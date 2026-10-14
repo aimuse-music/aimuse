@@ -1,0 +1,1366 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="description" content="AIで制作された楽曲だけを集めた音楽配信サービス"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><title>AIMUSE</title></head><body>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#0b0912">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Unbounded:wght@500;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: single-column phone shell (max 520px, centered on PC) · sticky screen header · mini player + fixed bottom nav */
+:root{
+  color-scheme: dark;
+  --bg:#0b0912;
+  --surface:#15121f;
+  --surface2:#1e1a2c;
+  --line:#2c2742;
+  --fg:#f2eefb;
+  --muted:#9d95b8;
+  --faint:#6b6488;
+  --violet:#a463ff;
+  --indigo:#6b6cff;
+  --grad:linear-gradient(120deg,#b46bff 0%,#7c5cff 45%,#5a72ff 100%);
+  --glow:rgba(140,100,255,.35);
+  --ok:#3fd49a; --warn:#f6bd55; --bad:#ff5f7e;
+  --f-display:"Unbounded","Zen Kaku Gothic New",system-ui,sans-serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --gl:max(16px, env(safe-area-inset-left,0px));
+  --gr:max(16px, env(safe-area-inset-right,0px));
+  --sb:env(safe-area-inset-bottom,0px);
+  --st:env(safe-area-inset-top,0px);
+  --nav-h:62px;
+  --mini-h:64px;
+  background:var(--bg);
+}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--f-body);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:2px solid var(--violet);outline-offset:2px;border-radius:8px}
+input,select,textarea{font:inherit;color:var(--fg)}
+h1,h2,h3{margin:0;text-wrap:balance}
+p{margin:0}
+
+.app{max-width:520px;margin:0 auto;min-height:100%;position:relative}
+.screen{padding-left:var(--gl);padding-right:var(--gr);padding-block:0 calc(var(--nav-h) + var(--mini-h) + var(--sb) + 28px);animation:enter .32s cubic-bezier(.2,.8,.2,1)}
+@keyframes enter{from{opacity:.0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* header */
+.top{position:sticky;top:var(--st);z-index:20;margin-left:calc(-1*var(--gl));margin-right:calc(-1*var(--gr));padding:12px var(--gr) 10px var(--gl);background:linear-gradient(var(--bg) 70%,rgba(11,9,18,0));display:flex;align-items:center;gap:12px;min-height:56px}
+.logo{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.06em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.logo-sub{font-family:var(--f-display);font-size:9px;letter-spacing:.32em;color:var(--faint);font-weight:500}
+.top h1{font-size:24px;font-weight:900;letter-spacing:.02em}
+.icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:50%;color:var(--fg);flex:none}
+.icon-btn:active{background:var(--surface2)}
+.spacer{flex:1}
+
+.demo-note{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--muted);font-size:12.5px;line-height:1.55}
+.demo-note b{color:var(--fg);font-weight:700}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap;line-height:1.5}
+.tag.suno{color:#ffb4e0;border-color:rgba(255,140,210,.35)}
+.tag.udio{color:#9fd0ff;border-color:rgba(120,190,255,.35)}
+.tag.other{color:#d9cfff;border-color:rgba(200,180,255,.3)}
+.tag.demo{color:var(--warn);border-color:rgba(246,189,85,.4)}
+.tag.ok{color:var(--ok);border-color:rgba(63,212,154,.4)}
+.tag.bad{color:var(--bad);border-color:rgba(255,95,126,.4)}
+
+/* sections */
+.sec{margin-top:26px}
+.sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
+.sec-h h2{font-size:19px;font-weight:900;letter-spacing:.02em}
+.sec-h .en{font-family:var(--f-display);font-size:9.5px;letter-spacing:.28em;color:var(--faint);font-weight:500;display:block;margin-bottom:2px}
+.link{font-size:12.5px;color:var(--muted)}
+.hrow{display:flex;gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;margin-left:calc(-1*var(--gl));margin-right:calc(-1*var(--gr));padding:2px var(--gr) 6px var(--gl);scroll-padding-left:var(--gl);scrollbar-width:none}
+.hrow::-webkit-scrollbar{display:none}
+.hrow>*{scroll-snap-align:start;flex:none}
+
+/* cover */
+.cover{position:relative;overflow:hidden;aspect-ratio:1/1;width:100%;max-width:100%;background-size:cover;background-position:center;flex:none;isolation:isolate}
+.cover svg{position:absolute;inset:0;width:100%;height:100%;mix-blend-mode:screen;opacity:.9}
+.cover .cv-t{position:absolute;left:10%;bottom:9%;right:10%;font-family:var(--f-display);font-weight:700;color:rgba(255,255,255,.92);font-size:clamp(10px,6cqi,26px);line-height:1.15;letter-spacing:.02em;text-shadow:0 2px 12px rgba(0,0,0,.35);z-index:2}
+.cover-wrap{container-type:inline-size}
+
+/* hero (featured) */
+.hero{width:min(78vw,330px);display:flex;flex-direction:column;gap:10px;text-align:left}
+.hero .cover{border-radius:20px;box-shadow:0 18px 40px -18px var(--glow)}
+.hero-meta{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.hero-meta .t{font-weight:700;font-size:16px;line-height:1.35}
+.hero-meta .a{color:var(--muted);font-size:13px}
+.play-fab{width:44px;height:44px;border-radius:50%;background:var(--grad);display:grid;place-items:center;flex:none;box-shadow:0 8px 18px -6px var(--glow)}
+
+.card{width:142px;display:flex;flex-direction:column;gap:8px;text-align:left}
+.card .cover{border-radius:14px}
+.card .t{font-weight:700;font-size:13.5px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+.card .a{color:var(--muted);font-size:12px;margin-top:-6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* song row */
+.list{display:flex;flex-direction:column}
+.row{display:grid;grid-template-columns:auto 52px minmax(0,1fr) auto;gap:12px;align-items:center;padding:8px 0;text-align:left;width:100%}
+.row.norank{grid-template-columns:52px minmax(0,1fr) auto}
+.row .cover{border-radius:10px;width:52px}
+.row .rank{font-family:var(--f-display);font-weight:700;font-size:15px;width:24px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums}
+.row .rank.top{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.row .t{font-weight:700;font-size:14.5px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row.cur .t{color:#c9a8ff}
+.row .sub{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px;min-width:0}
+.row .sub span.n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .end{display:flex;align-items:center;gap:2px;color:var(--muted)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:11.5px}
+.heart-on{color:#ff6fae}
+
+.chips{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin-left:calc(-1*var(--gl));margin-right:calc(-1*var(--gr));padding:2px var(--gr) 4px var(--gl)}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;padding:7px 14px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);font-size:13px;font-weight:500;color:var(--muted);white-space:nowrap}
+.chip.on{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:700}
+
+.artist{width:96px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+.artist .cover{border-radius:50%;width:96px}
+.artist .n{font-size:12.5px;font-weight:700;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.artist .f{font-size:11px;color:var(--muted);margin-top:-6px}
+
+/* search */
+.searchbox{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:0 12px;height:46px;width:100%}
+.searchbox input{flex:1;background:none;border:0;outline:none;font-size:16px;min-width:0}
+.searchbox input::placeholder{color:var(--faint)}
+.seg{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:3px;gap:3px}
+.seg button{flex:1;padding:7px 6px;border-radius:9px;font-size:13px;color:var(--muted);font-weight:500}
+.seg button.on{background:var(--surface2);color:var(--fg);font-weight:700;box-shadow:inset 0 0 0 1px var(--line)}
+.label{font-size:11.5px;color:var(--faint);letter-spacing:.08em;font-weight:700;margin:14px 0 8px}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tile{position:relative;height:88px;border-radius:14px;overflow:hidden;padding:12px;text-align:left;font-weight:900;font-size:16px;display:flex;align-items:flex-start}
+.tile small{position:absolute;right:12px;bottom:10px;font-family:var(--f-mono);font-size:11px;font-weight:500;opacity:.8}
+.empty{padding:36px 8px;text-align:center;color:var(--muted);font-size:14px}
+
+/* forms */
+.form{display:flex;flex-direction:column;gap:18px;margin-top:6px}
+.field{display:flex;flex-direction:column;gap:7px}
+.field>label,.field>.fl{font-size:13px;font-weight:700}
+.field .req{color:var(--bad);font-size:11px;margin-left:4px}
+.input{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:16px;width:100%;outline:none}
+.input:focus{border-color:var(--violet)}
+textarea.input{min-height:130px;resize:vertical;line-height:1.7}
+.err{color:var(--bad);font-size:12px}
+.pick{display:flex;align-items:center;gap:12px;padding:12px;border:1px dashed var(--line);border-radius:14px;background:var(--surface);text-align:left;width:100%}
+.pick .ic{width:46px;height:46px;border-radius:12px;background:var(--surface2);display:grid;place-items:center;flex:none;overflow:hidden;background-size:cover;background-position:center}
+.pick .tx{min-width:0;flex:1}
+.pick .tx b{display:block;font-size:14px}
+.pick .tx span{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.checks{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:6px 4px}
+.check{display:flex;gap:12px;align-items:flex-start;padding:10px;text-align:left;width:100%;font-size:13.5px;line-height:1.55}
+.box{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--faint);display:grid;place-items:center;flex:none;margin-top:1px;transition:.15s}
+.check.on .box{background:var(--grad);border-color:transparent}
+.btn{height:50px;border-radius:14px;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;width:100%}
+.btn.primary{background:var(--grad);box-shadow:0 10px 24px -10px var(--glow)}
+.btn.primary:disabled{opacity:.4;box-shadow:none}
+.btn.ghost{background:var(--surface2);border:1px solid var(--line)}
+.btn.sm{height:38px;font-size:13px;border-radius:11px;width:auto;padding:0 14px}
+.btn.danger{background:rgba(255,95,126,.12);color:var(--bad);border:1px solid rgba(255,95,126,.35)}
+.btn.okb{background:rgba(63,212,154,.12);color:var(--ok);border:1px solid rgba(63,212,154,.35)}
+.btn-row{display:flex;gap:10px}
+.btn-row>*{flex:1}
+.kv{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px 12px;font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px}
+.kv dt{color:var(--muted);font-size:12.5px}
+.kv dd{margin:0;font-weight:500;overflow-wrap:anywhere}
+.steps{display:flex;gap:6px;margin:4px 0 4px}
+.steps i{height:3px;flex:1;border-radius:3px;background:var(--line)}
+.steps i.on{background:var(--grad)}
+
+/* my page */
+.profile{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:8px 0 4px}
+.avatar{width:92px;height:92px;border-radius:50%;padding:3px;background:var(--grad)}
+.avatar>div{width:100%;height:100%;border-radius:50%;background:var(--surface2);display:grid;place-items:center;font-family:var(--f-display);font-size:28px;font-weight:700}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);border-radius:16px;background:var(--surface);margin-top:14px}
+.stat{padding:12px 4px;text-align:center}
+.stat+.stat{border-left:1px solid var(--line)}
+.stat b{display:block;font-family:var(--f-display);font-size:16px;font-variant-numeric:tabular-nums}
+.stat span{font-size:11px;color:var(--muted)}
+.tabs{display:flex;gap:18px;border-bottom:1px solid var(--line);margin-top:22px}
+.tabs button{padding:10px 0;font-size:14px;color:var(--muted);font-weight:500;position:relative}
+.tabs button.on{color:var(--fg);font-weight:700}
+.tabs button.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--grad);border-radius:2px}
+.admin-entry{display:flex;align-items:center;gap:12px;margin-top:16px;padding:14px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(120deg,rgba(164,99,255,.14),rgba(90,114,255,.08));text-align:left;width:100%}
+
+/* artist page */
+.ahead{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding-top:4px}
+.ahead .cover{width:150px;border-radius:50%;box-shadow:0 18px 40px -16px var(--glow)}
+.ahead h2{font-size:24px;font-weight:900}
+.follow{padding:8px 22px;border-radius:999px;border:1px solid var(--fg);font-weight:700;font-size:13.5px}
+.follow.on{background:var(--fg);color:var(--bg)}
+
+/* admin */
+.panel{border:1px solid var(--line);border-radius:16px;background:var(--surface);padding:14px;display:flex;flex-direction:column;gap:12px}
+.panel-h{display:grid;grid-template-columns:56px minmax(0,1fr);gap:12px;align-items:center}
+.panel-h .cover{border-radius:10px;width:56px}
+.panel-h b{display:block;font-size:15px;line-height:1.35}
+.panel-h span{font-size:12px;color:var(--muted)}
+.mini-checks{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--muted)}
+.mini-checks div{display:flex;gap:6px;align-items:flex-start}
+.reasons{display:flex;flex-wrap:wrap;gap:6px}
+.badge-count{min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--bad);color:#fff;font-size:10.5px;font-weight:700;display:inline-grid;place-items:center;margin-left:6px;font-variant-numeric:tabular-nums}
+.sum{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:4px}
+.sum div{border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--surface)}
+.sum b{display:block;font-family:var(--f-display);font-size:20px}
+.sum span{font-size:11px;color:var(--muted)}
+.sum .warn b{color:var(--warn)} .sum .bad b{color:var(--bad)}
+
+/* bottom nav */
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(13,11,21,.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid var(--line);padding:0 var(--gr) var(--sb) var(--gl)}
+.nav-in{max-width:520px;margin:0 auto;height:var(--nav-h);display:grid;grid-template-columns:repeat(4,1fr)}
+.nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;color:var(--faint);font-weight:500}
+.nav button.on{color:var(--fg);font-weight:700}
+.nav .up{width:44px;height:30px;border-radius:10px;background:var(--grad);display:grid;place-items:center;color:#fff}
+
+/* mini player */
+.mini{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + var(--sb));z-index:39;padding:0 var(--gr) 6px var(--gl);animation:enter .3s ease}
+.mini-in{max-width:504px;margin:0 auto;display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 8px 10px;border-radius:14px;position:relative;overflow:hidden;box-shadow:0 10px 30px -10px rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.06)}
+.mini-in .cover{border-radius:8px;width:44px}
+.mini-in .t{font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini-in .a{font-size:11.5px;color:rgba(255,255,255,.72);display:flex;gap:6px;align-items:center;white-space:nowrap;overflow:hidden}
+.mini-bar{position:absolute;left:10px;right:10px;bottom:4px;height:2px;background:rgba(255,255,255,.2);border-radius:2px;overflow:hidden}
+.mini-bar i{display:block;height:100%;background:#fff}
+
+/* full player */
+.player{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;padding:calc(var(--st) + 8px) var(--gr) calc(var(--sb) + 18px) var(--gl);overflow-y:auto;animation:sheet .38s cubic-bezier(.2,.9,.2,1)}
+@keyframes sheet{from{transform:translateY(100%)}to{transform:none}}
+.player-in{max-width:440px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:18px;flex:1}
+.ph{display:flex;align-items:center;gap:8px}
+.ph .mid{flex:1;text-align:center;font-size:11.5px;color:rgba(255,255,255,.7);letter-spacing:.06em}
+.ph .mid b{display:block;color:#fff;font-size:13px;letter-spacing:0;font-weight:700}
+.stage{display:grid;place-items:center;min-height:0}
+.stage .cover{border-radius:22px;width:min(100%,360px);box-shadow:0 30px 60px -20px rgba(0,0,0,.65)}
+.lyrics{width:100%;height:min(56vh,380px);overflow-y:auto;padding:4px 2px;mask-image:linear-gradient(transparent,#000 10%,#000 85%,transparent)}
+.lyrics p{font-size:21px;font-weight:700;line-height:1.55;color:rgba(255,255,255,.4);padding:5px 0;transition:color .3s}
+.lyrics p.on{color:#fff}
+.lyrics p.gap{height:18px;padding:0}
+.lyrics .none{font-size:15px;color:rgba(255,255,255,.65);text-align:center;padding-top:30%}
+.pt{display:flex;align-items:center;gap:12px}
+.pt .t{font-size:22px;font-weight:900;line-height:1.3}
+.pt .a{color:rgba(255,255,255,.75);font-size:15px;text-align:left}
+.seek{width:100%;-webkit-appearance:none;appearance:none;height:22px;background:transparent;cursor:pointer}
+.seek::-webkit-slider-runnable-track{height:4px;border-radius:4px;background:linear-gradient(90deg,#fff var(--p),rgba(255,255,255,.22) var(--p))}
+.seek::-moz-range-track{height:4px;border-radius:4px;background:rgba(255,255,255,.22)}
+.seek::-moz-range-progress{height:4px;border-radius:4px;background:#fff}
+.seek::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#fff;margin-top:-5px}
+.seek::-moz-range-thumb{width:14px;height:14px;border:0;border-radius:50%;background:#fff}
+.times{display:flex;justify-content:space-between;color:rgba(255,255,255,.65);margin-top:-2px}
+.ctrls{display:flex;align-items:center;justify-content:space-between}
+.ctrls .on{color:#d6b8ff;position:relative}
+.ctrls .on::after{content:"";position:absolute;bottom:3px;left:50%;width:4px;height:4px;border-radius:50%;background:currentColor;transform:translateX(-50%)}
+.big-play{width:72px;height:72px;border-radius:50%;background:#fff;color:#0b0912;display:grid;place-items:center;box-shadow:0 10px 30px -8px rgba(0,0,0,.5)}
+.pfoot{display:flex;justify-content:space-between;align-items:center}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:999px;background:rgba(255,255,255,.1);font-size:13px;font-weight:700}
+.pill.on{background:#fff;color:#0b0912}
+.demo-strip{font-size:12px;line-height:1.55;color:rgba(255,255,255,.82);background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:9px 12px;display:flex;gap:8px;align-items:flex-start}
+
+/* sheet */
+.scrim{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;animation:fade .2s}
+@keyframes fade{from{opacity:0}}
+.sheet{width:100%;max-width:520px;background:var(--surface);border-top-left-radius:22px;border-top-right-radius:22px;padding:18px var(--gr) calc(var(--sb) + 18px) var(--gl);display:flex;flex-direction:column;gap:10px;animation:sheet .3s cubic-bezier(.2,.9,.2,1)}
+.sheet h3{font-size:17px;font-weight:900}
+.sheet .opt{padding:13px 14px;border-radius:12px;background:var(--surface2);text-align:left;font-size:14px}
+
+.toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + var(--mini-h) + var(--sb) + 18px);transform:translateX(-50%);z-index:100;background:#fff;color:#0b0912;font-weight:700;font-size:13.5px;padding:10px 16px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.4);animation:enter .25s;max-width:calc(100% - 32px);text-align:center}
+
+.eq{display:inline-flex;gap:2px;align-items:flex-end;height:12px}
+.eq i{width:3px;background:#c9a8ff;border-radius:1px;animation:eq .9s infinite ease-in-out}
+.eq i:nth-child(2){animation-delay:.2s}.eq i:nth-child(3){animation-delay:.4s}
+@keyframes eq{0%,100%{height:3px}50%{height:12px}}
+
+
+/* file pickers */
+.vh{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0);pointer-events:none}
+.drop{width:100%;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;padding:22px 14px;border:1.5px dashed var(--line);border-radius:16px;background:var(--surface);transition:border-color .15s,background .15s;touch-action:manipulation}
+.drop:active,.drop.over,.pick-grid.over .drop{border-color:var(--violet);background:var(--surface2)}
+.drop.bad{border-color:rgba(255,95,126,.6)}
+.drop b{font-size:15px}
+.drop span{font-size:12px;color:var(--muted)}
+.drop .fmt{font-family:var(--f-mono);font-size:11px;color:var(--faint);margin-top:4px}
+.drop-ic{width:52px;height:52px;border-radius:16px;background:var(--grad);display:grid;place-items:center;color:#fff;margin-bottom:6px;box-shadow:0 8px 20px -8px var(--glow)}
+.drop.small{padding:16px 10px}
+.drop.small .drop-ic{width:42px;height:42px;border-radius:13px}
+.drop.small b{font-size:14px}
+.pick-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.hint{font-size:12px;color:var(--muted);line-height:1.55}
+.opt-l{color:var(--faint);font-size:11px;margin-left:6px;font-weight:500}
+.fcard{border:1px solid var(--line);border-radius:16px;background:var(--surface);padding:12px;display:flex;flex-direction:column;gap:12px}
+.fcard-h{display:grid;grid-template-columns:46px minmax(0,1fr);gap:12px;align-items:center}
+.fthumb{width:46px;height:46px;border-radius:12px;background:var(--grad);display:grid;place-items:center;color:#fff}
+.fname{font-weight:700;font-size:14px;line-height:1.4;overflow-wrap:anywhere}
+.fmeta{color:var(--muted)}
+.fcard-f{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.img-row{display:grid;grid-template-columns:104px minmax(0,1fr);gap:12px;align-items:start}
+.img-prev{width:104px;aspect-ratio:1/1;max-width:100%;border-radius:12px;overflow:hidden;background:var(--surface2);border:1px solid var(--line)}
+.img-prev img{width:100%;height:100%;object-fit:cover;display:block}
+.img-fallback{width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--muted);font-family:var(--f-mono);font-size:11px}
+.warn-line{display:flex;gap:6px;align-items:flex-start;font-size:12px;color:var(--warn);line-height:1.5}
+.warn-line svg{flex:none;margin-top:2px}
+.tag.local{color:#bfe3ff;border-color:rgba(120,190,255,.35)}
+
+
+.home-empty{margin-top:22px;border:1px solid var(--line);border-radius:18px;background:var(--surface);padding:26px 18px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}
+.home-empty h2{font-size:18px;font-weight:900}
+.home-empty p{font-size:13.5px;color:var(--muted);max-width:320px}
+.home-empty .btn-row{width:100%;margin-top:6px}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div id="root"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+/* =========================================================
+   AIMUSE Ver.1.0 — 本番版（Supabase + Cloudflare Pages）
+   ---------------------------------------------------------
+   構成メモ（将来の拡張用）
+   - CONFIG ............ アプリ設定。ジャンル・AIツール・権利チェック項目
+   - auth .............. 会員ログイン（Supabase Auth）
+   - repo .............. 投稿情報の保存窓口（Supabase のテーブル）
+   - uploadService ..... 音源・画像の保存窓口（Supabase Storage）
+   - 架空のデモデータは持たない。表示・集計はすべて実際の投稿から行う
+   ========================================================= */
+const {useState,useEffect,useRef,useMemo} = React;
+const html = htm.bind(React.createElement);
+
+const CONFIG = {
+  version: "0.1",
+  locale: "ja",               // 将来: en / ko / zh などに切り替え
+  genres: ["J-POP","シティポップ","EDM","ロック","バラード","ローファイ","アニソン風","アンビエント"],
+  tools: ["Suno","Udio","その他"],
+  rightsChecks: [
+    "この楽曲は自分がAIサービスで生成したものです",
+    "使用したAIサービスの利用規約で、配信・商用利用が認められた条件で生成しました",
+    "第三者の歌詞・メロディ・音源・画像を無断で使用していません",
+    "実在の歌手やアーティストの声・名前を無断で模倣していません"
+  ],
+  adminChecks: ["既存曲との類似チェック済み","ジャケット画像の権利確認済み","歌詞の内容確認済み"],
+  rejectReasons: ["権利確認が不十分","既存曲に酷似","不適切な内容","音質・ファイル不備"],
+  reportReasons: ["既存曲に酷似している","不適切なジャケット画像","不適切な歌詞","なりすまし・名義の問題"]
+};
+
+const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355,"バラード":260,"ローファイ":190,"アニソン風":305,"アンビエント":235};
+
+/* ===== データ層（本番：Supabase） =====
+   - 会員：Supabase Auth（メール＋パスワード）
+   - 投稿情報（曲名・審査状態・通報・再生数）：Supabase の tracks / reports テーブル
+   - 音源・ジャケット画像：Supabase Storage（audio / covers バケット）。どの端末からでも再生できる
+   - お気に入り・フォロー：この端末内（localStorage）
+   ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
+const store = {
+  get(k,f){try{const v=localStorage.getItem(k);return v?JSON.parse(v):f}catch(e){return f}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+};
+const dataService = {
+  loadFavorites: () => new Set(store.get("aimuse.favs2",[])),
+  saveFavorites: (set) => store.set("aimuse.favs2",[...set]),
+  loadFollows: () => new Set(store.get("aimuse.follows2",[])),
+  saveFollows: (set) => store.set("aimuse.follows2",[...set])
+};
+
+const SB_CFG = window.AIMUSE_CONFIG || {};
+const sbReady = !!(window.supabase && SB_CFG.supabaseUrl && SB_CFG.supabaseAnonKey && !/^__/.test(SB_CFG.supabaseUrl));
+const sb = sbReady ? window.supabase.createClient(SB_CFG.supabaseUrl, SB_CFG.supabaseAnonKey, {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}) : null;
+
+/* 音源・画像は非公開バケット。期限付きURL（署名付きURL）を発行して再生・表示する
+   - 有効期限1時間。残り15分を切ったものだけ再発行し、それ以外は同じURLを使い回す
+   - 発行できるかどうかはStorageのRLSで判定（公開中の曲は誰でも、それ以外は本人と管理者のみ） */
+const SIGN_TTL = 3600, SIGN_RENEW_MS = 15*60*1000;
+const signedCache = new Map();
+const cachedUrl = (bucket,path) => { if(!path) return null; const c=signedCache.get(bucket+":"+path); return c&&c.exp>Date.now()?c.url:null; };
+async function signPaths(bucket,paths){
+  if(!sb) return;
+  const now=Date.now();
+  const need=[...new Set(paths.filter(Boolean))].filter(p=>{ const c=signedCache.get(bucket+":"+p); return !c||c.exp-now<SIGN_RENEW_MS; });
+  for(let i=0;i<need.length;i+=100){
+    const chunk=need.slice(i,i+100);
+    try{
+      const {data,error} = await sb.storage.from(bucket).createSignedUrls(chunk,SIGN_TTL);
+      if(error){ console.warn("sign",bucket,error.message); continue; }
+      (data||[]).forEach(d=>{ if(d&&d.signedUrl&&!d.error&&d.path) signedCache.set(bucket+":"+d.path,{url:d.signedUrl,exp:now+SIGN_TTL*1000}); });
+    }catch(e){ console.warn("sign",bucket,e); }
+  }
+}
+const signRows = rows => Promise.all([
+  signPaths("audio",rows.map(r=>r.audio_path)),
+  signPaths("covers",rows.map(r=>r.image_path))
+]);
+const camelToSnake = k => k.replace(/[A-Z]/g,c=>"_"+c.toLowerCase());
+const toRow = patch => { const o={}; Object.keys(patch).forEach(k=>{ if(k!=="id"&&k!=="createdAt"&&k!=="hasImage") o[camelToSnake(k)]=patch[k]; }); return o; };
+
+const trackFromRow = r => ({
+  id:r.id, userId:r.user_id, title:r.title, artist:r.artist, genre:r.genre, tool:r.tool, toolName:r.tool_name,
+  audioPath:r.audio_path, audioName:r.audio_name, audioSize:r.audio_size, audioExt:r.audio_ext, duration:r.duration||0,
+  imagePath:r.image_path, imageName:r.image_name, hasImage:!!r.image_path,
+  lyrics:r.lyrics||[], checks:r.checks||[], status:r.status, rejectReason:r.reject_reason, plays:r.plays||0,
+  hues:r.hues||[270,230], pattern:r.pattern??0, submittedAt:r.submitted_at||"", approvedAt:r.approved_at||"", reviewedAt:r.reviewed_at||"",
+  createdAt:Date.parse(r.created_at)||0,
+  audioUrl:cachedUrl("audio",r.audio_path), imageUrl:cachedUrl("covers",r.image_path)
+});
+const reportFromRow = r => ({
+  id:r.id, songId:r.song_id, reason:r.reason, reporter:r.reporter_name||"会員", at:r.at||"", status:r.status,
+  action:r.action, resolvedAt:r.resolved_at, createdAt:Date.parse(r.created_at)||0
+});
+
+/* 会員（ログイン状態） */
+const auth = {
+  user:null, profile:null, ready:false, recovery:false, listeners:new Set(),
+  get isAdmin(){ return !!(this.profile&&this.profile.is_admin); },
+  emit(){ this.listeners.forEach(f=>f({user:this.user,profile:this.profile,ready:this.ready,recovery:this.recovery})); },
+  subscribe(f){ this.listeners.add(f); f({user:this.user,profile:this.profile,ready:this.ready,recovery:this.recovery}); return ()=>this.listeners.delete(f); },
+  async loadProfile(){
+    if(!sb||!this.user){ this.profile=null; return; }
+    const {data} = await sb.from("profiles").select("id,display_name,is_admin").eq("id",this.user.id).maybeSingle();
+    this.profile = data||{id:this.user.id,display_name:(this.user.email||"").split("@")[0],is_admin:false};
+  },
+  async init(){
+    if(!sb){ this.ready=true; this.emit(); return; }
+    const {data} = await sb.auth.getSession();
+    this.user = data.session?.user||null;
+    await this.loadProfile(); this.ready=true; this.emit();
+    sb.auth.onAuthStateChange((event,session)=>{
+      if(event==="PASSWORD_RECOVERY") this.recovery=true;
+      const prevId=this.user?.id; this.user=session?.user||null;
+      // コールバック内で直接 await しない（Supabaseの推奨）
+      setTimeout(async()=>{ await this.loadProfile(); this.emit(); if(prevId!==this.user?.id) repo.refresh(); },0);
+    });
+  },
+  signIn:(email,password)=>sb.auth.signInWithPassword({email,password}),
+  signUp:(email,password,name)=>sb.auth.signUp({email,password,options:{data:{display_name:name||undefined},emailRedirectTo:location.origin+location.pathname}}),
+  resetPassword:(email)=>sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname}),
+  async updatePassword(password){ const r=await sb.auth.updateUser({password}); if(!r.error){ this.recovery=false; this.emit(); } return r; },
+  signOut:()=>sb.auth.signOut()
+};
+
+const repo = {
+  mode:"pending",
+  tracks:new Map(), reports:new Map(), listeners:new Set(),
+  emit(){ const t=[...this.tracks.values()], r=[...this.reports.values()]; this.listeners.forEach(f=>f(t,r,this.mode)); },
+  subscribe(f){ this.listeners.add(f); f([...this.tracks.values()],[...this.reports.values()],this.mode); return ()=>this.listeners.delete(f); },
+  async init(){
+    if(!sb){ this.mode="unconfigured"; this.emit(); return; }
+    await this.refresh();
+    document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") this.refresh(); });
+    // 期限付きURLを切らさないよう、表示中は10分ごとに更新
+    setInterval(()=>{ if(document.visibilityState==="visible") this.refresh(); },10*60*1000);
+  },
+  async refresh(){
+    if(!sb) return;
+    const t = await sb.from("tracks").select("*").order("created_at",{ascending:false});
+    if(t.error){ console.warn("tracks",t.error.message); this.mode=this.mode==="cloud"?"cloud":"error"; this.emit(); return; }
+    await signRows(t.data);
+    this.tracks.clear(); t.data.forEach(r=>this.tracks.set(r.id,trackFromRow(r)));
+    this.reports.clear();
+    if(auth.isAdmin){
+      const r = await sb.from("reports").select("*").order("created_at",{ascending:false});
+      if(!r.error) r.data.forEach(x=>this.reports.set(x.id,reportFromRow(x)));
+    }
+    this.mode="cloud"; this.emit();
+  },
+  mapOf(col){ return col==="tracks"?this.tracks:this.reports; },
+  async insertTrack(row){
+    const {data,error} = await sb.from("tracks").insert(row).select("*").single();
+    if(error) throw error;
+    await signRows([data]);
+    this.tracks.set(data.id,trackFromRow(data)); this.emit(); return data;
+  },
+  async insertReport(row){
+    const {error} = await sb.from("reports").insert(row);
+    if(error) throw error;
+    if(auth.isAdmin) this.refresh();
+  },
+  async put(col,id,patch){
+    const map=this.mapOf(col); const before=map.get(id);
+    if(before){ map.set(id,{...before,...patch}); this.emit(); }
+    const {error} = await sb.from(col).update(toRow(patch)).eq("id",id);
+    if(error){ if(before){ map.set(id,before); this.emit(); } throw error; }
+  },
+  async remove(col,id){
+    const map=this.mapOf(col); const before=map.get(id);
+    map.delete(id); this.emit();
+    const {error} = await sb.from(col).delete().eq("id",id);
+    if(error){ if(before){ map.set(id,before); this.emit(); } throw error; }
+  },
+  async incPlays(id){
+    const t=this.tracks.get(id); if(t){ this.tracks.set(id,{...t,plays:(t.plays||0)+1}); this.emit(); }
+    await sb.rpc("increment_plays",{tid:id});
+  },
+  // 再生時間が未登録の曲：画面表示用には誰でも反映。データベースへの保存は投稿者本人か管理者のときだけ
+  async setDuration(id,d,persist){
+    const t=this.tracks.get(id); if(t){ this.tracks.set(id,{...t,duration:d}); this.emit(); }
+    if(persist) await sb.rpc("set_duration_if_missing",{tid:id,d});
+  },
+  async removeFiles(t){
+    if(t&&t.audioPath) await sb.storage.from("audio").remove([t.audioPath]);
+    if(t&&t.imagePath) await sb.storage.from("covers").remove([t.imagePath]);
+  }
+};
+
+const artistKey = name => "ar_"+[...(name||"")].reduce((h,c)=>(h*31+c.charCodeAt(0))>>>0,7).toString(36);
+
+/* ---------- utilities ---------- */
+const fmtTime = s => { s=Math.max(0,Math.floor(s||0)); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); };
+const fmtNum = n => n>=10000 ? (n/10000).toFixed(n>=100000?0:1).replace(/\.0$/,"")+"万" : n.toLocaleString("ja-JP");
+const toolClass = t => t==="Suno"?"suno":t==="Udio"?"udio":"other";
+const nowStr = () => { const d=new Date(); const p=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
+
+/* ---------- icons ---------- */
+const P = {
+  home:"M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z",
+  search:"M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4",
+  plus:"M12 5v14M5 12h14",
+  user:"M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c1-4 4-6 8-6s7 2 8 6",
+  heart:"M12 20s-7-4.5-9-9a4.5 4.5 0 0 1 9-3 4.5 4.5 0 0 1 9 3c-2 4.5-9 9-9 9z",
+  prev:"M6 5v14M19 5 9 12l10 7z", next:"M18 5v14M5 5l10 7-10 7z",
+  shuffle:"M3 7h3c5 0 7 10 12 10h3M18 14l3 3-3 3M3 17h3c1.7 0 3-1 4-2.5M14 9.5C15 8 16.3 7 18 7h3M18 4l3 3-3 3",
+  repeat:"M4 11V9a3 3 0 0 1 3-3h13M17 3l3 3-3 3M20 13v2a3 3 0 0 1-3 3H4M7 21l-3-3 3-3",
+  down:"M6 9l6 6 6-6", back:"M15 6l-6 6 6 6",
+  lyrics:"M4 6h16M4 11h16M4 16h10",
+  shield:"M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z", flag:"M5 21V4h11l-2 4 2 4H5",
+  check:"M5 12l5 5 9-10", x:"M6 6l12 12M18 6 6 18",
+  eye:"M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+  eyeOff:"M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3 3.6M6.5 6.6C3.8 8.4 2 12 2 12s4 7 10 7a10 10 0 0 0 4.4-1",
+  trash:"M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13",
+  music:"M9 18V5l11-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM20 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z",
+  image:"M4 5h16v14H4zM4 16l5-5 4 4 3-3 4 4",
+  info:"M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01",
+  chev:"M9 6l6 6-6 6",
+  folder:"M3 6a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"
+};
+const Icon = ({n,size=22,fill=false,sw=1.8,style}) => html`
+  <svg width=${size} height=${size} viewBox="0 0 24 24" fill=${fill?"currentColor":"none"} stroke="currentColor" strokeWidth=${sw} strokeLinecap="round" strokeLinejoin="round" style=${style} aria-hidden="true"><path d=${P[n]}/></svg>`;
+const PlayIcon = ({size=22}) => html`<svg width=${size} height=${size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7.5 4.8v14.4c0 .8.9 1.3 1.6.8l11-7.2c.6-.4.6-1.2 0-1.6l-11-7.2c-.7-.5-1.6 0-1.6.8z"/></svg>`;
+const PauseIcon = ({size=22}) => html`<svg width=${size} height=${size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4.5" width="4" height="15" rx="1.2"/><rect x="14" y="4.5" width="4" height="15" rx="1.2"/></svg>`;
+
+/* ---------- generated cover art (no external images) ---------- */
+function Pattern({p,seed}){
+  const w = "rgba(255,255,255,.55)";
+  if(p===0) return html`<g fill="none" stroke=${w} strokeWidth=".6">${[8,15,22,29,36,43,50].map(r=>html`<circle key=${r} cx="72" cy="30" r=${r} opacity=${1-r/60}/>`)}</g>`;
+  if(p===1){
+    const lines=[]; for(let k=0;k<9;k++){let d="M0 "+(40+k*6); for(let x=0;x<=100;x+=5){d+=` L${x} ${40+k*6+Math.sin((x+seed*7+k*9)/9)*(3+k*.6)}`} lines.push(html`<path key=${k} d=${d} fill="none" stroke=${w} strokeWidth=".5" opacity=${.25+k*.07}/>`);} return html`<g>${lines}</g>`;
+  }
+  if(p===2){
+    const dots=[]; for(let y=8;y<100;y+=10) for(let x=8;x<100;x+=10){const r=.6+((x*y+seed)%7)/5; dots.push(html`<circle key=${x+"-"+y} cx=${x} cy=${y} r=${r} fill=${w} opacity=${.15+((x+y+seed)%5)/8}/>`);} return html`<g>${dots}</g>`;
+  }
+  if(p===3) return html`<g><defs><radialGradient id=${"o"+seed}><stop offset="0" stopColor="#fff" stopOpacity=".85"/><stop offset=".5" stopColor="#fff" stopOpacity=".18"/><stop offset="1" stopColor="#fff" stopOpacity="0"/></radialGradient></defs><circle cx="50" cy="46" r="30" fill=${`url(#o${seed})`}/><line x1="0" y1="62" x2="100" y2="62" stroke=${w} strokeWidth=".4"/><line x1="0" y1="68" x2="100" y2="68" stroke=${w} strokeWidth=".3" opacity=".6"/><line x1="0" y1="76" x2="100" y2="76" stroke=${w} strokeWidth=".25" opacity=".4"/></g>`;
+  return html`<g stroke=${w} strokeWidth=".5" opacity=".7">${Array.from({length:14},(_,i)=>html`<line key=${i} x1=${-20+i*10} y1="100" x2=${20+i*10} y2="0"/>`)}<rect x="22" y="22" width="56" height="56" fill="none" strokeWidth=".8" transform="rotate(12 50 50)"/></g>`;
+}
+function Cover({item,title,radius,style}){
+  const [h1,h2] = item.hues||[270,230];
+  const seed = (item.id||"x").split("").reduce((a,c)=>a+c.charCodeAt(0),0);
+  const bg = item.imageUrl ? `center/cover no-repeat url(${item.imageUrl})` :
+    `radial-gradient(120% 90% at 85% 10%, hsl(${h1} 85% 62% / .55), transparent 55%), linear-gradient(150deg, hsl(${h1} 70% 42%), hsl(${h2} 72% 16%))`;
+  return html`<div className="cover-wrap" style=${style}><div className="cover" style=${{background:bg,borderRadius:radius}}>
+    ${!item.imageUrl && html`<svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice"><${Pattern} p=${item.pattern??0} seed=${seed}/></svg>`}
+    ${title && !item.imageUrl && html`<span className="cv-t">${title}</span>`}
+  </div></div>`;
+}
+
+/* ---------- shared pieces ---------- */
+const ToolTag = ({tool}) => html`<span className=${"tag "+toolClass(tool)}>${tool}</span>`;
+
+function SongRow({song,artist,rank,cur,playing,fav,onPlay,onFav}){
+  return html`<div className=${"row"+(rank?"":" norank")+(cur?" cur":"")} role="button" tabIndex="0" onClick=${onPlay} onKeyDown=${e=>e.key==="Enter"&&onPlay()}>
+    ${rank && html`<span className=${"rank"+(rank<=3?" top":"")}>${rank}</span>`}
+    <${Cover} item=${song} radius=${10}/>
+    <div style=${{minWidth:0}}>
+      <div className="t">${song.title}</div>
+      <div className="sub">${cur&&playing&&html`<span className="eq"><i></i><i></i><i></i></span>`}<span className="n">${artist?.name||song.artistName}</span><${ToolTag} tool=${song.tool}/></div>
+    </div>
+    <div className="end">
+      <span className="mono">${rank?fmtNum(song.plays)+"回":fmtTime(song.duration)}</span>
+      <button className="icon-btn" aria-label=${fav?"お気に入りから削除":"お気に入りに追加"} onClick=${e=>{e.stopPropagation();onFav()}}><${Icon} n="heart" size=${20} fill=${fav} style=${{color:fav?"#ff6fae":undefined}}/></button>
+    </div>
+  </div>`;
+}
+
+function SecHead({en,title,action,onAction}){
+  return html`<div className="sec-h"><div><span className="en">${en}</span><h2>${title}</h2></div>${action&&html`<button className="link" onClick=${onAction}>${action}</button>`}</div>`;
+}
+
+/* ---------- HOME ---------- */
+function Home({ctx}){
+  const {songs,artistOf,play,favs,toggleFav,openArtist,artists,current,playing,setTab,repoMode,isAdmin} = ctx;
+  const [genre,setGenre] = useState(CONFIG.genres[0]);
+  const featured = songs.slice(0,6);
+  const fresh = [...songs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
+  const ranking = [...songs].sort((a,b)=>b.plays-a.plays).slice(0,10);
+  const byGenre = songs.filter(s=>s.genre===genre);
+  const topArtists = [...artists].sort((a,b)=>b.followers-a.followers).slice(0,6);
+  const h = new Date().getHours();
+  const greet = h<5?"こんばんは":h<11?"おはようございます":h<18?"こんにちは":"こんばんは";
+  return html`<div className="screen">
+    <header className="top">
+      <div><div className="logo">AIMUSE</div><div className="logo-sub">AI MUSIC STREAMING</div></div>
+      <div className="spacer"></div>
+      <button className="icon-btn" aria-label="検索" onClick=${()=>setTab("search")}><${Icon} n="search"/></button>
+    </header>
+    <div className="demo-note"><${Icon} n="info" size=${18}/><span>${repoMode==="unconfigured"?html`<b>接続設定が未完了です</b>　サーバーとの接続設定（config.js）が完了するまで、楽曲を表示できません。`:repoMode==="error"?html`<b>読み込みに失敗しました</b>　通信状態を確認して、ページを再読み込みしてください。`:html`<b>AIMUSE</b>　AIで制作された楽曲だけを集めた音楽配信サービスです。表示されるのは審査で承認された楽曲だけです。`}</span></div>
+    ${songs.length===0&&html`<div className="home-empty">
+      <span className="drop-ic"><${Icon} n="music" size=${26}/></span>
+      <h2>${repoMode==="pending"?"読み込み中…":"公開中の楽曲はまだありません"}</h2>
+      ${repoMode!=="pending"&&html`<p>投稿された楽曲が審査で承認されると、ここにおすすめ・新着・ランキングとして表示されます。</p>
+      <div className="btn-row">${isAdmin&&html`<button className="btn ghost" onClick=${()=>setTab("admin")}>管理者画面</button>`}<button className="btn primary" onClick=${()=>setTab("upload")}>楽曲を投稿する</button></div>`}
+    </div>`}
+
+    ${songs.length>0&&html`<section className="sec">
+      <${SecHead} en="FOR YOU" title=${greet+"。今日のおすすめ"}/>
+      <div className="hrow">${featured.map(s=>html`<button key=${s.id} className="hero" onClick=${()=>play(s,featured)}>
+        <${Cover} item=${s} title=${s.title} radius=${20}/>
+        <div className="hero-meta"><div style=${{minWidth:0}}><div className="t">${s.title}</div><div className="a">${artistOf(s).name} · ${s.genre}</div></div>
+        <span className="play-fab">${current?.id===s.id&&playing?html`<${PauseIcon} size=${18}/>`:html`<${PlayIcon} size=${18}/>`}</span></div>
+      </button>`)}</div>
+    </section>`}
+
+    ${songs.length>0&&html`<section className="sec">
+      <${SecHead} en="NEW RELEASES" title="新着楽曲"/>
+      <div className="hrow">${fresh.map(s=>html`<button key=${s.id} className="card" onClick=${()=>play(s,fresh)}>
+        <${Cover} item=${s} radius=${14}/><div className="t">${s.title}</div><div className="a">${artistOf(s).name}</div>
+      </button>`)}</div>
+    </section>`}
+
+    ${songs.length>0&&html`<section className="sec">
+      <${SecHead} en="TOP 10" title="人気ランキング"/>
+      <div className="list">${ranking.map((s,i)=>html`<${SongRow} key=${s.id} song=${s} artist=${artistOf(s)} rank=${i+1} cur=${current?.id===s.id} playing=${playing} fav=${favs.has(s.id)} onPlay=${()=>play(s,ranking)} onFav=${()=>toggleFav(s.id)}/>`)}</div>
+    </section>`}
+
+    ${songs.length>0&&html`<section className="sec">
+      <${SecHead} en="GENRES" title="ジャンル別"/>
+      <div className="chips">${CONFIG.genres.map(g=>html`<button key=${g} className=${"chip"+(g===genre?" on":"")} onClick=${()=>setGenre(g)}>${g}</button>`)}</div>
+      <div className="list" style=${{marginTop:6}}>${byGenre.length?byGenre.map(s=>html`<${SongRow} key=${s.id} song=${s} artist=${artistOf(s)} cur=${current?.id===s.id} playing=${playing} fav=${favs.has(s.id)} onPlay=${()=>play(s,byGenre)} onFav=${()=>toggleFav(s.id)}/>`):html`<div className="empty">このジャンルの楽曲はまだありません</div>`}</div>
+    </section>`}
+
+    ${songs.length>0&&html`<section className="sec">
+      <${SecHead} en="ARTISTS" title="注目アーティスト"/>
+      <div className="hrow">${topArtists.map(a=>html`<button key=${a.id} className="artist" onClick=${()=>openArtist(a.id)}>
+        <${Cover} item=${a} radius="50%"/><div className="n">${a.name}</div><div className="f">${fmtNum(a.followers)} フォロワー</div>
+      </button>`)}</div>
+    </section>`}
+  </div>`;
+}
+
+/* ---------- SEARCH ---------- */
+function Search({ctx}){
+  const {songs,artists,artistOf,play,favs,toggleFav,openArtist,current,playing} = ctx;
+  const [q,setQ] = useState("");
+  const [mode,setMode] = useState("all");
+  const [genre,setGenre] = useState(null);
+  const [tool,setTool] = useState(null);
+  const query = q.trim().toLowerCase();
+  const active = query || genre || tool;
+  const songHits = songs.filter(s=>{
+    if(genre && s.genre!==genre) return false;
+    if(tool && s.tool!==tool) return false;
+    if(!query) return true;
+    const a = artistOf(s).name.toLowerCase();
+    if(mode==="song") return s.title.toLowerCase().includes(query);
+    if(mode==="artist") return a.includes(query);
+    return s.title.toLowerCase().includes(query)||a.includes(query)||s.genre.toLowerCase().includes(query)||s.tool.toLowerCase().includes(query);
+  });
+  const artistHits = mode==="song" ? [] : artists.filter(a=>{
+    const has = songs.some(s=>s.artistId===a.id && (!genre||s.genre===genre) && (!tool||s.tool===tool));
+    return has && (!query || a.name.toLowerCase().includes(query));
+  });
+  const clear = () => {setQ("");setGenre(null);setTool(null)};
+  return html`<div className="screen">
+    <header className="top"><h1>検索</h1></header>
+    <label className="searchbox"><${Icon} n="search" size=${20} style=${{color:"var(--faint)"}}/>
+      <input id="q" type="search" value=${q} onInput=${e=>setQ(e.target.value)} placeholder="曲名・アーティスト・ジャンル" enterKeyHint="search" autoComplete="off"/>
+      ${q&&html`<button aria-label="クリア" onClick=${()=>setQ("")}><${Icon} n="x" size=${18}/></button>`}
+    </label>
+    <div className="seg" style=${{marginTop:12}}>
+      ${[["all","すべて"],["song","曲名"],["artist","アーティスト"]].map(([k,l])=>html`<button key=${k} className=${mode===k?"on":""} onClick=${()=>setMode(k)}>${l}</button>`)}
+    </div>
+    <div className="label">AI制作ツール</div>
+    <div className="chips">${CONFIG.tools.map(t=>html`<button key=${t} className=${"chip"+(tool===t?" on":"")} onClick=${()=>setTool(tool===t?null:t)}>${t}</button>`)}</div>
+    <div className="label">ジャンル</div>
+    <div className="chips">${CONFIG.genres.map(g=>html`<button key=${g} className=${"chip"+(genre===g?" on":"")} onClick=${()=>setGenre(genre===g?null:g)}>${g}</button>`)}</div>
+
+    ${!active ? html`<section className="sec">
+      <${SecHead} en="BROWSE" title="ジャンルから探す"/>
+      <div className="tiles">${CONFIG.genres.map(g=>{const hh=genreHue[g]; return html`<button key=${g} className="tile" onClick=${()=>setGenre(g)} style=${{background:`linear-gradient(135deg,hsl(${hh} 65% 45%),hsl(${hh-40} 70% 20%))`}}>${g}<small>${songs.filter(s=>s.genre===g).length}曲</small></button>`})}</div>
+    </section>` : html`<section className="sec">
+      <div className="sec-h"><div><span className="en">RESULTS</span><h2>${songHits.length+artistHits.length}件の結果</h2></div><button className="link" onClick=${clear}>条件をクリア</button></div>
+      ${artistHits.length>0 && html`<div className="hrow" style=${{marginBottom:10}}>${artistHits.map(a=>html`<button key=${a.id} className="artist" onClick=${()=>openArtist(a.id)}><${Cover} item=${a} radius="50%"/><div className="n">${a.name}</div><div className="f">アーティスト</div></button>`)}</div>`}
+      ${mode!=="artist" || query==="" ? html`<div className="list">${songHits.map(s=>html`<${SongRow} key=${s.id} song=${s} artist=${artistOf(s)} cur=${current?.id===s.id} playing=${playing} fav=${favs.has(s.id)} onPlay=${()=>play(s,songHits)} onFav=${()=>toggleFav(s.id)}/>`)}</div>` : null}
+      ${songHits.length+artistHits.length===0 && html`<div className="empty">「${q||genre||tool}」に一致する楽曲は見つかりませんでした。<br/>別のキーワードやジャンルで試してください。</div>`}
+    </section>`}
+  </div>`;
+}
+
+/* ---------- UPLOAD ---------- */
+/* ファイル選択まわり
+   - 選んだファイルは確認画面までは URL.createObjectURL で試聴・プレビューし、申請時に Supabase Storage へ保存する
+   - サーバー保存（将来）：uploadService.uploadToServer を Cloudflare R2 の署名付きURLへの PUT に置き換える */
+const UPLOAD_RULES = {
+  audio:{exts:["mp3","wav","m4a"],mimes:["audio/mpeg","audio/mp3","audio/wav","audio/x-wav","audio/wave","audio/vnd.wave","audio/mp4","audio/x-m4a","audio/m4a","audio/aac"],maxMB:50,label:"MP3・WAV・M4A"},
+  image:{exts:["jpg","jpeg","png","heic","heif"],mimes:["image/jpeg","image/jpg","image/png","image/heic","image/heif"],maxMB:15,label:"JPG・PNG・HEIC"}
+};
+const AUDIO_ACCEPT = ".mp3,.wav,.m4a,audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a";
+const IMAGE_FILE_ACCEPT = ".jpg,.jpeg,.png,.heic,.heif,image/jpeg,image/png,image/heic,image/heif";
+const fmtSize = b => b>=1048576 ? (b/1048576).toFixed(1)+" MB" : Math.max(1,Math.round(b/1024))+" KB";
+const extOf = name => { const m=/\.([^.]+)$/.exec(name||""); return m?m[1].toLowerCase():""; };
+
+const uploadService = {
+  mode:"supabase",
+  check(kind,file){
+    const r=UPLOAD_RULES[kind]; const ext=extOf(file.name); const type=(file.type||"").toLowerCase();
+    const okExt=r.exts.includes(ext); const okMime=r.mimes.includes(type);
+    if(!okExt && !okMime) return `対応していない形式です（${ext?"."+ext:type||"形式不明"}）。${r.label}のファイルを選んでください。`;
+    if(file.size===0) return "ファイルが空です（0バイト）。iCloud Driveのファイルはダウンロード完了後にもう一度選んでください。";
+    if(file.size>r.maxMB*1048576) return `ファイルサイズが大きすぎます（${fmtSize(file.size)}）。${r.maxMB}MB以下のファイルを選んでください。`;
+    return null;
+  },
+  prepareLocal(file){ return {file,name:file.name,size:file.size,type:file.type,ext:extOf(file.name)||(file.type.split("/")[1]||""),url:URL.createObjectURL(file),storage:"local"}; },
+  release(item){ try{ if(item&&item.url) URL.revokeObjectURL(item.url); }catch(e){} },
+  contentType(kind,item){
+    const t=(item.type||"").toLowerCase(); if(UPLOAD_RULES[kind].mimes.includes(t)) return t;
+    return ({mp3:"audio/mpeg",wav:"audio/wav",m4a:"audio/mp4",jpg:"image/jpeg",jpeg:"image/jpeg",png:"image/png",heic:"image/heic",heif:"image/heif"})[item.ext]||"application/octet-stream";
+  },
+  // Supabase Storage に保存し、保存先パスを返す（パス：会員ID/楽曲ID.拡張子）
+  async uploadToServer(kind,userId,trackId,item){
+    const bucket = kind==="audio"?"audio":"covers";
+    const type = this.contentType(kind,item);
+    const fromType = ({"audio/mpeg":"mp3","audio/mp3":"mp3","audio/wav":"wav","audio/x-wav":"wav","audio/wave":"wav","audio/vnd.wave":"wav","audio/mp4":"m4a","audio/x-m4a":"m4a","audio/m4a":"m4a","audio/aac":"m4a","image/jpeg":"jpg","image/jpg":"jpg","image/png":"png","image/heic":"heic","image/heif":"heif"})[type];
+    const ext = UPLOAD_RULES[kind].exts.includes(item.ext) ? item.ext : (fromType||"bin");
+    const path = `${userId}/${trackId}.${ext}`;
+    const {error} = await sb.storage.from(bucket).upload(path,item.file,{contentType:type,upsert:false,cacheControl:"3600"});
+    if(error) throw error;
+    return path;
+  }
+};
+
+function useDrop(onFile){
+  const [over,setOver]=useState(false);
+  return [over,{
+    onDragOver:e=>{e.preventDefault();setOver(true)},
+    onDragLeave:()=>setOver(false),
+    onDrop:e=>{e.preventDefault();setOver(false);const f=e.dataTransfer.files&&e.dataTransfer.files[0];if(f)onFile(f)}
+  }];
+}
+
+function AudioPicker({value,error,onPick,onClear,onMeta}){
+  const ref=useRef(null);
+  const [playErr,setPlayErr]=useState(false);
+  const open=()=>ref.current&&ref.current.click();
+  const change=e=>{const f=e.target.files&&e.target.files[0]; e.target.value=""; if(f){setPlayErr(false);onPick(f);}};
+  const [over,dropProps]=useDrop(f=>{setPlayErr(false);onPick(f)});
+  return html`<div className="field">
+    <span className="fl">音源ファイル<span className="req">必須</span></span>
+    <input ref=${ref} id="f-audio" type="file" accept=${AUDIO_ACCEPT} className="vh" onChange=${change} tabIndex="-1" aria-hidden="true"/>
+    ${!value ? html`<button className=${"drop"+(over?" over":"")+(error?" bad":"")} onClick=${open} ...${dropProps}>
+        <span className="drop-ic"><${Icon} n="music" size=${26}/></span>
+        <b>「ファイル」から音源を選ぶ</b>
+        <span>iCloud Drive・このiPhone内・ダウンロードから選べます</span>
+        <span className="fmt">${UPLOAD_RULES.audio.label} · ${UPLOAD_RULES.audio.maxMB}MBまで</span>
+      </button>`
+    : html`<div className="fcard">
+        <div className="fcard-h">
+          <span className="fthumb"><${Icon} n="music" size=${22}/></span>
+          <div style=${{minWidth:0}}><div className="fname">${value.name}</div>
+            <div className="fmeta mono">${value.ext.toUpperCase()} · ${fmtSize(value.size)}${value.duration?" · "+fmtTime(value.duration):""}</div></div>
+        </div>
+        <audio controls playsInline preload="metadata" src=${value.url} style=${{width:"100%"}}
+          onLoadedMetadata=${e=>{const d=e.target.duration; if(isFinite(d)) onMeta({duration:Math.round(d)})}}
+          onError=${()=>setPlayErr(true)}></audio>
+        ${playErr && html`<div className="warn-line"><${Icon} n="info" size=${15}/><span>このブラウザでは試聴できない形式の可能性があります。投稿の申請はできます。</span></div>`}
+        <div className="fcard-f"><span className="tag local">未投稿</span><span className="spacer"></span>
+          <button className="btn sm ghost" onClick=${open}>変更</button>
+          <button className="btn sm danger" onClick=${onClear}>削除</button></div>
+      </div>`}
+    ${error && html`<span className="err" role="alert">${error}</span>`}
+  </div>`;
+}
+
+function ImagePicker({value,error,onPick,onClear}){
+  const photoRef=useRef(null), fileRef=useRef(null);
+  const [noPreview,setNoPreview]=useState(false);
+  const change=e=>{const f=e.target.files&&e.target.files[0]; e.target.value=""; if(f){setNoPreview(false);onPick(f);}};
+  const [over,dropProps]=useDrop(f=>{setNoPreview(false);onPick(f)});
+  return html`<div className="field">
+    <span className="fl">ジャケット画像<span className="opt-l">任意</span></span>
+    <input ref=${photoRef} id="f-photo" type="file" accept="image/*" className="vh" onChange=${change} tabIndex="-1" aria-hidden="true"/>
+    <input ref=${fileRef} id="f-imgfile" type="file" accept=${IMAGE_FILE_ACCEPT} className="vh" onChange=${change} tabIndex="-1" aria-hidden="true"/>
+    ${!value ? html`<div className=${"pick-grid"+(over?" over":"")} ...${dropProps}>
+        <button className=${"drop small"+(error?" bad":"")} onClick=${()=>photoRef.current.click()}><span className="drop-ic"><${Icon} n="image" size=${22}/></span><b>写真から選ぶ</b><span>写真ライブラリ</span></button>
+        <button className=${"drop small"+(error?" bad":"")} onClick=${()=>fileRef.current.click()}><span className="drop-ic"><${Icon} n="folder" size=${22}/></span><b>ファイルから選ぶ</b><span>「ファイル」アプリ</span></button>
+      </div>
+      <span className="hint">${UPLOAD_RULES.image.label} · ${UPLOAD_RULES.image.maxMB}MBまで。正方形がおすすめです。未選択の場合は自動でデザインします。</span>`
+    : html`<div className="fcard">
+        <div className="img-row">
+          <div className="img-prev">${noPreview
+            ? html`<div className="img-fallback"><${Icon} n="image" size=${26}/><span>${value.ext.toUpperCase()}</span></div>`
+            : html`<img src=${value.url} alt="選択したジャケット画像" onLoad=${()=>setNoPreview(false)} onError=${()=>setNoPreview(true)}/>`}</div>
+          <div style=${{minWidth:0,display:"flex",flexDirection:"column",gap:4}}>
+            <div className="fname">${value.name}</div>
+            <div className="fmeta mono">${value.ext.toUpperCase()} · ${fmtSize(value.size)}</div>
+            ${noPreview && html`<div className="warn-line"><${Icon} n="info" size=${15}/><span>このブラウザではHEICのプレビューを表示できません。iPhoneのSafariでは表示されます。</span></div>`}
+            <span className="tag local" style=${{alignSelf:"flex-start"}}>未投稿</span>
+          </div>
+        </div>
+        <div className="fcard-f"><span className="spacer"></span>
+          <button className="btn sm ghost" onClick=${()=>photoRef.current.click()}>写真から変更</button>
+          <button className="btn sm ghost" onClick=${()=>fileRef.current.click()}>ファイルから変更</button>
+          <button className="btn sm danger" aria-label="画像を削除" onClick=${onClear}><${Icon} n="trash" size=${16}/></button></div>
+      </div>`}
+    ${error && html`<span className="err" role="alert">${error}</span>`}
+  </div>`;
+}
+
+function Upload({ctx}){
+  const {submit,setTab,repoMode,user,isAdmin} = ctx;
+  const empty = {title:"",artist:"",genre:"",tool:"Suno",toolOther:"",lyrics:"",audio:null,image:null,checks:CONFIG.rightsChecks.map(()=>false)};
+  const [f,setF] = useState(empty);
+  const [step,setStep] = useState("form");
+  const [errs,setErrs] = useState({});
+  const set = (k,v) => setF(p=>({...p,[k]:v}));
+  const submitted = useRef(false);
+  const [sending,setSending] = useState(false);
+
+  const pickFile = (kind,file) => {
+    const msg = uploadService.check(kind,file);
+    if(msg){ setErrs(e=>({...e,[kind]:msg})); return; }
+    setErrs(e=>({...e,[kind]:null}));
+    setF(p=>{ uploadService.release(p[kind]); return {...p,[kind]:uploadService.prepareLocal(file)}; });
+  };
+  const clearFile = kind => setF(p=>{ uploadService.release(p[kind]); return {...p,[kind]:null}; });
+  const metaAudio = m => setF(p=>p.audio?{...p,audio:{...p.audio,...m}}:p);
+
+  const validate = () => {
+    const e={};
+    if(!f.title.trim()) e.title="曲名を入力してください";
+    if(!f.artist.trim()) e.artist="アーティスト名を入力してください";
+    if(!f.genre) e.genre="ジャンルを選択してください";
+    if(f.tool==="その他"&&!f.toolOther.trim()) e.tool="使用したサービス名を入力してください";
+    if(!f.audio) e.audio="音源ファイルを選択してください";
+    if(f.checks.some(c=>!c)) e.checks="すべての項目を確認してチェックしてください";
+    setErrs(e); return Object.keys(e).length===0;
+  };
+  const toConfirm = () => { if(validate()){ setStep("confirm"); window.scrollTo(0,0);} else setTimeout(()=>{const el=document.querySelector(".err");el&&el.scrollIntoView({block:"center",behavior:"smooth"})},30); };
+  const send = async () => { if(sending) return; setSending(true); const ok = await submit(f); setSending(false); if(!ok) return; submitted.current=true; setStep("done"); window.scrollTo(0,0); };
+  const restart = () => { submitted.current=false; setF(empty); setErrs({}); setStep("form"); };
+  const steps = {form:1,confirm:2,done:3}[step];
+
+  if(!user) return html`<div className="screen">
+    <header className="top"><h1>楽曲を投稿</h1></header>
+    <div className="demo-note"><${Icon} n="info" size=${18}/><span>楽曲の投稿にはログインが必要です。会員登録は無料です。</span></div>
+    <${AuthPanel} ctx=${ctx}/>
+  </div>`;
+
+  return html`<div className="screen">
+    <header className="top">
+      ${step==="confirm"&&html`<button className="icon-btn" aria-label="入力に戻る" onClick=${()=>setStep("form")}><${Icon} n="back"/></button>`}
+      <h1>${step==="form"?"楽曲を投稿":step==="confirm"?"内容の確認":"申請完了"}</h1>
+    </header>
+    <div className="steps">${[1,2,3].map(i=>html`<i key=${i} className=${i<=steps?"on":""}></i>`)}</div>
+    <div style=${{fontSize:12,color:"var(--muted)"}}>1 入力 → 2 確認 → 3 審査へ申請</div>
+
+    ${step==="form" && html`<div className="form">
+      <div className="demo-note"><${Icon} n="info" size=${18}/><span><b>保存について：</b>曲名・音源・ジャケット画像は、申請時にAIMUSEのサーバーに保存されます。審査で承認されると、どの端末からでも再生できるようになります。</span></div>
+      <div className="field"><label htmlFor="f-title">曲名<span className="req">必須</span></label>
+        <input id="f-title" className="input" value=${f.title} onInput=${e=>set("title",e.target.value)} placeholder="例：真夜中のシグナル" maxLength="60"/>${errs.title&&html`<span className="err">${errs.title}</span>`}</div>
+      <div className="field"><label htmlFor="f-artist">アーティスト名<span className="req">必須</span></label>
+        <input id="f-artist" className="input" value=${f.artist} onInput=${e=>set("artist",e.target.value)} placeholder="活動名を入力" maxLength="40"/>${errs.artist&&html`<span className="err">${errs.artist}</span>`}</div>
+      <div className="field"><label htmlFor="f-genre">ジャンル<span className="req">必須</span></label>
+        <select id="f-genre" className="input" value=${f.genre} onChange=${e=>set("genre",e.target.value)}><option value="">選択してください</option>${CONFIG.genres.map(g=>html`<option key=${g} value=${g}>${g}</option>`)}</select>${errs.genre&&html`<span className="err">${errs.genre}</span>`}</div>
+      <div className="field"><span className="fl">使用したAIサービス<span className="req">必須</span></span>
+        <div className="seg">${CONFIG.tools.map(t=>html`<button key=${t} className=${f.tool===t?"on":""} onClick=${()=>set("tool",t)}>${t}</button>`)}</div>
+        ${f.tool==="その他"&&html`<input id="f-toolother" className="input" value=${f.toolOther} onInput=${e=>set("toolOther",e.target.value)} placeholder="サービス名（例：Stable Audio）"/>`}
+        ${errs.tool&&html`<span className="err">${errs.tool}</span>`}</div>
+      <${AudioPicker} value=${f.audio} error=${errs.audio} onPick=${file=>pickFile("audio",file)} onClear=${()=>clearFile("audio")} onMeta=${metaAudio}/>
+      <${ImagePicker} value=${f.image} error=${errs.image} onPick=${file=>pickFile("image",file)} onClear=${()=>clearFile("image")}/>
+      <div className="field"><label htmlFor="f-lyrics">歌詞</label>
+        <textarea id="f-lyrics" className="input" value=${f.lyrics} onInput=${e=>set("lyrics",e.target.value)} placeholder="1行ずつ入力。インスト曲は空欄で構いません"></textarea></div>
+      <div className="field"><span className="fl">権利の確認<span className="req">必須</span></span>
+        <div className="checks">${CONFIG.rightsChecks.map((c,i)=>html`<button key=${i} className=${"check"+(f.checks[i]?" on":"")} role="checkbox" aria-checked=${f.checks[i]} onClick=${()=>set("checks",f.checks.map((v,j)=>j===i?!v:v))}>
+          <span className="box">${f.checks[i]&&html`<${Icon} n="check" size=${14} sw=${3}/>`}</span><span>${c}</span></button>`)}</div>
+        ${errs.checks&&html`<span className="err">${errs.checks}</span>`}</div>
+      <button className="btn primary" onClick=${toConfirm}>確認画面へ進む</button>
+    </div>`}
+
+    ${step==="confirm" && html`<div className="form">
+      <div style=${{display:"grid",gridTemplateColumns:"110px minmax(0,1fr)",gap:14,alignItems:"center"}}>
+        <${Cover} item=${{id:"preview",hues:[275,230],pattern:3,imageUrl:f.image?.url}} radius=${14}/>
+        <div style=${{minWidth:0}}><div style=${{fontSize:19,fontWeight:900,lineHeight:1.3}}>${f.title}</div><div style=${{color:"var(--muted)",fontSize:14}}>${f.artist}</div><div style=${{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}><span className="tag">${f.genre}</span><${ToolTag} tool=${f.tool==="その他"?f.toolOther:f.tool}/></div></div>
+      </div>
+      <div className="field"><span className="fl">音源の試聴</span><audio controls playsInline preload="metadata" src=${f.audio.url} style=${{width:"100%"}}></audio></div>
+      <dl className="kv">
+        <dt>音源</dt><dd>${f.audio.name}<br/><span className="mono" style=${{color:"var(--muted)"}}>${f.audio.ext.toUpperCase()} · ${fmtSize(f.audio.size)}${f.audio.duration?" · "+fmtTime(f.audio.duration):""}</span></dd>
+        <dt>ジャケット</dt><dd>${f.image?f.image.name:"自動デザイン"}</dd>
+        <dt>AIサービス</dt><dd>${f.tool==="その他"?f.toolOther:f.tool}</dd>
+        <dt>歌詞</dt><dd style=${{whiteSpace:"pre-wrap"}}>${f.lyrics.trim()||"なし（インスト）"}</dd>
+        <dt>権利確認</dt><dd>${CONFIG.rightsChecks.length}項目すべて確認済み</dd>
+        <dt>保存先</dt><dd>投稿情報：AIMUSEのデータベース<br/>音源・画像：AIMUSEのサーバー</dd>
+      </dl>
+      <div className="demo-note"><${Icon} n="shield" size=${18}/><span>申請後、運営による権利・内容の審査を経て公開されます。審査結果はマイページの「投稿曲」で確認できます。</span></div>
+      <div className="btn-row"><button className="btn ghost" onClick=${()=>setStep("form")}>修正する</button><button className="btn primary" onClick=${send} disabled=${sending}>${sending?"アップロード中…":"投稿を申請する"}</button></div>
+    </div>`}
+
+    ${step==="done" && html`<div className="form" style=${{alignItems:"center",textAlign:"center",paddingTop:24}}>
+      <div style=${{width:76,height:76,borderRadius:"50%",background:"var(--grad)",display:"grid",placeItems:"center"}}><${Icon} n="check" size=${36} sw=${2.6}/></div>
+      <h2 style=${{fontSize:22,fontWeight:900}}>審査を申請しました</h2>
+      <p style=${{color:"var(--muted)",fontSize:14,maxWidth:320}}>「${f.title}」は審査待ちになりました。承認されると新着楽曲に表示されます。音源と画像はAIMUSEのサーバーに保存されました。</p>
+      <div className="btn-row" style=${{width:"100%"}}><button className="btn ghost" onClick=${restart}>続けて投稿</button>${isAdmin?html`<button className="btn primary" onClick=${()=>setTab("admin")}>審査画面を見る</button>`:html`<button className="btn primary" onClick=${()=>setTab("me")}>マイページへ</button>`}</div>
+    </div>`}
+  </div>`;
+}
+
+/* ---------- MY PAGE ---------- */
+function MyPage({ctx}){
+  const {songs,artists,artistOf,play,favs,toggleFav,follows,openArtist,submissions,setTab,current,playing,user,profile,isAdmin,signOut,recovery} = ctx;
+  const [tab,setT] = useState("fav");
+  if(recovery) return html`<div className="screen"><header className="top"><h1>マイページ</h1></header><${NewPasswordPanel} ctx=${ctx}/></div>`;
+  if(!user) return html`<div className="screen">
+    <header className="top"><h1>マイページ</h1></header>
+    <div className="demo-note"><${Icon} n="info" size=${18}/><span>ログインすると、楽曲の投稿と審査状況の確認ができます。</span></div>
+    <${AuthPanel} ctx=${ctx}/>
+  </div>`;
+  const myName = (profile&&profile.display_name)||(user.email||"").split("@")[0];
+  const favSongs = songs.filter(s=>favs.has(s.id));
+  const mine = submissions.filter(s=>s.mine);
+  const myPublic = mine.filter(s=>s.status==="public"||s.status==="hidden");
+  const followed = artists.filter(a=>follows.has(a.id));
+  const statusTag = st => st==="pending"?html`<span className="tag demo">審査待ち</span>`:st==="public"?html`<span className="tag ok">公開中</span>`:st==="hidden"?html`<span className="tag">非公開</span>`:html`<span className="tag bad">却下</span>`;
+  return html`<div className="screen">
+    <header className="top"><h1>マイページ</h1></header>
+    <div className="profile">
+      <div className="avatar"><div>${[...myName][0]?.toUpperCase()||"A"}</div></div>
+      <div><div style=${{fontSize:20,fontWeight:900}}>${myName}</div><div style=${{fontSize:12.5,color:"var(--muted)"}}>${user.email}${isAdmin?" · 管理者":""}</div></div>
+    </div>
+    <div className="stats">
+      <div className="stat"><b>${mine.length}</b><span>投稿曲</span></div>
+      <div className="stat"><b>${followed.length}</b><span>フォロー</span></div>
+      <div className="stat"><b>0</b><span>フォロワー</span></div>
+      <div className="stat"><b>${fmtNum(myPublic.reduce((a,s)=>a+s.plays,0))}</b><span>再生数</span></div>
+    </div>
+    ${isAdmin&&html`<button className="admin-entry" onClick=${()=>setTab("admin")}><${Icon} n="shield"/><div style=${{flex:1}}><b style=${{display:"block",fontSize:14}}>管理者画面</b><span style=${{fontSize:12,color:"var(--muted)"}}>投稿審査・通報対応・楽曲管理</span></div><${Icon} n="chev" size=${18}/></button>`}
+    <div className="tabs">${[["fav",`お気に入り ${favSongs.length}`],["mine",`投稿曲 ${mine.length}`],["follow",`フォロー中 ${followed.length}`]].map(([k,l])=>html`<button key=${k} className=${tab===k?"on":""} onClick=${()=>setT(k)}>${l}</button>`)}</div>
+    <div style=${{marginTop:8}}>
+      ${tab==="fav" && (favSongs.length ? html`<div className="list">${favSongs.map(s=>html`<${SongRow} key=${s.id} song=${s} artist=${artistOf(s)} cur=${current?.id===s.id} playing=${playing} fav=${true} onPlay=${()=>play(s,favSongs)} onFav=${()=>toggleFav(s.id)}/>`)}</div>` : html`<div className="empty">ハートをタップした曲がここに並びます</div>`)}
+      ${tab==="mine" && (mine.length ? html`<div className="list">${mine.map(s=>html`<div key=${s.id} className="row norank"><${Cover} item=${s} radius=${10}/><div style=${{minWidth:0}}><div className="t">${s.title}</div><div className="sub"><span className="n">${s.submittedAt}</span></div></div><div className="end">${statusTag(s.status)}</div></div>`)}</div>` : html`<div className="empty">まだ投稿した曲はありません<br/><button className="btn primary sm" style=${{margin:"14px auto 0"}} onClick=${()=>setTab("upload")}>楽曲を投稿する</button></div>`)}
+      ${tab==="follow" && (followed.length ? html`<div className="list">${followed.map(a=>html`<button key=${a.id} className="row norank" onClick=${()=>openArtist(a.id)}><${Cover} item=${a} radius="50%"/><div style=${{minWidth:0}}><div className="t">${a.name}</div><div className="sub">${fmtNum(a.followers)} フォロワー</div></div><${Icon} n="chev" size=${18}/></button>`)}</div>` : html`<div className="empty">フォローしたアーティストがここに並びます</div>`)}
+    </div>
+    <button className="btn ghost" style=${{marginTop:28}} onClick=${signOut}>ログアウト</button>
+  </div>`;
+}
+
+/* ---------- ARTIST ---------- */
+function Artist({ctx}){
+  const {artistId,artists,songs,play,favs,toggleFav,follows,toggleFollow,goBack,current,playing,artistOf} = ctx;
+  const a = artists.find(x=>x.id===artistId); if(!a) return null;
+  const list = songs.filter(s=>s.artistId===a.id).sort((x,y)=>y.plays-x.plays);
+  const on = follows.has(a.id);
+  return html`<div className="screen">
+    <header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button></header>
+    <div className="ahead">
+      <${Cover} item=${a} radius="50%"/>
+      <h2>${a.name}</h2>
+      <div style=${{color:"var(--muted)",fontSize:13}}>${fmtNum(a.followers+(on?1:0))} フォロワー · ${list.length}曲</div>
+      <p style=${{color:"var(--muted)",fontSize:13.5,maxWidth:320}}>${a.bio}</p>
+      <div style=${{display:"flex",gap:10,alignItems:"center"}}>
+        <button className=${"follow"+(on?" on":"")} onClick=${()=>toggleFollow(a.id)}>${on?"フォロー中":"フォローする"}</button>
+        ${list.length>0&&html`<button className="play-fab" aria-label="すべて再生" onClick=${()=>play(list[0],list)}><${PlayIcon} size=${18}/></button>`}
+      </div>
+    </div>
+    <section className="sec"><${SecHead} en="POPULAR" title="人気の曲"/>
+      <div className="list">${list.map((s,i)=>html`<${SongRow} key=${s.id} song=${s} artist=${a} rank=${i+1} cur=${current?.id===s.id} playing=${playing} fav=${favs.has(s.id)} onPlay=${()=>play(s,list)} onFav=${()=>toggleFav(s.id)}/>`)}</div>
+    </section>
+  </div>`;
+}
+
+/* ---------- ADMIN ---------- */
+function Admin({ctx}){
+  const {submissions,decide,reports,resolveReport,allSongs,artistOf,setVisibility,removeSong,goBack,isAdmin} = ctx;
+  const [tab,setT] = useState("review");
+  const [adminChecks,setAC] = useState({});
+  const [rejecting,setRejecting] = useState(null);
+  const [confirmDel,setConfirmDel] = useState(null);
+  const pending = submissions.filter(s=>s.status==="pending");
+  const openReports = reports.filter(r=>r.status==="open");
+  const songOf = id => allSongs.find(s=>s.id===id);
+  const ac = id => adminChecks[id]||CONFIG.adminChecks.map(()=>false);
+  if(!isAdmin) return html`<div className="screen"><header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>管理者画面</h1></header><div className="empty">このページは管理者のみ利用できます</div></div>`;
+  return html`<div className="screen">
+    <header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>管理者画面</h1></header>
+    <div className="sum">
+      <div className=${pending.length?"warn":""}><b>${pending.length}</b><span>審査待ち</span></div>
+      <div className=${openReports.length?"bad":""}><b>${openReports.length}</b><span>未対応の通報</span></div>
+      <div><b>${allSongs.filter(s=>s.status==="public").length}</b><span>公開中の楽曲</span></div>
+    </div>
+    <div className="tabs">
+      <button className=${tab==="review"?"on":""} onClick=${()=>setT("review")}>投稿審査${pending.length?html`<span className="badge-count">${pending.length}</span>`:""}</button>
+      <button className=${tab==="reports"?"on":""} onClick=${()=>setT("reports")}>通報${openReports.length?html`<span className="badge-count">${openReports.length}</span>`:""}</button>
+      <button className=${tab==="songs"?"on":""} onClick=${()=>setT("songs")}>楽曲管理</button>
+    </div>
+
+    ${tab==="review" && html`<div style=${{display:"flex",flexDirection:"column",gap:12,marginTop:14}}>
+      ${pending.length===0 && html`<div className="empty">審査待ちの投稿はありません</div>`}
+      ${pending.map(s=>{const checks=ac(s.id); const all=checks.every(Boolean); return html`<div key=${s.id} className="panel">
+        <div className="panel-h"><${Cover} item=${s} radius=${10}/><div style=${{minWidth:0}}><b>${s.title}</b><span>${s.artist} · ${s.genre} · ${s.submittedAt}</span><div style=${{display:"flex",gap:6,marginTop:4,flexWrap:"wrap"}}><${ToolTag} tool=${s.tool}/>${s.mine&&html`<span className="tag">あなたの投稿</span>`}</div></div></div>
+        <div className="mini-checks"><div style=${{color:"var(--fg)",fontWeight:700}}>投稿者の権利申告</div>${CONFIG.rightsChecks.map((c,i)=>html`<div key=${i}><${Icon} n=${s.checks[i]?"check":"x"} size=${14} sw=${2.4} style=${{color:s.checks[i]?"var(--ok)":"var(--bad)",flex:"none",marginTop:3}}/><span>${c}</span></div>`)}</div>
+        <div style=${{fontSize:12.5,color:"var(--muted)"}}>音源：${s.audioName}${s.audioUrl?"（試聴可）":"（音源ファイルがありません）"}</div>
+        ${s.audioUrl&&html`<audio controls src=${s.audioUrl} style=${{width:"100%"}}></audio>`}
+        <div><div style=${{fontSize:12.5,fontWeight:700,marginBottom:2}}>運営の著作権チェック</div>
+          ${CONFIG.adminChecks.map((c,i)=>html`<button key=${i} className=${"check"+(checks[i]?" on":"")} style=${{padding:"7px 0"}} role="checkbox" aria-checked=${checks[i]} onClick=${()=>setAC({...adminChecks,[s.id]:checks.map((v,j)=>j===i?!v:v)})}><span className="box">${checks[i]&&html`<${Icon} n="check" size=${14} sw=${3}/>`}</span><span>${c}</span></button>`)}</div>
+        ${rejecting===s.id ? html`<div><div style=${{fontSize:12.5,fontWeight:700,marginBottom:8}}>却下理由を選択</div><div className="reasons">${CONFIG.rejectReasons.map(r=>html`<button key=${r} className="chip" onClick=${()=>{decide(s.id,"rejected",r);setRejecting(null)}}>${r}</button>`)}</div><button className="link" style=${{marginTop:10}} onClick=${()=>setRejecting(null)}>キャンセル</button></div>`
+          : html`<div className="btn-row"><button className="btn sm danger" onClick=${()=>setRejecting(s.id)}>却下</button><button className="btn sm okb" disabled=${!all} style=${{opacity:all?1:.4}} onClick=${()=>decide(s.id,"approved")}>${all?"承認して公開":"チェック後に承認"}</button></div>`}
+      </div>`})}
+    </div>`}
+
+    ${tab==="reports" && html`<div style=${{display:"flex",flexDirection:"column",gap:12,marginTop:14}}>
+      ${reports.length===0&&html`<div className="empty">通報はありません</div>`}
+      ${reports.map(r=>{const s=songOf(r.songId); if(!s) return null; return html`<div key=${r.id} className="panel" style=${{opacity:r.status==="open"?1:.55}}>
+        <div className="panel-h"><${Cover} item=${s} radius=${10}/><div style=${{minWidth:0}}><b>${s.title}</b><span>${artistOf(s).name} · ${s.status==="public"?"公開中":"非公開"}</span></div></div>
+        <div style=${{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><${Icon} n="flag" size=${16} style=${{color:"var(--bad)"}}/><b style=${{fontSize:14}}>${r.reason}</b></div>
+        <div className="mono" style=${{color:"var(--muted)"}}>${r.reporter} · ${r.at}</div>
+        ${r.status==="open" ? html`<div className="btn-row"><button className="btn sm ghost" onClick=${()=>resolveReport(r.id,"dismiss")}>問題なし</button><button className="btn sm danger" onClick=${()=>resolveReport(r.id,"hide")}>非公開にする</button></div>`
+          : html`<span className="tag ok">対応済み：${r.action==="hide"?"非公開にしました":"問題なしで完了"}</span>`}
+      </div>`})}
+    </div>`}
+
+    ${tab==="songs" && html`<div className="list" style=${{marginTop:8}}>
+      ${allSongs.map(s=>html`<div key=${s.id} className="row norank" style=${{opacity:s.status==="public"?1:.55}}>
+        <${Cover} item=${s} radius=${10}/>
+        <div style=${{minWidth:0}}><div className="t">${s.title}</div><div className="sub"><span className="n">${artistOf(s).name}</span>${s.status==="public"?html`<span className="tag ok">公開</span>`:html`<span className="tag demo">非公開</span>`}</div></div>
+        <div className="end">
+          ${confirmDel===s.id ? html`<button className="btn sm danger" onClick=${()=>{removeSong(s.id);setConfirmDel(null)}}>削除する</button><button className="icon-btn" aria-label="キャンセル" onClick=${()=>setConfirmDel(null)}><${Icon} n="x" size=${18}/></button>`
+            : html`<button className="icon-btn" aria-label=${s.status==="public"?"非公開にする":"公開する"} onClick=${()=>setVisibility(s.id,s.status==="public"?"hidden":"public")}><${Icon} n=${s.status==="public"?"eye":"eyeOff"} size=${20}/></button><button className="icon-btn" aria-label="削除" onClick=${()=>s.status==="public"?removeSong(s.id):setConfirmDel(s.id)}><${Icon} n="trash" size=${20}/></button>`}
+        </div>
+      </div>`)}
+    </div>`}
+  </div>`;
+}
+
+/* ---------- PLAYER ---------- */
+function MiniPlayer({song,artist,playing,pos,toggle,open,fav,onFav}){
+  const [h1,h2]=song.hues||[270,230];
+  return html`<div className="mini"><div className="mini-in" style=${{background:`linear-gradient(110deg,hsl(${h1} 45% 22%),hsl(${h2} 45% 14%))`}} role="button" tabIndex="0" onClick=${open} onKeyDown=${e=>e.key==="Enter"&&open()}>
+    <${Cover} item=${song} radius=${8}/>
+    <div style=${{minWidth:0}}><div className="t">${song.title}</div><div className="a"><span style=${{overflow:"hidden",textOverflow:"ellipsis"}}>${artist.name}</span>${!song.audioUrl&&html`<span className="tag demo" style=${{fontSize:9.5,padding:"0 6px"}}>音源なし</span>`}</div></div>
+    <div style=${{display:"flex",alignItems:"center"}}>
+      <button className="icon-btn" aria-label="お気に入り" onClick=${e=>{e.stopPropagation();onFav()}}><${Icon} n="heart" size=${21} fill=${fav} style=${{color:fav?"#ff6fae":"#fff"}}/></button>
+      <button className="icon-btn" aria-label=${playing?"一時停止":"再生"} onClick=${e=>{e.stopPropagation();toggle()}}>${playing?html`<${PauseIcon} size=${24}/>`:html`<${PlayIcon} size=${24}/>`}</button>
+    </div>
+    <div className="mini-bar"><i style=${{width:(pos/song.duration*100)+"%"}}></i></div>
+  </div></div>`;
+}
+
+function FullPlayer({ctx}){
+  const {current:song,artistOf,playing,toggle,pos,seek,next,prev,repeat,cycleRepeat,shuffle,setShuffle,favs,toggleFav,close,showLyrics,setShowLyrics,report,openArtist,queueLabel} = ctx;
+  const [sheet,setSheet] = useState(false);
+  const lyrRef = useRef(null);
+  const artist = artistOf(song);
+  const [h1,h2] = song.hues||[270,230];
+  const pct = Math.min(100,pos/song.duration*100);
+  const lines = song.lyrics||[];
+  const textLines = lines.map((l,i)=>[l,i]).filter(([l])=>l);
+  const activeIdx = textLines.length ? textLines[Math.min(textLines.length-1,Math.floor(pos/song.duration*textLines.length))][1] : -1;
+  useEffect(()=>{ const el=lyrRef.current?.querySelector("p.on"); if(el) el.scrollIntoView({block:"center",behavior:"smooth"}); },[activeIdx,showLyrics]);
+  const fav = favs.has(song.id);
+  return html`<div className="player" style=${{background:`radial-gradient(120% 70% at 50% 0%, hsl(${h1} 55% 32%), transparent 70%), linear-gradient(180deg,hsl(${h2} 45% 14%),#0b0912 85%)`}} role="dialog" aria-label="再生画面">
+    <div className="player-in">
+      <div className="ph">
+        <button className="icon-btn" aria-label="閉じる" onClick=${close}><${Icon} n="down" size=${26}/></button>
+        <div className="mid">再生中のリスト<b>${queueLabel}</b></div>
+        <button className="icon-btn" aria-label="この曲を通報" onClick=${()=>setSheet(true)}><${Icon} n="flag" size=${20}/></button>
+      </div>
+      <div className="stage">
+        ${showLyrics ? html`<div className="lyrics" ref=${lyrRef}>${lines.length ? lines.map((l,i)=>l?html`<p key=${i} className=${i===activeIdx?"on":""}>${l}</p>`:html`<p key=${i} className="gap"></p>`) : html`<div className="none">${song.instrumental?"インストゥルメンタル曲のため歌詞はありません":"歌詞はまだ登録されていません"}</div>`}</div>`
+          : html`<${Cover} item=${song} title=${song.title} radius=${22} style=${{width:"min(100%,360px)"}}/>`}
+      </div>
+      <div className="pt">
+        <div style=${{flex:1,minWidth:0}}><div className="t">${song.title}</div><button className="a" onClick=${()=>{close();openArtist(artist.id)}}>${artist.name}</button>
+          <div style=${{display:"flex",gap:6,marginTop:6}}><${ToolTag} tool=${song.tool}/><span className="tag" style=${{color:"#ddd"}}>${song.genre}</span></div></div>
+        <button className="icon-btn" aria-label=${fav?"お気に入りから削除":"お気に入りに追加"} onClick=${()=>toggleFav(song.id)}><${Icon} n="heart" size=${28} fill=${fav} style=${{color:fav?"#ff6fae":"#fff"}}/></button>
+      </div>
+      <div>
+        <input id="seek" className="seek" type="range" min="0" max=${song.duration} step="1" value=${Math.floor(pos)} onInput=${e=>seek(+e.target.value)} style=${{"--p":pct+"%"}} aria-label="再生位置"/>
+        <div className="times mono"><span>${fmtTime(pos)}</span><span>-${fmtTime(song.duration-pos)}</span></div>
+      </div>
+      <div className="ctrls">
+        <button className=${"icon-btn"+(shuffle?" on":"")} aria-label="シャッフル" aria-pressed=${shuffle} onClick=${()=>setShuffle(!shuffle)}><${Icon} n="shuffle" size=${22}/></button>
+        <button className="icon-btn" aria-label="前の曲" onClick=${prev} style=${{width:52,height:52}}><${Icon} n="prev" size=${30} fill=${true} sw=${1.4}/></button>
+        <button className="big-play" aria-label=${playing?"一時停止":"再生"} onClick=${toggle}>${playing?html`<${PauseIcon} size=${32}/>`:html`<${PlayIcon} size=${32}/>`}</button>
+        <button className="icon-btn" aria-label="次の曲" onClick=${()=>next(false)} style=${{width:52,height:52}}><${Icon} n="next" size=${30} fill=${true} sw=${1.4}/></button>
+        <button className=${"icon-btn"+(repeat!=="off"?" on":"")} aria-label=${"リピート："+({off:"オフ",all:"全曲",one:"1曲"}[repeat])} onClick=${cycleRepeat} style=${{position:"relative"}}><${Icon} n="repeat" size=${22}/>${repeat==="one"&&html`<span style=${{position:"absolute",top:5,right:5,fontSize:9,fontWeight:900}}>1</span>`}</button>
+      </div>
+      <div className="pfoot">
+        <button className=${"pill"+(showLyrics?" on":"")} onClick=${()=>setShowLyrics(!showLyrics)}><${Icon} n="lyrics" size=${16}/>歌詞</button>
+        <span className="mono" style=${{color:"rgba(255,255,255,.6)"}}>${fmtNum(song.plays)}回再生</span>
+      </div>
+      ${!song.audioUrl && html`<div className="demo-strip"><${Icon} n="info" size=${16} style=${{flex:"none",marginTop:2}}/><span>この曲の音源ファイルが見つからないため再生できません。</span></div>`}
+    </div>
+    ${sheet && html`<div className="scrim" onClick=${()=>setSheet(false)}><div className="sheet" onClick=${e=>e.stopPropagation()}>
+      <h3>この曲を通報</h3><p style=${{fontSize:13,color:"var(--muted)"}}>「${song.title}」について、該当する理由を選んでください。運営が確認します。</p>
+      ${CONFIG.reportReasons.map(r=>html`<button key=${r} className="opt" onClick=${()=>{report(song.id,r);setSheet(false)}}>${r}</button>`)}
+      <button className="btn ghost" style=${{marginTop:4}} onClick=${()=>setSheet(false)}>キャンセル</button>
+    </div></div>`}
+  </div>`;
+}
+
+/* ---------- 会員ログイン ---------- */
+const authError = e => {
+  const m=(e&&e.message)||"";
+  if(/Invalid login credentials/i.test(m)) return "メールアドレスまたはパスワードが正しくありません";
+  if(/Email not confirmed/i.test(m)) return "メールアドレスの確認が完了していません。届いたメールのリンクを開いてください";
+  if(/already registered|already been registered/i.test(m)) return "このメールアドレスはすでに登録されています。ログインしてください";
+  if(/rate limit/i.test(m)) return "短時間に操作が集中しています。しばらく待ってからお試しください";
+  if(/Password should be/i.test(m)) return "パスワードは6文字以上で入力してください";
+  return "うまくいきませんでした。通信状態を確認して、もう一度お試しください";
+};
+function AuthPanel({ctx}){
+  const {say} = ctx;
+  const [mode,setMode] = useState("login");
+  const [email,setEmail] = useState("");
+  const [pw,setPw] = useState("");
+  const [name,setName] = useState("");
+  const [busy,setBusy] = useState(false);
+  const [err,setErr] = useState(null);
+  const [info,setInfo] = useState(null);
+  if(!sb) return html`<div className="empty">サーバーとの接続設定が完了していないため、ログインできません。</div>`;
+  const go = async () => {
+    setErr(null); setInfo(null);
+    const em=email.trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){ setErr("メールアドレスを正しく入力してください"); return; }
+    if(mode!=="reset" && pw.length<6){ setErr("パスワードは6文字以上で入力してください"); return; }
+    setBusy(true);
+    try{
+      if(mode==="login"){ const {error}=await auth.signIn(em,pw); if(error) throw error; say("ログインしました"); }
+      else if(mode==="signup"){ const {data,error}=await auth.signUp(em,pw,name.trim()); if(error) throw error;
+        if(data.session) say("会員登録が完了しました");
+        else { setInfo("確認メールを送信しました。メール内のリンクを開くと登録が完了します。"); setMode("login"); } }
+      else { const {error}=await auth.resetPassword(em); if(error) throw error; setInfo("パスワード再設定用のメールを送信しました。メール内のリンクを開いてください。"); setMode("login"); }
+    }catch(e){ setErr(authError(e)); }
+    setBusy(false);
+  };
+  return html`<div className="form">
+    ${mode!=="reset" && html`<div className="seg">${[["login","ログイン"],["signup","新規登録"]].map(([k,l])=>html`<button key=${k} className=${mode===k?"on":""} onClick=${()=>{setMode(k);setErr(null)}}>${l}</button>`)}</div>`}
+    ${mode==="reset" && html`<div style=${{fontSize:15,fontWeight:700}}>パスワードの再設定</div>`}
+    ${mode==="signup" && html`<div className="field"><label htmlFor="a-name">表示名<span className="opt-l">任意</span></label>
+      <input id="a-name" className="input" value=${name} onInput=${e=>setName(e.target.value)} placeholder="活動名など" maxLength="40" autoComplete="nickname"/></div>`}
+    <div className="field"><label htmlFor="a-email">メールアドレス</label>
+      <input id="a-email" className="input" type="email" value=${email} onInput=${e=>setEmail(e.target.value)} autoComplete="email" inputMode="email" autoCapitalize="none"/></div>
+    ${mode!=="reset" && html`<div className="field"><label htmlFor="a-pw">パスワード</label>
+      <input id="a-pw" className="input" type="password" value=${pw} onInput=${e=>setPw(e.target.value)} autoComplete=${mode==="signup"?"new-password":"current-password"} placeholder="6文字以上"/></div>`}
+    ${err && html`<span className="err" role="alert">${err}</span>`}
+    ${info && html`<div className="demo-note"><${Icon} n="info" size=${18}/><span>${info}</span></div>`}
+    <button className="btn primary" onClick=${go} disabled=${busy}>${busy?"処理中…":mode==="login"?"ログイン":mode==="signup"?"会員登録（無料）":"再設定メールを送る"}</button>
+    ${mode==="login" && html`<button className="link" onClick=${()=>{setMode("reset");setErr(null)}}>パスワードを忘れた場合</button>`}
+    ${mode==="reset" && html`<button className="link" onClick=${()=>{setMode("login");setErr(null)}}>ログインに戻る</button>`}
+  </div>`;
+}
+function NewPasswordPanel({ctx}){
+  const {say} = ctx;
+  const [pw,setPw] = useState("");
+  const [busy,setBusy] = useState(false);
+  const [err,setErr] = useState(null);
+  const go = async () => {
+    if(pw.length<6){ setErr("パスワードは6文字以上で入力してください"); return; }
+    setBusy(true); setErr(null);
+    const {error} = await auth.updatePassword(pw);
+    setBusy(false);
+    if(error) setErr(authError(error)); else say("パスワードを変更しました");
+  };
+  return html`<div className="form">
+    <div style=${{fontSize:15,fontWeight:700}}>新しいパスワードを設定</div>
+    <div className="field"><label htmlFor="a-newpw">新しいパスワード</label>
+      <input id="a-newpw" className="input" type="password" value=${pw} onInput=${e=>setPw(e.target.value)} autoComplete="new-password" placeholder="6文字以上"/></div>
+    ${err && html`<span className="err" role="alert">${err}</span>`}
+    <button className="btn primary" onClick=${go} disabled=${busy}>${busy?"処理中…":"パスワードを変更する"}</button>
+  </div>`;
+}
+
+/* ---------- APP ---------- */
+const NO_AUDIO = "音源ファイルが見つからないため再生できません";
+function App(){
+  const [tab,setTab] = useState("home");
+  const [history,setHistory] = useState([]);
+  const [artistId,setArtistId] = useState(null);
+  const [tracks,setTracks] = useState([]);
+  const [reportsRaw,setReports] = useState([]);
+  const [repoMode,setRepoMode] = useState("pending");
+  const [authState,setAuthState] = useState({user:null,profile:null,ready:false,recovery:false});
+  const [favs,setFavs] = useState(()=>dataService.loadFavorites());
+  const [follows,setFollows] = useState(()=>dataService.loadFollows());
+  const [queue,setQueue] = useState([]);
+  const [queueLabel,setQueueLabel] = useState("");
+  const [currentId,setCurrentId] = useState(null);
+  const [playing,setPlaying] = useState(false);
+  const [pos,setPos] = useState(0);
+  const [repeat,setRepeat] = useState("off");
+  const [shuffle,setShuffle] = useState(false);
+  const [playerOpen,setPlayerOpen] = useState(false);
+  const [showLyrics,setShowLyrics] = useState(false);
+  const [toast,setToast] = useState(null);
+  const audioRef = useRef(null);
+  const nextRef = useRef(null);
+
+  const say = m => { setToast(m); clearTimeout(window.__toastT); window.__toastT=setTimeout(()=>setToast(null),2400); };
+  const fail = () => say("保存できませんでした。通信状態を確認して、もう一度お試しください");
+
+  // 会員状態と保存データの読み込み（Supabase）
+  useEffect(()=>{
+    const un = repo.subscribe((t,r,m)=>{ setTracks(t); setReports(r); setRepoMode(m); });
+    const ua = auth.subscribe(setAuthState);
+    auth.init().then(()=>repo.init());
+    return ()=>{ un(); ua(); };
+  },[]);
+  const user = authState.user, profile = authState.profile, isAdmin = !!(profile&&profile.is_admin);
+  useEffect(()=>{ if(authState.recovery){ setHistory([]); setTab("me"); } },[authState.recovery]);
+
+  const toSong = t => { const lyr=Array.isArray(t.lyrics)&&t.lyrics.length?t.lyrics:null; return {
+    id:t.id,title:t.title,artistId:artistKey(t.artist),artistName:t.artist,genre:t.genre,
+    tool:CONFIG.tools.includes(t.tool)?t.tool:"その他",toolName:t.toolName||t.tool,
+    duration:t.duration||0,plays:t.plays||0,date:(t.approvedAt||t.submittedAt||""),hues:t.hues||[270,230],pattern:t.pattern??0,
+    lyrics:lyr,instrumental:!lyr,status:t.status,audioUrl:t.audioUrl||null,imageUrl:t.imageUrl||null,mine:!!(user&&t.userId===user.id),featured:true }; };
+
+  const allSongs = useMemo(()=>tracks.filter(t=>t.status==="public"||t.status==="hidden").sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(toSong),[tracks,user]);
+  const songs = useMemo(()=>allSongs.filter(s=>s.status==="public").sort((a,b)=>b.date.localeCompare(a.date)),[allSongs]);
+  const artists = useMemo(()=>{ const m=new Map(); songs.forEach(s=>{ if(!m.has(s.artistId)) m.set(s.artistId,{id:s.artistId,name:s.artistName,hues:s.hues,pattern:s.pattern,followers:0,bio:""}); }); return [...m.values()].map(a=>({...a,followers:follows.has(a.id)?1:0})); },[songs,follows]);
+  const submissions = useMemo(()=>tracks.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(t=>({...t,tool:t.toolName||t.tool,mine:!!(user&&t.userId===user.id),lyrics:t.lyrics||null,checks:t.checks||[]})),[tracks,user]);
+  const reports = useMemo(()=>reportsRaw.filter(r=>tracks.some(t=>t.id===r.songId)).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)),[reportsRaw,tracks]);
+  const current = allSongs.find(s=>s.id===currentId)||null;
+  const artistOf = s => artists.find(a=>a.id===s.artistId)||{name:s.artistName||"不明",id:s.artistId};
+
+  const go = t => { setHistory(h=>[...h,tab]); setTab(t); window.scrollTo(0,0); };
+  const goBack = () => { setHistory(h=>{const p=h[h.length-1]||"home"; setTab(p); return h.slice(0,-1)}); window.scrollTo(0,0); };
+  const navTo = t => { setHistory([]); setTab(t); window.scrollTo(0,0); };
+  const openArtist = id => { setArtistId(id); go("artist"); };
+
+  const toggleFav = id => setFavs(prev=>{const n=new Set(prev); if(n.has(id)){n.delete(id);say("お気に入りから削除しました")}else{n.add(id);say("お気に入りに追加しました")} dataService.saveFavorites(n); return n;});
+  const toggleFollow = id => setFollows(prev=>{const n=new Set(prev); if(n.has(id)){n.delete(id);say("フォローを解除しました")}else{n.add(id);say("フォローしました")} dataService.saveFollows(n); return n;});
+
+  const startSong = song => { setCurrentId(song.id); setPos(0); setPlaying(!!song.audioUrl); if(!song.audioUrl) say(NO_AUDIO); };
+  const play = (song,list) => {
+    if(currentId===song.id){ if(!song.audioUrl){ say(NO_AUDIO); return; } setPlaying(p=>!p); return; }
+    setQueue((list||[song]).map(s=>s.id));
+    setQueueLabel(tab==="search"?"検索結果":tab==="me"?"マイページ":tab==="artist"?artistOf(song).name:"ホーム");
+    startSong(song);
+  };
+  const toggle = () => { if(!current) return; if(!current.audioUrl){ say(NO_AUDIO); return; } setPlaying(p=>!p); };
+  const seek = v => { setPos(v); if(current?.audioUrl&&audioRef.current) audioRef.current.currentTime=v; };
+  const songById = id => allSongs.find(s=>s.id===id);
+  const next = (auto=false) => {
+    if(!queue.length||!current) return;
+    if(auto && repeat==="one"){ seek(0); setPlaying(true); return; }
+    const i = queue.indexOf(currentId);
+    let ni;
+    if(shuffle && queue.length>1){ do{ ni=Math.floor(Math.random()*queue.length) }while(ni===i); }
+    else ni = i+1;
+    if(ni>=queue.length){ if(repeat==="all"||!auto) ni=0; else { setPlaying(false); seek(0); return; } }
+    const s = songById(queue[ni]); if(s) startSong(s);
+  };
+  nextRef.current = next;
+  const prev = () => {
+    if(pos>3||!queue.length){ seek(0); return; }
+    const i = queue.indexOf(currentId);
+    const s = songById(queue[(i-1+queue.length)%queue.length]); if(s) startSong(s);
+  };
+  const cycleRepeat = () => setRepeat(r=>{const n=r==="off"?"all":r==="all"?"one":"off"; say({off:"リピート：オフ",all:"リピート：全曲",one:"リピート：1曲"}[n]); return n;});
+
+  // 再生数：音源のある曲を再生し始めたときに1回数える
+  const counted = useRef(null);
+  useEffect(()=>{
+    if(!current||!playing||!current.audioUrl||counted.current===current.id) return;
+    counted.current=current.id;
+    const t=tracks.find(x=>x.id===current.id);
+    if(t&&t.status==="public") repo.incPlays(t.id).catch(()=>{});
+  },[currentId,playing]);
+  useEffect(()=>{ counted.current=null; },[currentId]);
+
+  // 音源の再生
+  useEffect(()=>{
+    const a = audioRef.current; if(!a) return;
+    if(current?.audioUrl){
+      if(a.dataset.tid!==current.id){ a.src=current.audioUrl; a.dataset.src=current.audioUrl; a.dataset.tid=current.id; a.currentTime=0; }
+      else if(a.dataset.src!==current.audioUrl && a.paused){
+        // 同じ曲の期限付きURLが更新された：一時停止中なら再生位置を保ったまま差し替え
+        const t=a.currentTime; a.src=current.audioUrl; a.dataset.src=current.audioUrl;
+        a.addEventListener("loadedmetadata",()=>{ try{ a.currentTime=t; }catch(e){} },{once:true});
+      }
+      if(playing) a.play().catch(()=>{ setPlaying(false); say("再生を開始できませんでした"); }); else a.pause();
+    } else { a.pause(); if(playing) setPlaying(false); }
+  },[currentId,playing,current?.audioUrl]);
+
+  const submit = async f => {
+    if(!user){ say("投稿にはログインが必要です"); return false; }
+    const id = crypto.randomUUID();
+    let audioPath=null, imagePath=null;
+    try{
+      audioPath = await uploadService.uploadToServer("audio",user.id,id,f.audio);
+      if(f.image) imagePath = await uploadService.uploadToServer("image",user.id,id,f.image);
+      await repo.insertTrack({
+        id, user_id:user.id, title:f.title.trim(), artist:f.artist.trim(), genre:f.genre, tool:f.tool, tool_name:f.tool==="その他"?f.toolOther.trim():f.tool,
+        audio_path:audioPath, audio_name:f.audio.name, audio_size:f.audio.size, audio_ext:f.audio.ext, duration:(f.audio.duration>0&&f.audio.duration<=3600)?f.audio.duration:0,
+        image_path:imagePath, image_name:f.image?f.image.name:null,
+        lyrics:f.lyrics.trim()?f.lyrics.split("\n"):[], checks:[...f.checks],
+        submitted_at:nowStr(), status:"pending", plays:0,
+        hues:[260+Math.floor(Math.random()*80),210+Math.floor(Math.random()*50)], pattern:Math.floor(Math.random()*5)
+      });
+      return true;
+    }catch(e){
+      console.warn("submit",e);
+      repo.removeFiles({audioPath,imagePath}).catch(()=>{});
+      const m=(e&&e.message)||"";
+      say(/審査待ちの楽曲は/.test(m) ? "審査待ちの楽曲は1人10曲までです。審査が終わってから投稿してください"
+        : /24時間に20曲/.test(m) ? "投稿は24時間に20曲までです。時間をおいてから投稿してください"
+        : /このアーティスト名/.test(m) ? "このアーティスト名は使用できません（「AIMUSE」「運営」「公式」などは使えません）"
+        : "アップロードできませんでした。通信状態を確認して、もう一度お試しください");
+      return false;
+    }
+  };
+  const decide = (id,status,reason) => {
+    const patch = status==="approved" ? {status:"public",approvedAt:nowStr()} : {status:"rejected",rejectReason:reason,reviewedAt:nowStr()};
+    repo.put("tracks",id,patch).then(()=>say(status==="approved"?"承認して公開しました":"却下しました："+reason)).catch(fail);
+  };
+  const resolveReport = (id,action) => {
+    const r = reportsRaw.find(x=>x.id===id);
+    repo.put("reports",id,{status:"resolved",action,resolvedAt:nowStr()}).catch(fail);
+    if(action==="hide"&&r) repo.put("tracks",r.songId,{status:"hidden"}).catch(fail);
+    say(action==="hide"?"楽曲を非公開にしました":"問題なしとして対応済みにしました");
+  };
+  const report = (songId,reason) => { if(!user){ say("通報にはログインが必要です"); return; } repo.insertReport({song_id:songId,reason,reporter_id:user.id,reporter_name:(profile&&profile.display_name)||"会員",at:nowStr(),status:"open"}).then(()=>say("通報を受け付けました")).catch(fail); };
+  const setVisibility = (id,status) => repo.put("tracks",id,{status}).then(()=>say(status==="public"?"公開しました":"非公開にしました")).catch(fail);
+  // 楽曲の削除（安全な2段階方式）
+  //  ・公開中の曲は削除できない。先に「非公開」にしてから削除する
+  //  ・音源・画像ファイルはすぐには消さない（30日間は管理者が復元できる。期限後に整理）
+  const removeSong = id => {
+    const t = tracks.find(x=>x.id===id);
+    if(t && t.status==="public"){ say("公開中の楽曲は削除できません。先に非公開にしてください"); return; }
+    repo.remove("tracks",id).then(()=>{
+      say("楽曲を削除しました（30日以内なら復元できます）");
+      setQueue(q=>q.filter(x=>x!==id)); if(currentId===id){setCurrentId(null);setPlaying(false);setPlayerOpen(false)}
+    }).catch(e=>say(/公開中の楽曲は削除できません/.test((e&&e.message)||"") ? "公開中の楽曲は削除できません。先に非公開にしてください" : "削除できませんでした。通信状態を確認して、もう一度お試しください"));
+  };
+
+  const signOut = () => auth.signOut().then(()=>{ say("ログアウトしました"); navTo("home"); });
+  const ctx = {user,profile,isAdmin,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
+    current,playing,toggle,pos,seek,next,prev,repeat,cycleRepeat,shuffle,setShuffle,close:()=>setPlayerOpen(false),showLyrics,setShowLyrics,queueLabel};
+
+  useEffect(()=>{ document.body.style.overflow = playerOpen?"hidden":""; },[playerOpen]);
+
+  const navItems = [["home","ホーム","home"],["search","検索","search"],["upload","投稿","plus"],["me","マイページ","user"]];
+  const navActive = tab==="artist"?(history[0]||"home"):tab==="admin"?"me":tab;
+  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin}[tab];
+
+  return html`<div className="app">
+    <${Screen} key=${tab+(tab==="artist"?artistId:"")} ctx=${ctx}/>
+    ${current && !playerOpen && html`<${MiniPlayer} song=${current} artist=${artistOf(current)} playing=${playing} pos=${pos} toggle=${toggle} open=${()=>setPlayerOpen(true)} fav=${favs.has(current.id)} onFav=${()=>toggleFav(current.id)}/>`}
+    <nav className="nav" aria-label="メインナビゲーション"><div className="nav-in">
+      ${navItems.map(([k,l,ic])=>html`<button key=${k} className=${navActive===k?"on":""} onClick=${()=>navTo(k)} aria-current=${navActive===k?"page":undefined}>
+        ${k==="upload"?html`<span className="up"><${Icon} n="plus" size=${20} sw=${2.4}/></span>`:html`<${Icon} n=${ic} size=${24} sw=${navActive===k?2.2:1.7}/>`}<span>${l}</span></button>`)}
+    </div></nav>
+    ${current && playerOpen && html`<${FullPlayer} ctx=${ctx}/>`}
+    ${toast && html`<div className="toast" role="status">${toast}</div>`}
+    <audio ref=${audioRef} preload="auto" playsInline onTimeUpdate=${e=>setPos(e.target.currentTime)} onEnded=${()=>nextRef.current(true)}
+      onError=${e=>{ const a=e.target; if(current&&current.audioUrl&&a.dataset.tid===current.id&&a.dataset.src!==current.audioUrl){ const t=a.currentTime; a.src=current.audioUrl; a.dataset.src=current.audioUrl; a.addEventListener("loadedmetadata",()=>{ try{ a.currentTime=t; }catch(_){} if(playing) a.play().catch(()=>{}); },{once:true}); } }}
+      onLoadedMetadata=${e=>{const d=Math.round(e.target.duration); const t=current&&tracks.find(x=>x.id===current.id); if(t&&isFinite(d)&&d>0&&!t.duration) repo.setDuration(t.id,d,!!(user&&(t.userId===user.id||isAdmin))).catch(()=>{});}}></audio>
+  </div>`;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(html`<${App}/>`);
+</script>
+
+</body></html>

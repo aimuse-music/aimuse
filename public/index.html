@@ -179,6 +179,20 @@ textarea.input{min-height:130px;resize:vertical;line-height:1.7}
 .tabs button.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--grad);border-radius:2px}
 .admin-entry{display:flex;align-items:center;gap:12px;margin-top:16px;padding:14px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(120deg,rgba(164,99,255,.14),rgba(90,114,255,.08));text-align:left;width:100%}
 
+/* legal pages（利用規約・プライバシーポリシー・投稿ガイドライン） */
+.legal-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 16px;margin-top:18px}
+.legal-links .link{text-decoration:underline;text-underline-offset:3px;padding:4px 0}
+.legal{font-size:14.5px;line-height:1.85;overflow-wrap:anywhere}
+.legal-title{font-size:20px;font-weight:900;margin-top:20px;letter-spacing:.02em}
+.legal-meta{margin-top:12px;font-size:12.5px;color:var(--muted);line-height:1.7}
+.legal section{margin-top:26px}
+.legal h3{font-size:15.5px;font-weight:700;margin-bottom:8px;line-height:1.5}
+.legal p{margin-bottom:10px}
+.legal ul{margin:0 0 10px;padding-left:1.3em}
+.legal li{margin-bottom:6px}
+.legal li::marker{color:var(--faint)}
+.legal mark.todo{background:rgba(246,189,85,.14);color:var(--warn);border-radius:4px;padding:0 3px}
+
 /* artist page */
 .ahead{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding-top:4px}
 .ahead .cover{width:150px;border-radius:50%;box-shadow:0 18px 40px -16px var(--glow)}
@@ -351,7 +365,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-15.5";
+const BUILD = "2026-10-16.1";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -1000,6 +1014,7 @@ function MyPage({ctx}){
       ${tab==="follow" && (followed.length ? html`<div className="list">${followed.map(a=>html`<button key=${a.id} className="row norank" onClick=${()=>openArtist(a.id)}><${Cover} item=${a} radius="50%"/><div style=${{minWidth:0}}><div className="t">${a.name}</div><div className="sub">${fmtNum(a.followers)} フォロワー</div></div><${Icon} n="chev" size=${18}/></button>`)}</div>` : html`<div className="empty">フォローしたアーティストがここに並びます</div>`)}
     </div>
     <button className="btn ghost" style=${{marginTop:28}} onClick=${signOut}>ログアウト</button>
+    <${LegalLinks} openLegal=${ctx.openLegal}/>
   </div>`;
 }
 
@@ -1167,12 +1182,15 @@ const authError = e => {
   if(/Password should be/i.test(m)) return "パスワードは6文字以上で入力してください";
   return "うまくいきませんでした。通信状態を確認して、もう一度お試しください";
 };
+// 規約などを読んでから戻ったときに、入力途中の内容（パスワード以外）を復元するための一時保存（メモリ内のみ）
+const authDraft = {mode:"login",email:"",name:""};
 function AuthPanel({ctx}){
   const {say} = ctx;
-  const [mode,setMode] = useState("login");
-  const [email,setEmail] = useState("");
+  const [mode,setMode] = useState(()=>authDraft.mode);
+  const [email,setEmail] = useState(()=>authDraft.email);
   const [pw,setPw] = useState("");
-  const [name,setName] = useState("");
+  const [name,setName] = useState(()=>authDraft.name);
+  useEffect(()=>{ authDraft.mode=mode==="reset"?"login":mode; authDraft.email=email; authDraft.name=name; },[mode,email,name]);
   const [busy,setBusy] = useState(false);
   const [err,setErr] = useState(null);
   const [info,setInfo] = useState(null);
@@ -1184,9 +1202,9 @@ function AuthPanel({ctx}){
     if(mode!=="reset" && pw.length<6){ setErr("パスワードは6文字以上で入力してください"); return; }
     setBusy(true);
     try{
-      if(mode==="login"){ const {error}=await auth.signIn(em,pw); if(error) throw error; say("ログインしました"); }
+      if(mode==="login"){ const {error}=await auth.signIn(em,pw); if(error) throw error; Object.assign(authDraft,{mode:"login",email:"",name:""}); say("ログインしました"); }
       else if(mode==="signup"){ const {data,error}=await auth.signUp(em,pw,name.trim()); if(error) throw error;
-        if(data.session) say("会員登録が完了しました");
+        if(data.session){ Object.assign(authDraft,{mode:"login",email:"",name:""}); say("会員登録が完了しました"); }
         else { setInfo("確認メールを送信しました。メール内のリンクを開くと登録が完了します。"); setMode("login"); } }
       else { const {error}=await auth.resetPassword(em); if(error) throw error; setInfo("パスワード再設定用のメールを送信しました。メール内のリンクを開いてください。"); setMode("login"); }
     }catch(e){ setErr(authError(e)); }
@@ -1206,6 +1224,7 @@ function AuthPanel({ctx}){
     <button className="btn primary" onClick=${go} disabled=${busy}>${busy?"処理中…":mode==="login"?"ログイン":mode==="signup"?"会員登録（無料）":"再設定メールを送る"}</button>
     ${mode==="login" && html`<button className="link" onClick=${()=>{setMode("reset");setErr(null)}}>パスワードを忘れた場合</button>`}
     ${mode==="reset" && html`<button className="link" onClick=${()=>{setMode("login");setErr(null)}}>ログインに戻る</button>`}
+    <${LegalLinks} openLegal=${ctx.openLegal}/>
   </div>`;
 }
 function NewPasswordPanel({ctx}){
@@ -1229,12 +1248,325 @@ function NewPasswordPanel({ctx}){
   </div>`;
 }
 
+/* ---------- LEGAL（利用規約・プライバシーポリシー・投稿ガイドライン） ----------
+   ・法律専門家による確認前の草案。【要確認：…】は公開前に確定させる項目（画面上で色付き表示）
+   ・本文は blocks の配列：文字列＝段落、配列＝箇条書き
+   ・ログインしていなくても閲覧可。URL末尾 #terms / #privacy / #guidelines で直接開ける */
+const LEGAL_OPERATOR = "【要確認：運営者名（個人の場合は氏名または屋号）】";
+const LEGAL_CONTACT = "【要確認：お問い合わせ窓口（メールアドレスまたはフォームのURL）】";
+const LEGAL_DOCS = [
+{
+  id:"terms", tab:"利用規約", title:"利用規約",
+  meta:["制定日：【要確認：制定日（公開日）】","運営者："+LEGAL_OPERATOR],
+  sections:[
+    {h:"第1条（この規約について）", blocks:[
+      "この利用規約（以下「本規約」）は、"+LEGAL_OPERATOR+"（以下「運営者」）が提供する、AIを使って制作された楽曲の投稿・配信サービス「AIMUSE」（以下「本サービス」）の利用条件を定めるものです。",
+      "本サービスを利用する方（以下「利用者」）は、本規約に同意したうえで本サービスを利用するものとします。",
+      "「プライバシーポリシー」および「楽曲投稿・著作権ガイドライン」は、本規約と一体として適用されます。"
+    ]},
+    {h:"第2条（サービスの概要）", blocks:[[
+      "本サービスは、AI音楽制作ツールを使って制作された楽曲を投稿・公開・再生するためのサービスです。AIを使わずに制作された楽曲は対象外です。",
+      "投稿された楽曲は、運営者の審査で承認されたものだけが公開されます。",
+      "公開中の楽曲は、会員登録をしていない方も再生できます。楽曲の投稿、お気に入り、フォロー、通報は会員のみ利用できます。",
+      "本サービスの利用は、現在無料です。"
+    ]]},
+    {h:"第3条（会員登録）", blocks:[
+      "会員登録は、メールアドレスとパスワードを登録し、届いた確認メールのリンクを開いてメールアドレスの確認を完了することで成立します。確認が完了するまで、会員向けの機能は利用できません。",
+      "利用者は、自分のメールアドレスなど正確な情報で登録するものとします。",
+      "未成年の方は、親権者など法定代理人の同意を得たうえで利用してください。【要確認：利用できる年齢の下限を設けるか】",
+      "運営者は、過去に本規約違反で利用を停止された方からの登録など、運営者が不適切と判断した登録を承認しないこと、または取り消すことがあります。"
+    ]},
+    {h:"第4条（アカウントの管理・退会）", blocks:[[
+      "パスワードは利用者自身の責任で管理し、第三者に使わせたり教えたりしないでください。",
+      "アカウントの不正利用に気づいた場合は、すぐにお問い合わせ窓口へご連絡ください。",
+      "表示名・アーティスト名に「AIMUSE」「運営」「公式」「管理者」など、運営者や公式アカウントと誤解される名称は使用できません。",
+      "退会（アカウントの削除）を希望する場合は、お問い合わせ窓口から申請してください。現在、アプリ内に退会の機能はありません。【要確認：アプリ内に退会機能を追加した場合は記載を更新】",
+      "退会すると、会員情報、投稿した楽曲、お気に入り、フォローなどの情報は削除され、元に戻すことはできません。保存期間の詳細はプライバシーポリシーに定めます。"
+    ]]},
+    {h:"第5条（禁止行為）", blocks:[
+      "利用者は、本サービスの利用にあたり、次の行為をしてはいけません。",
+      [
+        "法令または公序良俗に違反する行為",
+        "他人の著作権、著作隣接権、商標権、肖像権、パブリシティ権、プライバシーその他の権利や利益を侵害する行為",
+        "AIを使わずに制作された楽曲、または他人が制作した楽曲を投稿する行為",
+        "実在の歌手・アーティスト・人物の声や名前を無断で模倣し、本人の作品・本人の歌唱であると誤解させる行為",
+        "運営者、他の利用者、実在の人物・団体になりすます行為",
+        "投稿時の権利に関する申告に、事実と異なる内容を申告する行為",
+        "わいせつ、暴力的、差別的な内容、他人を誹謗中傷する内容、違法行為を助長する内容を、楽曲・歌詞・ジャケット画像などに含める行為",
+        "再生数その他の数値を、不正な方法で増やしたり操作したりする行為",
+        "不正アクセス、サーバーやネットワークへの過度な負荷、不具合の悪用など、本サービスの運営を妨げる行為",
+        "他の利用者の個人情報を収集する行為",
+        "運営者が認めていない宣伝、勧誘、営業その他の営利を目的とする行為",
+        "不正な目的で複数のアカウントを作成・利用する行為",
+        "公開楽曲を無断で録音・保存し、本サービスの外で配布・公開する行為",
+        "その他、運営者が不適切と判断する行為"
+      ]
+    ]},
+    {h:"第6条（投稿楽曲の権利と投稿者の責任）", blocks:[
+      "投稿者は、投稿する楽曲、歌詞、ジャケット画像、楽曲名、アーティスト名など（以下「投稿コンテンツ」）について、次のことを保証するものとします。",
+      [
+        "投稿コンテンツを本サービスで公開するために必要な権利を持っていること、または権利者から許可を得ていること",
+        "制作に使用したAIサービスの利用規約に従い、配信・商用利用が認められた条件で制作したものであること",
+        "第三者の権利を侵害していないこと"
+      ],
+      "投稿コンテンツに関して投稿者が持つ権利は、投稿によって運営者に移ることはありません。",
+      "投稿者は、運営者に対し、本サービスの提供に必要な範囲で投稿コンテンツを無償で利用すること（保存、配信、表示、審査のための確認など）を許諾するものとします。許諾の範囲は「楽曲投稿・著作権ガイドライン」に定めます。",
+      "運営者の審査は、投稿コンテンツが第三者の権利を侵害していないことを保証するものではありません。投稿コンテンツに関して第三者との間で問題が生じた場合、投稿者は自らの責任で対応するものとします。【要確認：投稿者の責任・補償の範囲（法律専門家に確認）】"
+    ]},
+    {h:"第7条（審査・投稿の削除・利用停止）", blocks:[[
+      "運営者は、投稿された楽曲を審査し、承認または却下します。却下の理由を個別にお知らせしない場合があります。",
+      "運営者は、公開後の楽曲であっても、本規約やガイドラインへの違反、権利侵害の申し立て、その他必要と判断した場合には、事前に通知することなく非公開にし、または削除することがあります。",
+      "運営者は、本規約に違反した利用者、または違反のおそれがある利用者のアカウントを利用停止にすることがあります。利用停止中は、楽曲の投稿、お気に入り、フォロー、通報などの機能を利用できません。運営者は、必要に応じてその利用者の投稿を非公開または削除します。",
+      "投稿者が自分の投稿の非公開・削除を希望する場合は、お問い合わせ窓口から依頼してください。【要確認：アプリ内に投稿の削除機能を追加した場合は記載を更新】",
+      "運営者は、この条に基づく対応によって利用者に生じた損害について、運営者に故意または重大な過失がある場合を除き、責任を負いません。"
+    ]]},
+    {h:"第8条（サービスの変更・中断・終了）", blocks:[[
+      "運営者は、利用者への事前の通知なく、本サービスの内容を変更することがあります。",
+      "運営者は、システムの保守、障害、運営者が利用する外部サービス（Supabase、Cloudflare など）の停止・仕様変更、その他やむを得ない理由により、本サービスを一時的に中断することがあります。",
+      "運営者は、本サービスを終了することがあります。その場合は、【要確認：事前告知の期間（例：1か月前）】までに本サービス上で告知します。",
+      "本サービスに投稿したデータが失われる可能性があります。音源・画像などの元のデータは、利用者自身で保管してください。"
+    ]]},
+    {h:"第9条（免責事項）", blocks:[[
+      "運営者は、本サービスに不具合や中断がないこと、本サービスの情報が正確・完全であること、特定の目的に適していることを保証しません。",
+      "利用者同士、または利用者と第三者との間で生じた問題については、当事者間で解決するものとします。",
+      "運営者は、本サービスに関して利用者に生じた損害について、運営者に故意または重大な過失がある場合を除き、責任を負いません。ただし、消費者契約法その他の法令により運営者の責任を免除・制限できない場合は、この限りではありません。【要確認：免責の範囲（法律専門家に確認）】"
+    ]]},
+    {h:"第10条（規約の変更）", blocks:[
+      "運営者は、民法の定型約款の変更に関する規定に従い、本規約を変更することがあります。変更する場合は、変更後の内容と変更の効力が生じる日を、本サービス上で事前に告知します。"
+    ]},
+    {h:"第11条（準拠法・裁判管轄）", blocks:[
+      "本規約は日本法に従って解釈されます。本サービスに関する紛争については、【要確認：合意管轄裁判所】を第一審の専属的合意管轄裁判所とします。"
+    ]},
+    {h:"第12条（お問い合わせ）", blocks:[
+      "本サービスに関するお問い合わせは、次の窓口までお願いします。",
+      "お問い合わせ窓口："+LEGAL_CONTACT
+    ]}
+  ]
+},
+{
+  id:"privacy", tab:"プライバシー", title:"プライバシーポリシー",
+  meta:["制定日：【要確認：制定日（公開日）】","運営者："+LEGAL_OPERATOR],
+  sections:[
+    {h:"1. 基本方針", blocks:[
+      LEGAL_OPERATOR+"（以下「運営者」）は、「AIMUSE」（以下「本サービス」）における利用者の個人情報を、個人情報の保護に関する法律その他の法令に従って取り扱います。"
+    ]},
+    {h:"2. 取得する情報", blocks:[
+      "本サービスでは、次の情報を取得します。",
+      [
+        "会員登録のとき：メールアドレス、パスワード、表示名（任意）。表示名を入力しなかった場合は、メールアドレスの「@」より前の部分が表示名として自動で設定されます。パスワードは認証サービス（Supabase Auth）が管理しており、運営者がパスワードそのものを閲覧する機能はありません。",
+        "楽曲を投稿するとき：楽曲名、アーティスト名、ジャンル、使用したAIツール名、音源ファイル、ジャケット画像（任意）、歌詞（任意）、それぞれのファイルの元のファイル名・サイズ・形式、再生時間、権利に関する申告の内容、投稿日時。",
+        "サービスを利用するとき：お気に入り・フォローの登録内容、通報の内容（対象の楽曲、理由、通報した会員のIDと表示名、日時）。",
+        "再生数を数えるとき：ログイン中の方は会員ID、ログインしていない方はIPアドレスを元に戻せない形に変換（ハッシュ化）した値を、再生した楽曲と時間帯とともに記録します。IPアドレスそのものは、この記録には保存しません。",
+        "通信の際に自動的に送られる情報：本サービスの表示や利用の際、IPアドレス、ブラウザの種類などの情報が、本サービスを動かすために運営者が利用している外部サービス（4.に記載）に送られます。",
+        "お問い合わせのとき：お名前、連絡先、お問い合わせの内容など、利用者が入力・送信した情報。"
+      ],
+      "ファイルの元のファイル名は、そのまま保存されます。ファイル名に氏名など個人を特定できる情報を含めないでください。"
+    ]},
+    {h:"3. 利用目的", blocks:[
+      [
+        "会員登録、ログイン、本人確認のため",
+        "楽曲の保存・審査・公開・再生など、本サービスを提供するため",
+        "再生数・フォロワー数を集計するため（同じ方による短時間の重複カウントの防止を含みます）",
+        "本規約・ガイドラインへの違反、権利侵害、不正利用に対応するため",
+        "確認メール、パスワード再設定メール、重要なお知らせを送るため",
+        "お問い合わせ、権利侵害の申し立て、開示等の請求に対応するため",
+        "本サービスの運営状況の把握と改善のため"
+      ],
+      "現在、本サービスは広告の配信を行っておらず、取得した情報を広告目的で利用したり、販売したりすることはありません。"
+    ]},
+    {h:"4. 外部サービスの利用", blocks:[
+      "本サービスは、次の外部サービスを利用しています。これらの事業者に、本サービスの運営に必要な範囲で情報の取り扱いを委託しています。",
+      [
+        "Supabase（Supabase, Inc.・米国）：会員の認証、データベース、音源・画像ファイルの保存、確認メールなどの送信。データの保存地域：【要確認：Supabaseプロジェクトのリージョン】",
+        "Cloudflare Pages（Cloudflare, Inc.・米国）：本サービスのWebサイトの配信",
+        "Google Fonts（Google LLC・米国）、cdnjs、jsDelivr、unpkg：画面表示に使うフォントやプログラムの配信。画面を表示するとき、IPアドレスなどがこれらの事業者に送られます。",
+        "【要確認：メール送信サービス（SMTP）を別途導入した場合は、その事業者名を追加】"
+      ],
+      "【要確認：外国にある事業者への委託・提供に関する記載（委託先の国名、その国の個人情報保護制度、委託先が講じている措置など）を法律専門家に確認】"
+    ]},
+    {h:"5. 他の利用者に公開される情報", blocks:[
+      [
+        "公開中の楽曲の情報（楽曲名、アーティスト名、ジャンル、使用したAIツール名、ジャケット画像、歌詞、音源、再生数）と、アーティストのフォロワー数（人数のみ）は、会員でない方を含め誰でも見ることができます。",
+        "公開中の楽曲については、投稿時の元のファイル名を技術的な方法で取得できる場合があります。",
+        "メールアドレス、表示名、お気に入り・フォローの内容、通報の内容、審査中・非公開の楽曲は、他の利用者には公開されません。",
+        "運営者（管理者）は、審査や問い合わせ対応などのため、会員のメールアドレス・表示名、審査中・非公開の楽曲、通報の内容を閲覧できます。"
+      ]
+    ]},
+    {h:"6. Cookie・ブラウザの保存領域について", blocks:[
+      [
+        "本サービスは、ログイン状態を保つため、ブラウザの保存領域（localStorage）にログイン情報（認証用の情報）を保存します。ログアウトすると削除されます。",
+        "本サービスを最新の状態に更新するため、ブラウザの一時的な保存領域（sessionStorage）に、本サービスの版の情報を保存することがあります。",
+        "本サービスは、広告や閲覧履歴の追跡を目的としたCookieやアクセス解析ツールを使用していません。",
+        "4.に記載した外部サービスが、サービスの提供や安全確保のために、独自にCookieなどを使用する場合があります。"
+      ]
+    ]},
+    {h:"7. 保存期間と削除", blocks:[
+      [
+        "会員情報と投稿の情報は、原則として退会（アカウントの削除）まで保存します。",
+        "退会すると、会員情報、投稿した楽曲の情報、お気に入り、フォロー、通報の記録はデータベースから削除されます。音源・画像ファイルは自動では削除されないため、運営者が別途削除します。【要確認：ファイルを削除するまでの期間】",
+        "削除された楽曲の情報は、誤って削除した場合に復元できるよう、削除時点の内容を約30日間保存し、その後順次削除します。音源・画像ファイルも少なくともこの期間は保存されます。",
+        "再生数を数えるための記録は、約2日を過ぎたものから順次削除します。",
+        "外部サービスの記録やバックアップに、一定期間情報が残る場合があります。"
+      ]
+    ]},
+    {h:"8. 安全管理のための措置", blocks:[
+      "運営者は、取り扱う個人情報の漏えいなどを防ぐため、次の措置を講じています。",
+      [
+        "通信はHTTPSで暗号化しています。",
+        "データベースでは、会員本人と管理者以外が非公開の情報を読み書きできないよう、行単位のアクセス制限（RLS）を設定しています。",
+        "音源・画像ファイルは非公開の保存領域に置き、再生・表示のときは有効期限（1時間）付きのURLを発行しています。審査中・非公開の楽曲のファイルは、投稿者本人と管理者だけが取得できます。",
+        "管理者の権限は、アプリから付与・変更できないようにしています。",
+        "【要確認：運営者自身の管理体制（管理者アカウントの保護方法、二段階認証の利用、取り扱う人の範囲など）】"
+      ],
+      "ただし、インターネット上のサービスにおいて完全な安全を保証することはできません。個人情報の漏えいなどが発生した場合は、法令に従って対応します。"
+    ]},
+    {h:"9. 第三者への提供", blocks:[
+      "運営者は、本人の同意がある場合や法令に基づく場合などを除き、個人情報を第三者に提供しません。4.に記載した外部サービスへの委託は、ここでいう第三者への提供には当たりません。"
+    ]},
+    {h:"10. 開示・訂正・削除などのご請求", blocks:[
+      "ご本人から、保有している個人情報の開示、訂正、追加、削除、利用の停止などのご請求があった場合は、ご本人であることを確認したうえで、法令に従って対応します。",
+      "ご請求は、お問い合わせ窓口までご連絡ください。ご本人確認のため、登録しているメールアドレスからご連絡いただくなどの方法をお願いする場合があります。【要確認：手数料の有無、回答までの目安期間】"
+    ]},
+    {h:"11. このポリシーの変更", blocks:[
+      "運営者は、必要に応じてこのポリシーを変更することがあります。重要な変更をする場合は、本サービス上でお知らせします。"
+    ]},
+    {h:"12. お問い合わせ", blocks:[
+      "個人情報の取り扱いに関するお問い合わせは、次の窓口までお願いします。",
+      [
+        "運営者："+LEGAL_OPERATOR,
+        "【要確認：住所・代表者氏名（個人運営の場合に、どのように公表するかを法律専門家に確認）】",
+        "お問い合わせ窓口："+LEGAL_CONTACT
+      ]
+    ]}
+  ]
+},
+{
+  id:"guidelines", tab:"投稿ガイドライン", title:"楽曲投稿・著作権ガイドライン",
+  meta:["制定日：【要確認：制定日（公開日）】","運営者："+LEGAL_OPERATOR],
+  sections:[
+    {h:"1. このガイドラインについて", blocks:[
+      "このガイドラインは、「AIMUSE」（以下「本サービス」）に楽曲を投稿するときのルールと、権利に関する考え方をまとめたものです。利用規約と一体として適用されます。"
+    ]},
+    {h:"2. 投稿できる楽曲", blocks:[
+      "本サービスに投稿できるのは、次のすべてを満たす楽曲です。",
+      [
+        "Suno、Udio などのAI音楽制作ツールを使って制作した楽曲であること（AIによる作曲に、ご自身の作詞や編集を組み合わせたものを含みます）",
+        "投稿者自身がAIツールを操作して制作した楽曲であること",
+        "使用したAIツールの利用規約で、配信・商用利用が認められた条件で制作した楽曲であること",
+        "歌詞やジャケット画像についても、投稿者が権利を持っているか、権利者から許可を得ていること"
+      ],
+      "AIを使わずに制作された楽曲は、本サービスの対象外です。"
+    ]},
+    {h:"3. AIツールの利用規約・商用利用権の確認", blocks:[
+      "AI音楽制作ツールの利用条件は、ツールごと、また同じツールでも料金プランごとに異なります。たとえば無料プランでは、商用利用が認められていなかったり、制作した楽曲の権利がツールの提供会社に帰属したりする場合があります。投稿する前に、必ずご自身で次の点を確認してください。",
+      [
+        "制作した楽曲の権利が誰に帰属するか",
+        "ほかのサービスで公開・配信してよいか",
+        "商用利用が認められているか",
+        "楽曲を制作した時点のプランと規約の内容（あとから有料プランに切り替えても、それ以前に制作した楽曲には適用されない場合があります）",
+        "クレジット表記などの条件があるか"
+      ],
+      "確認した内容がわかるよう、制作時の料金プランや制作日の記録を保管しておくことをおすすめします。判断に迷う場合は、投稿を控えてください。運営者は、各ツールの利用規約の内容や、その解釈について保証しません。"
+    ]},
+    {h:"4. 第三者の権利の尊重", blocks:[
+      "楽曲、歌詞、ジャケット画像、楽曲名、アーティスト名には、次のような他人の権利を侵害するものを含めないでください。",
+      [
+        "著作権：既存の楽曲のメロディ・歌詞・音源、他人の画像やイラストを無断で使うこと。既存の楽曲の歌詞をそのままAIに入力して制作することも含みます。",
+        "商標権：他社の商品名・ブランド名・ロゴを、アーティスト名やジャケット画像に無断で使うこと",
+        "肖像権・パブリシティ権：実在の人物の写真や似顔絵を、本人の許可なくジャケット画像に使うこと",
+        "そのほか、他人の名誉やプライバシーを傷つける内容"
+      ]
+    ]},
+    {h:"5. 禁止される投稿", blocks:[[
+      "無断転載：他人が制作した楽曲（他人がAIで制作したものを含みます）を、自分の楽曲として投稿すること。ほかのサービスから入手した音源を投稿すること。",
+      "声の無断模倣：実在の歌手・声優・人物の声を、許可なく模倣・再現した楽曲（声質変換や音声のクローン技術を使ったものを含みます）",
+      "なりすまし：実在の歌手・アーティスト・団体の名前を名乗ったり、本人の作品であると誤解させたりする楽曲名・アーティスト名・説明",
+      "既存の楽曲の無断使用：許可を得ていないサンプリング、リミックス、カバーなど",
+      "不適切な内容：わいせつ、暴力的、差別的な内容、他人を誹謗中傷する内容、違法行為を助長する内容",
+      "虚偽の申告：投稿時の権利に関する申告に、事実と異なる内容を申告すること"
+    ]]},
+    {h:"6. 審査について", blocks:[
+      "楽曲を投稿するときは、次の4項目を確認して申告していただきます。",
+      [
+        "この楽曲は自分がAIサービスで生成したものです",
+        "使用したAIサービスの利用規約で、配信・商用利用が認められた条件で生成しました",
+        "第三者の歌詞・メロディ・音源・画像を無断で使用していません",
+        "実在の歌手やアーティストの声・名前を無断で模倣していません"
+      ],
+      "投稿された楽曲は、運営者が既存の楽曲との類似、ジャケット画像の権利、歌詞の内容などを確認し、承認したものだけを公開します。権利の確認が不十分な場合、既存の楽曲に酷似している場合、内容が不適切な場合、音質やファイルに問題がある場合などは却下することがあります。",
+      "審査の結果はマイページの投稿曲の一覧に表示されます。現在、却下の理由はアプリ上には表示されません。理由を確認したい場合はお問い合わせ窓口へご連絡ください。",
+      "審査は、楽曲が第三者の権利を侵害していないことを保証するものではありません。投稿した楽曲についての責任は投稿者にあります。"
+    ]},
+    {h:"7. 権利侵害の通報と削除の手続き", blocks:[
+      "会員の方は、楽曲の再生画面にある通報の機能から、問題のある楽曲を運営者に知らせることができます（理由：既存曲に酷似している／不適切なジャケット画像／不適切な歌詞／なりすまし・名義の問題）。",
+      "権利者の方（会員でない方を含みます）は、お問い合わせ窓口から、次の内容をお知らせください。",
+      [
+        "お名前と連絡先",
+        "対象の楽曲（楽曲名・アーティスト名）",
+        "ご自身が持っている権利の内容",
+        "権利を侵害していると考える理由",
+        "申し立ての内容が真実であること"
+      ],
+      "運営者は、通報や申し立ての内容を確認し、必要と判断した場合は楽曲を非公開にし、または削除します。",
+      "【要確認：投稿者への連絡方法（現在、アプリにはお知らせの機能がないため、登録メールアドレスへの連絡を想定）】",
+      "非公開・削除の対応に異議がある投稿者は、お問い合わせ窓口からお申し出ください。",
+      "【要確認：申し立てへの対応期間の目安】",
+      "権利侵害を繰り返す利用者は、アカウントを利用停止にすることがあります。また、事実と異なる申し立てはしないでください。",
+      "お問い合わせ窓口："+LEGAL_CONTACT
+    ]},
+    {h:"8. 投稿者の権利と、本サービスへの利用許諾", blocks:[
+      "投稿した楽曲、歌詞、ジャケット画像などについて投稿者が持つ権利は、投稿者に残ります。投稿によって運営者に移ることはありません。",
+      "なお、日本では、AIが自律的に生成したものは著作物と認められず、人がどの程度創作的に関わったかによって判断されるとの考え方が示されています（文化審議会著作権分科会法制度小委員会「AIと著作権に関する考え方について」）。運営者は、投稿された楽曲に著作権が発生するかどうかを判断・保証しません。",
+      "投稿者は、運営者に対し、本サービスを提供するために必要な範囲で、投稿した楽曲などを無償で利用することを許諾するものとします。この許諾は独占的なものではなく、投稿者は同じ楽曲をほかのサービスでも自由に公開できます（使用したAIツールの規約が認める範囲に限ります）。運営者が行う利用は、次のとおりです。",
+      [
+        "楽曲・画像などのファイルとその情報を保存すること",
+        "公開中の楽曲を本サービス上で配信（再生）すること",
+        "楽曲名、アーティスト名、ジャケット画像、歌詞などを本サービス上に表示すること",
+        "審査や通報への対応のために、運営者が内容を確認すること",
+        "再生時間の取得など、本サービスの提供に必要な技術的な処理をすること"
+      ],
+      "運営者は、投稿された楽曲を販売したり、第三者に利用を許諾したりすることはありません。【要確認：本サービスの紹介（SNSなど）で公開楽曲を使う予定がある場合は、その範囲を追記】",
+      "この許諾は、楽曲が本サービス上に存在する間に限ります。楽曲の削除や退会のあとは新たに利用しません。ただし、復元に備えた保存（約30日間）や外部サービスのバックアップにより、一定期間データが残る場合があります。",
+      "本サービスは、楽曲のダウンロードの機能を提供していません。公開楽曲を無断で録音・保存して、本サービスの外で配布・公開することは禁止です。"
+    ]},
+    {h:"9. このガイドラインの変更", blocks:[
+      "運営者は、必要に応じてこのガイドラインを変更することがあります。重要な変更をする場合は、本サービス上でお知らせします。"
+    ]}
+  ]
+}
+];
+const legalText = s => String(s).split(/(【要確認[^】]*】)/).map((part,i)=> i%2 ? html`<mark key=${i} className="todo">${part}</mark>` : part);
+// 規約などへのリンク（ログイン画面・マイページで使用）
+function LegalLinks({openLegal}){
+  return html`<div className="legal-links" aria-label="規約とポリシー">${LEGAL_DOCS.map(d=>html`<button key=${d.id} className="link" onClick=${()=>openLegal(d.id)}>${d.title}</button>`)}</div>`;
+}
+function LegalPage({ctx}){
+  const {legalDoc,openLegal,goBack} = ctx;
+  const doc = LEGAL_DOCS.find(d=>d.id===legalDoc)||LEGAL_DOCS[0];
+  return html`<div className="screen">
+    <header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>規約・ポリシー</h1></header>
+    <div className="tabs" style=${{marginTop:4}}>${LEGAL_DOCS.map(d=>html`<button key=${d.id} className=${d.id===doc.id?"on":""} aria-current=${d.id===doc.id?"page":undefined} onClick=${()=>{openLegal(d.id,true);window.scrollTo(0,0);}}>${d.tab}</button>`)}</div>
+    <article className="legal">
+      <h2 className="legal-title">${doc.title}</h2>
+      <div className="demo-note" style=${{marginTop:12}}><${Icon} n="info" size=${18}/><span>この文書は、法律専門家による確認前の草案です。色付きの「要確認」の箇所は、正式公開までに確定します。</span></div>
+      <div className="legal-meta">${doc.meta.map((m,i)=>html`<div key=${i}>${legalText(m)}</div>`)}</div>
+      ${doc.sections.map((s,i)=>html`<section key=${i}>
+        <h3>${s.h}</h3>
+        ${s.blocks.map((b,j)=>Array.isArray(b)
+          ? html`<ul key=${j}>${b.map((li,k)=>html`<li key=${k}>${legalText(li)}</li>`)}</ul>`
+          : html`<p key=${j}>${legalText(b)}</p>`)}
+      </section>`)}
+    </article>
+  </div>`;
+}
+
 /* ---------- APP ---------- */
 const NO_AUDIO = "音源ファイルが見つからないため再生できません";
 function App(){
   const [tab,setTab] = useState("home");
   const [history,setHistory] = useState([]);
   const [artistId,setArtistId] = useState(null);
+  const [legalDoc,setLegalDoc] = useState("terms");
   const [tracks,setTracks] = useState([]);
   const [reportsRaw,setReports] = useState([]);
   const [repoMode,setRepoMode] = useState("pending");
@@ -1327,6 +1659,10 @@ function App(){
   const go = t => { setHistory(h=>[...h,tab]); setTab(t); window.scrollTo(0,0); };
   const goBack = () => { setHistory(h=>{const p=h[h.length-1]||"home"; setTab(p); return h.slice(0,-1)}); window.scrollTo(0,0); };
   const navTo = t => { setHistory([]); setTab(t); window.scrollTo(0,0); };
+  // 規約・ポリシー：inPage=true はページ内のタブ切り替え（履歴を増やさない）
+  const openLegal = (id,inPage) => { setLegalDoc(id); if(!inPage) go("legal"); };
+  // URL末尾が #terms / #privacy / #guidelines なら、その文書を直接開く
+  useEffect(()=>{ const m=location.hash.match(/^#(terms|privacy|guidelines)$/); if(m){ setLegalDoc(m[1]); setTab("legal"); } },[]);
   const openArtist = id => { setArtistId(id); go("artist"); };
 
   // お気に入り・フォロー：ログイン中の会員IDでSupabaseに保存（失敗したら画面を元に戻す）
@@ -1465,14 +1801,14 @@ function App(){
   };
 
   const signOut = () => auth.signOut().then(()=>{ say("ログアウトしました"); navTo("home"); });
-  const ctx = {user,profile,isAdmin,myFollowers,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
+  const ctx = {legalDoc,openLegal,user,profile,isAdmin,myFollowers,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
     current,playing,toggle,pos,seek,next,prev,repeat,cycleRepeat,shuffle,setShuffle,close:()=>setPlayerOpen(false),showLyrics,setShowLyrics,queueLabel};
 
   useEffect(()=>{ document.body.style.overflow = playerOpen?"hidden":""; },[playerOpen]);
 
   const navItems = [["home","ホーム","home"],["search","検索","search"],["upload","投稿","plus"],["me","マイページ","user"]];
-  const navActive = tab==="artist"?(history[0]||"home"):tab==="admin"?"me":tab;
-  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin}[tab];
+  const navActive = tab==="artist"?(history[0]||"home"):(tab==="admin"||tab==="legal")?"me":tab;
+  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin,legal:LegalPage}[tab];
 
   return html`<div className="app">
     <${Screen} key=${tab+(tab==="artist"?artistId:"")} ctx=${ctx}/>

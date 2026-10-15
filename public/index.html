@@ -351,7 +351,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-15.2";
+const BUILD = "2026-10-15.3";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -393,6 +393,12 @@ const social = {
     else okOrDup(await sb.from("follows").delete().eq("user_id",uid).eq("artist_id",artistId));
   },
   // フォロワー数（人数だけ。誰がフォローしているかは取得しない）
+  // artist_follower_count はDB側で人数だけを返す関数。follows の行そのもの（誰が誰を）はRLSで本人分しか読めない
+  async followerCount(id){
+    const {data,error} = await sb.rpc("artist_follower_count",{aid:id});
+    if(error) throw error;
+    return Number(data)||0;
+  },
   async followerCounts(ids){
     const out = new Map();
     await Promise.all(ids.map(async id=>{
@@ -478,7 +484,7 @@ const auth = {
 };
 
 const repo = {
-  mode:"pending",
+  mode:"pending", loadedAt:0,
   tracks:new Map(), reports:new Map(), listeners:new Set(),
   emit(){ const t=[...this.tracks.values()], r=[...this.reports.values()]; this.listeners.forEach(f=>f(t,r,this.mode)); },
   subscribe(f){ this.listeners.add(f); f([...this.tracks.values()],[...this.reports.values()],this.mode); return ()=>this.listeners.delete(f); },
@@ -500,7 +506,7 @@ const repo = {
       const r = await sb.from("reports").select("*").order("created_at",{ascending:false});
       if(!r.error) r.data.forEach(x=>this.reports.set(x.id,reportFromRow(x)));
     }
-    this.mode="cloud"; this.emit();
+    this.mode="cloud"; this.loadedAt=Date.now(); this.emit();
   },
   mapOf(col){ return col==="tracks"?this.tracks:this.reports; },
   async insertTrack(row){
@@ -952,7 +958,7 @@ function Upload({ctx}){
 
 /* ---------- MY PAGE ---------- */
 function MyPage({ctx}){
-  const {songs,artists,artistOf,play,favs,toggleFav,follows,openArtist,submissions,setTab,current,playing,user,profile,isAdmin,signOut,recovery} = ctx;
+  const {songs,artists,artistOf,play,favs,toggleFav,follows,openArtist,submissions,setTab,current,playing,user,profile,isAdmin,signOut,recovery,myFollowers} = ctx;
   const [tab,setT] = useState("fav");
   if(recovery) return html`<div className="screen"><header className="top"><h1>マイページ</h1></header><${NewPasswordPanel} ctx=${ctx}/></div>`;
   if(!user) return html`<div className="screen">
@@ -975,7 +981,7 @@ function MyPage({ctx}){
     <div className="stats">
       <div className="stat"><b>${mine.length}</b><span>投稿曲</span></div>
       <div className="stat"><b>${followed.length}</b><span>フォロー</span></div>
-      <div className="stat"><b>0</b><span>フォロワー</span></div>
+      <div className="stat"><b>${fmtNum(myFollowers)}</b><span>フォロワー</span></div>
       <div className="stat"><b>${fmtNum(myPublic.reduce((a,s)=>a+s.plays,0))}</b><span>再生数</span></div>
     </div>
     ${isAdmin&&html`<button className="admin-entry" onClick=${()=>setTab("admin")}><${Icon} n="shield"/><div style=${{flex:1}}><b style=${{display:"block",fontSize:14}}>管理者画面</b><span style=${{fontSize:12,color:"var(--muted)"}}>投稿審査・通報対応・楽曲管理</span></div><${Icon} n="chev" size=${18}/></button>`}
@@ -1224,6 +1230,7 @@ function App(){
   const [tracks,setTracks] = useState([]);
   const [reportsRaw,setReports] = useState([]);
   const [repoMode,setRepoMode] = useState("pending");
+  const [repoLoadedAt,setRepoLoadedAt] = useState(0);
   const [authState,setAuthState] = useState({user:null,profile:null,ready:false,recovery:false});
   // お気に入り・フォローはログイン中の会員ごとにSupabaseから読み込む（未ログイン時は空）
   const [favs,setFavs] = useState(()=>new Set());
@@ -1249,7 +1256,7 @@ function App(){
 
   // 会員状態と保存データの読み込み（Supabase）
   useEffect(()=>{
-    const un = repo.subscribe((t,r,m)=>{ setTracks(t); setReports(r); setRepoMode(m); });
+    const un = repo.subscribe((t,r,m)=>{ setTracks(t); setReports(r); setRepoMode(m); setRepoLoadedAt(repo.loadedAt); });
     const ua = auth.subscribe(setAuthState);
     auth.init().then(()=>repo.init());
     return ()=>{ un(); ua(); };
@@ -1292,14 +1299,18 @@ function App(){
   const allSongs = useMemo(()=>tracks.filter(t=>t.status==="public"||t.status==="hidden").sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(toSong),[tracks,user]);
   const songs = useMemo(()=>allSongs.filter(s=>s.status==="public").sort((a,b)=>b.date.localeCompare(a.date)),[allSongs]);
   const artists = useMemo(()=>{ const m=new Map(); songs.forEach(s=>{ if(!m.has(s.artistId)) m.set(s.artistId,{id:s.artistId,name:s.artistName,hues:s.hues,pattern:s.pattern,followers:0,bio:""}); }); return [...m.values()].map(a=>({...a,followers:followerCounts.get(a.id)||0})); },[songs,followerCounts]);
-  // 公開中アーティストのフォロワー数（全会員の合計人数）を取得
-  const artistIdsKey = useMemo(()=>[...new Set(songs.map(s=>s.artistId))].filter(isUuid).sort().join(","),[songs]);
+  // 自分の投稿曲に紐づくアーティスト（マイページのフォロワー数に使う）
+  const myArtistIds = useMemo(()=>[...new Set(tracks.filter(t=>user&&t.userId===user.id).map(t=>t.artistId))].filter(isUuid),[tracks,user]);
+  // 公開中アーティストと自分のアーティストのフォロワー数（全会員の合計人数）を取得
+  // ログイン切替時・データ再読み込み時（画面に戻ったとき・10分ごと）にも取り直す
+  const artistIdsKey = useMemo(()=>[...new Set([...songs.map(s=>s.artistId),...myArtistIds])].filter(isUuid).sort().join(","),[songs,myArtistIds]);
   useEffect(()=>{
     if(!sb||!artistIdsKey) return;
     let alive = true;
     social.followerCounts(artistIdsKey.split(",")).then(m=>{ if(alive) setFollowerCounts(m); }).catch(()=>{});
     return ()=>{ alive=false; };
-  },[artistIdsKey]);
+  },[artistIdsKey,uid,repoLoadedAt]);
+  const myFollowers = myArtistIds.reduce((n,id)=>n+(followerCounts.get(id)||0),0);
   const submissions = useMemo(()=>tracks.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(t=>({...t,tool:t.toolName||t.tool,mine:!!(user&&t.userId===user.id),lyrics:t.lyrics||null,checks:t.checks||[]})),[tracks,user]);
   const reports = useMemo(()=>reportsRaw.filter(r=>tracks.some(t=>t.id===r.songId)).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)),[reportsRaw,tracks]);
   const current = allSongs.find(s=>s.id===currentId)||null;
@@ -1331,7 +1342,10 @@ function App(){
     const bump = d => setFollowerCounts(p=>{ const n=new Map(p); n.set(id,Math.max(0,(n.get(id)||0)+d)); return n; });
     setIn(setFollows,id,on); bump(on?1:-1);
     say(on?"フォローしました":"フォローを解除しました");
-    social.setFollow(me,id,on).catch(e=>{
+    social.setFollow(me,id,on).then(()=>{
+      // 保存できたら、DBの実際のフォロワー数で上書き（取得に失敗しても保存済みのフォローは戻さない）
+      social.followerCount(id).then(c=>setFollowerCounts(p=>{ const n=new Map(p); n.set(id,c); return n; })).catch(()=>{});
+    },e=>{
       console.warn("follow",e);
       if(uidRef.current===me){ setIn(setFollows,id,!on); bump(on?-1:1); say("保存できませんでした。通信状態を確認して、もう一度お試しください"); }
     }).finally(()=>socialBusy.current.delete(key));
@@ -1441,7 +1455,7 @@ function App(){
   };
 
   const signOut = () => auth.signOut().then(()=>{ say("ログアウトしました"); navTo("home"); });
-  const ctx = {user,profile,isAdmin,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
+  const ctx = {user,profile,isAdmin,myFollowers,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
     current,playing,toggle,pos,seek,next,prev,repeat,cycleRepeat,shuffle,setShuffle,close:()=>setPlayerOpen(false),showLyrics,setShowLyrics,queueLabel};
 
   useEffect(()=>{ document.body.style.overflow = playerOpen?"hidden":""; },[playerOpen]);

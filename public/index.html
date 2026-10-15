@@ -351,7 +351,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-15.4";
+const BUILD = "2026-10-15.5";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -483,6 +483,7 @@ const auth = {
   signOut:()=>sb.auth.signOut()
 };
 
+const deniedError = () => Object.assign(new Error("denied"),{denied:true});
 const repo = {
   mode:"pending", loadedAt:0,
   tracks:new Map(), reports:new Map(), listeners:new Set(),
@@ -523,14 +524,18 @@ const repo = {
   async put(col,id,patch){
     const map=this.mapOf(col); const before=map.get(id);
     if(before){ map.set(id,{...before,...patch}); this.emit(); }
-    const {error} = await sb.from(col).update(toRow(patch)).eq("id",id);
-    if(error){ if(before){ map.set(id,before); this.emit(); } throw error; }
+    // 変更できた行を返してもらい、0件なら「権限がない／対象がない」として扱う
+    // （Supabaseは権限で弾いた更新をエラーにせず「0件更新」として返すため）
+    const {data,error} = await sb.from(col).update(toRow(patch)).eq("id",id).select("id");
+    const err = error || (!data||data.length===0 ? deniedError() : null);
+    if(err){ if(before){ map.set(id,before); this.emit(); } throw err; }
   },
   async remove(col,id){
     const map=this.mapOf(col); const before=map.get(id);
     map.delete(id); this.emit();
-    const {error} = await sb.from(col).delete().eq("id",id);
-    if(error){ if(before){ map.set(id,before); this.emit(); } throw error; }
+    const {data,error} = await sb.from(col).delete().eq("id",id).select("id");
+    const err = error || (!data||data.length===0 ? deniedError() : null);
+    if(err){ if(before){ map.set(id,before); this.emit(); } throw err; }
   },
   async incPlays(id){
     const t=this.tracks.get(id); if(t){ this.tracks.set(id,{...t,plays:(t.plays||0)+1}); this.emit(); }
@@ -1255,7 +1260,7 @@ function App(){
   const nextRef = useRef(null);
 
   const say = m => { setToast(m); clearTimeout(window.__toastT); window.__toastT=setTimeout(()=>setToast(null),2400); };
-  const fail = () => say("保存できませんでした。通信状態を確認して、もう一度お試しください");
+  const fail = e => say(e&&e.denied ? "権限がないため変更できませんでした。ログインし直してから、もう一度お試しください" : "保存できませんでした。通信状態を確認して、もう一度お試しください");
 
   // 会員状態と保存データの読み込み（Supabase）
   useEffect(()=>{
@@ -1439,9 +1444,11 @@ function App(){
   };
   const resolveReport = (id,action) => {
     const r = reportsRaw.find(x=>x.id===id);
-    repo.put("reports",id,{status:"resolved",action,resolvedAt:nowStr()}).catch(fail);
-    if(action==="hide"&&r) repo.put("tracks",r.songId,{status:"hidden"}).catch(fail);
-    say(action==="hide"?"楽曲を非公開にしました":"問題なしとして対応済みにしました");
+    // 結果が確定してからメッセージを出す（権限で弾かれた場合は成功と表示しない）
+    const hide = action==="hide"&&r ? repo.put("tracks",r.songId,{status:"hidden"}) : Promise.resolve();
+    hide.then(()=>repo.put("reports",id,{status:"resolved",action,resolvedAt:nowStr()}))
+      .then(()=>say(action==="hide"?"楽曲を非公開にしました":"問題なしとして対応済みにしました"))
+      .catch(fail);
   };
   const report = (songId,reason) => { if(!user){ say("通報にはログインが必要です"); return; } repo.insertReport({song_id:songId,reason,reporter_id:user.id,reporter_name:(profile&&profile.display_name)||"会員",at:nowStr(),status:"open"}).then(()=>say("通報を受け付けました")).catch(fail); };
   const setVisibility = (id,status) => repo.put("tracks",id,{status}).then(()=>say(status==="public"?"公開しました":"非公開にしました")).catch(fail);
@@ -1454,7 +1461,7 @@ function App(){
     repo.remove("tracks",id).then(()=>{
       say("楽曲を削除しました（30日以内なら復元できます）");
       setQueue(q=>q.filter(x=>x!==id)); if(currentId===id){setCurrentId(null);setPlaying(false);setPlayerOpen(false)}
-    }).catch(e=>say(/公開中の楽曲は削除できません/.test((e&&e.message)||"") ? "公開中の楽曲は削除できません。先に非公開にしてください" : "削除できませんでした。通信状態を確認して、もう一度お試しください"));
+    }).catch(e=>say(/公開中の楽曲は削除できません/.test((e&&e.message)||"") ? "公開中の楽曲は削除できません。先に非公開にしてください" : e&&e.denied ? "権限がないため削除できませんでした" : "削除できませんでした。通信状態を確認して、もう一度お試しください"));
   };
 
   const signOut = () => auth.signOut().then(()=>{ say("ログアウトしました"); navTo("home"); });

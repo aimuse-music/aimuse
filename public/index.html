@@ -350,6 +350,21 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    - お気に入り・フォロー：Supabase の favorites / follows テーブル（ログイン中の会員ごとに保存。RLSで本人の行だけ読み書き可）
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
+// 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
+const BUILD = "2026-10-15.2";
+async function newerBuildAvailable(){
+  try{
+    const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
+    if(!r.ok) return false;
+    const m = (await r.text()).match(/const BUILD = "([^"]+)"/);
+    if(!m || m[1]===BUILD) return false;
+    // 同じ版への再読み込みは1回だけ（読み込みが繰り返されるのを防ぐ）
+    if(sessionStorage.getItem("aimuse.reloadedFor")===m[1]) return false;
+    sessionStorage.setItem("aimuse.reloadedFor",m[1]);
+    return true;
+  }catch(e){ return false; }
+}
+
 // 旧版で端末内（全員共通）に保存していたお気に入り・フォローは使わないので削除する
 try{ localStorage.removeItem("aimuse.favs2"); localStorage.removeItem("aimuse.follows2"); }catch(e){}
 
@@ -360,12 +375,14 @@ const social = {
   // 必ず「ログイン中の会員ID」で絞り込んで取得する
   async load(uid){
     const [f,w] = await Promise.all([
-      sb.from("favorites").select("track_id").eq("user_id",uid),
-      sb.from("follows").select("artist_id").eq("user_id",uid)
+      sb.from("favorites").select("user_id,track_id").eq("user_id",uid),
+      sb.from("follows").select("user_id,artist_id").eq("user_id",uid)
     ]);
     if(f.error) throw f.error;
     if(w.error) throw w.error;
-    return { favs:new Set(f.data.map(r=>r.track_id)), follows:new Set(w.data.map(r=>r.artist_id)) };
+    // 念のため、持ち主がログイン中の会員である行だけを使う
+    const mine = rows => rows.filter(r=>r.user_id===uid);
+    return { favs:new Set(mine(f.data).map(r=>r.track_id)), follows:new Set(mine(w.data).map(r=>r.artist_id)) };
   },
   async setFav(uid,trackId,on){
     if(on) okOrDup(await sb.from("favorites").insert({user_id:uid,track_id:trackId}));
@@ -1252,6 +1269,19 @@ function App(){
       setFavs(r.favs); setFollows(r.follows);
     }).catch(e=>{ console.warn("social",e); if(uidRef.current===uid) say("お気に入り・フォローを読み込めませんでした"); });
   },[uid]);
+
+  // 新しい版が公開されていたら、再生中でないときに自動で読み込み直す
+  // （ログイン・ログアウト時と、アプリの画面に戻ってきたときに確認）
+  const playingRef = useRef(false);
+  playingRef.current = playing;
+  const firstUid = useRef(true);
+  const reloadIfNewer = () => { if(playingRef.current) return; newerBuildAvailable().then(n=>{ if(n && !playingRef.current) location.reload(); }); };
+  useEffect(()=>{ if(firstUid.current){ firstUid.current=false; return; } reloadIfNewer(); },[uid]);
+  useEffect(()=>{
+    const onVis = () => { if(document.visibilityState==="visible") reloadIfNewer(); };
+    document.addEventListener("visibilitychange",onVis);
+    return ()=>document.removeEventListener("visibilitychange",onVis);
+  },[]);
 
   const toSong = t => { const lyr=Array.isArray(t.lyrics)&&t.lyrics.length?t.lyrics:null; return {
     id:t.id,title:t.title,artistId:t.artistId||artistKey(t.artist),artistName:t.artist,genre:t.genre,

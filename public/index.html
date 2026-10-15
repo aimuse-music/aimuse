@@ -351,7 +351,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-15.3";
+const BUILD = "2026-10-15.4";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -712,6 +712,9 @@ function Search({ctx}){
     const has = songs.some(s=>s.artistId===a.id && (!genre||s.genre===genre) && (!tool||s.tool===tool));
     return has && (!query || a.name.toLowerCase().includes(query));
   });
+  // 画面に表示する曲（アーティスト検索では曲一覧を出さず、1アーティスト＝1件）。件数は表示する分だけを数える
+  const shownSongs = mode==="artist" ? [] : songHits;
+  const total = shownSongs.length + artistHits.length;
   const clear = () => {setQ("");setGenre(null);setTool(null)};
   return html`<div className="screen">
     <header className="top"><h1>検索</h1></header>
@@ -731,10 +734,10 @@ function Search({ctx}){
       <${SecHead} en="BROWSE" title="ジャンルから探す"/>
       <div className="tiles">${CONFIG.genres.map(g=>{const hh=genreHue[g]; return html`<button key=${g} className="tile" onClick=${()=>setGenre(g)} style=${{background:`linear-gradient(135deg,hsl(${hh} 65% 45%),hsl(${hh-40} 70% 20%))`}}>${g}<small>${songs.filter(s=>s.genre===g).length}曲</small></button>`})}</div>
     </section>` : html`<section className="sec">
-      <div className="sec-h"><div><span className="en">RESULTS</span><h2>${songHits.length+artistHits.length}件の結果</h2></div><button className="link" onClick=${clear}>条件をクリア</button></div>
+      <div className="sec-h"><div><span className="en">RESULTS</span><h2>${total}件の結果</h2></div><button className="link" onClick=${clear}>条件をクリア</button></div>
       ${artistHits.length>0 && html`<div className="hrow" style=${{marginBottom:10}}>${artistHits.map(a=>html`<button key=${a.id} className="artist" onClick=${()=>openArtist(a.id)}><${Cover} item=${a} radius="50%"/><div className="n">${a.name}</div><div className="f">アーティスト</div></button>`)}</div>`}
-      ${mode!=="artist" || query==="" ? html`<div className="list">${songHits.map(s=>html`<${SongRow} key=${s.id} song=${s} artist=${artistOf(s)} cur=${current?.id===s.id} playing=${playing} fav=${favs.has(s.id)} onPlay=${()=>play(s,songHits)} onFav=${()=>toggleFav(s.id)}/>`)}</div>` : null}
-      ${songHits.length+artistHits.length===0 && html`<div className="empty">「${q||genre||tool}」に一致する楽曲は見つかりませんでした。<br/>別のキーワードやジャンルで試してください。</div>`}
+      ${shownSongs.length>0 ? html`<div className="list">${shownSongs.map(s=>html`<${SongRow} key=${s.id} song=${s} artist=${artistOf(s)} cur=${current?.id===s.id} playing=${playing} fav=${favs.has(s.id)} onPlay=${()=>play(s,shownSongs)} onFav=${()=>toggleFav(s.id)}/>`)}</div>` : null}
+      ${total===0 && html`<div className="empty">「${q||genre||tool}」に一致する楽曲は見つかりませんでした。<br/>別のキーワードやジャンルで試してください。</div>`}
     </section>`}
   </div>`;
 }

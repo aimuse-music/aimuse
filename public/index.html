@@ -347,17 +347,43 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    - 会員：Supabase Auth（メール＋パスワード）
    - 投稿情報（曲名・審査状態・通報・再生数）：Supabase の tracks / reports テーブル
    - 音源・ジャケット画像：Supabase Storage（audio / covers バケット）。どの端末からでも再生できる
-   - お気に入り・フォロー：この端末内（localStorage）
+   - お気に入り・フォロー：Supabase の favorites / follows テーブル（ログイン中の会員ごとに保存。RLSで本人の行だけ読み書き可）
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
-const store = {
-  get(k,f){try{const v=localStorage.getItem(k);return v?JSON.parse(v):f}catch(e){return f}},
-  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
-};
-const dataService = {
-  loadFavorites: () => new Set(store.get("aimuse.favs2",[])),
-  saveFavorites: (set) => store.set("aimuse.favs2",[...set]),
-  loadFollows: () => new Set(store.get("aimuse.follows2",[])),
-  saveFollows: (set) => store.set("aimuse.follows2",[...set])
+
+// 旧版で端末内（全員共通）に保存していたお気に入り・フォローは使わないので削除する
+try{ localStorage.removeItem("aimuse.favs2"); localStorage.removeItem("aimuse.follows2"); }catch(e){}
+
+const isUuid = v => typeof v==="string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+// 同じ行がすでにある（二重タップなど）場合は成功扱い
+const okOrDup = r => { if(r.error && r.error.code!=="23505") throw r.error; };
+const social = {
+  // 必ず「ログイン中の会員ID」で絞り込んで取得する
+  async load(uid){
+    const [f,w] = await Promise.all([
+      sb.from("favorites").select("track_id").eq("user_id",uid),
+      sb.from("follows").select("artist_id").eq("user_id",uid)
+    ]);
+    if(f.error) throw f.error;
+    if(w.error) throw w.error;
+    return { favs:new Set(f.data.map(r=>r.track_id)), follows:new Set(w.data.map(r=>r.artist_id)) };
+  },
+  async setFav(uid,trackId,on){
+    if(on) okOrDup(await sb.from("favorites").insert({user_id:uid,track_id:trackId}));
+    else okOrDup(await sb.from("favorites").delete().eq("user_id",uid).eq("track_id",trackId));
+  },
+  async setFollow(uid,artistId,on){
+    if(on) okOrDup(await sb.from("follows").insert({user_id:uid,artist_id:artistId}));
+    else okOrDup(await sb.from("follows").delete().eq("user_id",uid).eq("artist_id",artistId));
+  },
+  // フォロワー数（人数だけ。誰がフォローしているかは取得しない）
+  async followerCounts(ids){
+    const out = new Map();
+    await Promise.all(ids.map(async id=>{
+      const {data,error} = await sb.rpc("artist_follower_count",{aid:id});
+      if(!error) out.set(id,Number(data)||0);
+    }));
+    return out;
+  }
 };
 
 const SB_CFG = window.AIMUSE_CONFIG || {};
@@ -391,7 +417,7 @@ const camelToSnake = k => k.replace(/[A-Z]/g,c=>"_"+c.toLowerCase());
 const toRow = patch => { const o={}; Object.keys(patch).forEach(k=>{ if(k!=="id"&&k!=="createdAt"&&k!=="hasImage") o[camelToSnake(k)]=patch[k]; }); return o; };
 
 const trackFromRow = r => ({
-  id:r.id, userId:r.user_id, title:r.title, artist:r.artist, genre:r.genre, tool:r.tool, toolName:r.tool_name,
+  id:r.id, userId:r.user_id, artistId:r.artist_id||null, title:r.title, artist:r.artist, genre:r.genre, tool:r.tool, toolName:r.tool_name,
   audioPath:r.audio_path, audioName:r.audio_name, audioSize:r.audio_size, audioExt:r.audio_ext, duration:r.duration||0,
   imagePath:r.image_path, imageName:r.image_name, hasImage:!!r.image_path,
   lyrics:r.lyrics||[], checks:r.checks||[], status:r.status, rejectReason:r.reject_reason, plays:r.plays||0,
@@ -957,7 +983,7 @@ function Artist({ctx}){
     <div className="ahead">
       <${Cover} item=${a} radius="50%"/>
       <h2>${a.name}</h2>
-      <div style=${{color:"var(--muted)",fontSize:13}}>${fmtNum(a.followers+(on?1:0))} フォロワー · ${list.length}曲</div>
+      <div style=${{color:"var(--muted)",fontSize:13}}>${fmtNum(a.followers)} フォロワー · ${list.length}曲</div>
       <p style=${{color:"var(--muted)",fontSize:13.5,maxWidth:320}}>${a.bio}</p>
       <div style=${{display:"flex",gap:10,alignItems:"center"}}>
         <button className=${"follow"+(on?" on":"")} onClick=${()=>toggleFollow(a.id)}>${on?"フォロー中":"フォローする"}</button>
@@ -1182,8 +1208,12 @@ function App(){
   const [reportsRaw,setReports] = useState([]);
   const [repoMode,setRepoMode] = useState("pending");
   const [authState,setAuthState] = useState({user:null,profile:null,ready:false,recovery:false});
-  const [favs,setFavs] = useState(()=>dataService.loadFavorites());
-  const [follows,setFollows] = useState(()=>dataService.loadFollows());
+  // お気に入り・フォローはログイン中の会員ごとにSupabaseから読み込む（未ログイン時は空）
+  const [favs,setFavs] = useState(()=>new Set());
+  const [follows,setFollows] = useState(()=>new Set());
+  const [followerCounts,setFollowerCounts] = useState(()=>new Map());
+  const uidRef = useRef(null);
+  const socialBusy = useRef(new Set());
   const [queue,setQueue] = useState([]);
   const [queueLabel,setQueueLabel] = useState("");
   const [currentId,setCurrentId] = useState(null);
@@ -1210,15 +1240,36 @@ function App(){
   const user = authState.user, profile = authState.profile, isAdmin = !!(profile&&profile.is_admin);
   useEffect(()=>{ if(authState.recovery){ setHistory([]); setTab("me"); } },[authState.recovery]);
 
+  // ログイン・ログアウト・アカウント切り替えのたびに、まず空にしてから本人の分だけ読み込み直す
+  const uid = user ? user.id : null;
+  useEffect(()=>{
+    uidRef.current = uid;
+    socialBusy.current.clear();
+    setFavs(new Set()); setFollows(new Set());
+    if(!uid||!sb) return;
+    social.load(uid).then(r=>{
+      if(uidRef.current!==uid) return; // 読み込み中に別アカウントへ切り替わった場合は捨てる
+      setFavs(r.favs); setFollows(r.follows);
+    }).catch(e=>{ console.warn("social",e); if(uidRef.current===uid) say("お気に入り・フォローを読み込めませんでした"); });
+  },[uid]);
+
   const toSong = t => { const lyr=Array.isArray(t.lyrics)&&t.lyrics.length?t.lyrics:null; return {
-    id:t.id,title:t.title,artistId:artistKey(t.artist),artistName:t.artist,genre:t.genre,
+    id:t.id,title:t.title,artistId:t.artistId||artistKey(t.artist),artistName:t.artist,genre:t.genre,
     tool:CONFIG.tools.includes(t.tool)?t.tool:"その他",toolName:t.toolName||t.tool,
     duration:t.duration||0,plays:t.plays||0,date:(t.approvedAt||t.submittedAt||""),hues:t.hues||[270,230],pattern:t.pattern??0,
     lyrics:lyr,instrumental:!lyr,status:t.status,audioUrl:t.audioUrl||null,imageUrl:t.imageUrl||null,mine:!!(user&&t.userId===user.id),featured:true }; };
 
   const allSongs = useMemo(()=>tracks.filter(t=>t.status==="public"||t.status==="hidden").sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(toSong),[tracks,user]);
   const songs = useMemo(()=>allSongs.filter(s=>s.status==="public").sort((a,b)=>b.date.localeCompare(a.date)),[allSongs]);
-  const artists = useMemo(()=>{ const m=new Map(); songs.forEach(s=>{ if(!m.has(s.artistId)) m.set(s.artistId,{id:s.artistId,name:s.artistName,hues:s.hues,pattern:s.pattern,followers:0,bio:""}); }); return [...m.values()].map(a=>({...a,followers:follows.has(a.id)?1:0})); },[songs,follows]);
+  const artists = useMemo(()=>{ const m=new Map(); songs.forEach(s=>{ if(!m.has(s.artistId)) m.set(s.artistId,{id:s.artistId,name:s.artistName,hues:s.hues,pattern:s.pattern,followers:0,bio:""}); }); return [...m.values()].map(a=>({...a,followers:followerCounts.get(a.id)||0})); },[songs,followerCounts]);
+  // 公開中アーティストのフォロワー数（全会員の合計人数）を取得
+  const artistIdsKey = useMemo(()=>[...new Set(songs.map(s=>s.artistId))].filter(isUuid).sort().join(","),[songs]);
+  useEffect(()=>{
+    if(!sb||!artistIdsKey) return;
+    let alive = true;
+    social.followerCounts(artistIdsKey.split(",")).then(m=>{ if(alive) setFollowerCounts(m); }).catch(()=>{});
+    return ()=>{ alive=false; };
+  },[artistIdsKey]);
   const submissions = useMemo(()=>tracks.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(t=>({...t,tool:t.toolName||t.tool,mine:!!(user&&t.userId===user.id),lyrics:t.lyrics||null,checks:t.checks||[]})),[tracks,user]);
   const reports = useMemo(()=>reportsRaw.filter(r=>tracks.some(t=>t.id===r.songId)).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)),[reportsRaw,tracks]);
   const current = allSongs.find(s=>s.id===currentId)||null;
@@ -1229,8 +1280,32 @@ function App(){
   const navTo = t => { setHistory([]); setTab(t); window.scrollTo(0,0); };
   const openArtist = id => { setArtistId(id); go("artist"); };
 
-  const toggleFav = id => setFavs(prev=>{const n=new Set(prev); if(n.has(id)){n.delete(id);say("お気に入りから削除しました")}else{n.add(id);say("お気に入りに追加しました")} dataService.saveFavorites(n); return n;});
-  const toggleFollow = id => setFollows(prev=>{const n=new Set(prev); if(n.has(id)){n.delete(id);say("フォローを解除しました")}else{n.add(id);say("フォローしました")} dataService.saveFollows(n); return n;});
+  // お気に入り・フォロー：ログイン中の会員IDでSupabaseに保存（失敗したら画面を元に戻す）
+  const setIn = (setter,id,on) => setter(p=>{ const n=new Set(p); on?n.add(id):n.delete(id); return n; });
+  const toggleFav = id => {
+    if(!uid||!sb){ say("お気に入りにはログインが必要です"); return; }
+    const key="fav:"+id; if(socialBusy.current.has(key)) return; socialBusy.current.add(key);
+    const on = !favs.has(id), me = uid;
+    setIn(setFavs,id,on);
+    say(on?"お気に入りに追加しました":"お気に入りから削除しました");
+    social.setFav(me,id,on).catch(e=>{
+      console.warn("favorite",e);
+      if(uidRef.current===me){ setIn(setFavs,id,!on); say("保存できませんでした。通信状態を確認して、もう一度お試しください"); }
+    }).finally(()=>socialBusy.current.delete(key));
+  };
+  const toggleFollow = id => {
+    if(!uid||!sb){ say("フォローにはログインが必要です"); return; }
+    if(!isUuid(id)){ say("このアーティストは現在フォローできません"); return; }
+    const key="follow:"+id; if(socialBusy.current.has(key)) return; socialBusy.current.add(key);
+    const on = !follows.has(id), me = uid;
+    const bump = d => setFollowerCounts(p=>{ const n=new Map(p); n.set(id,Math.max(0,(n.get(id)||0)+d)); return n; });
+    setIn(setFollows,id,on); bump(on?1:-1);
+    say(on?"フォローしました":"フォローを解除しました");
+    social.setFollow(me,id,on).catch(e=>{
+      console.warn("follow",e);
+      if(uidRef.current===me){ setIn(setFollows,id,!on); bump(on?-1:1); say("保存できませんでした。通信状態を確認して、もう一度お試しください"); }
+    }).finally(()=>socialBusy.current.delete(key));
+  };
 
   const startSong = song => { setCurrentId(song.id); setPos(0); setPlaying(!!song.audioUrl); if(!song.audioUrl) say(NO_AUDIO); };
   const play = (song,list) => {

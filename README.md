@@ -28,7 +28,7 @@ AIで制作された楽曲だけを集めた音楽配信サービス。
 - 乱用防止：審査待ちは1人10曲まで、保存ファイルは1人200個まで
 - 審査・通報対応・公開切替・削除：管理者（profiles.is_admin = true）のみ
 - 安全な削除：公開中の曲は削除不可（先に非公開）。削除内容は30日間 aimuse_private.track_deletions に保存され、管理者が admin_restore_track で復元可能。音源・画像は即時削除せず、30日後に孤立ファイルとして整理
-- お気に入り・フォローは現在アプリでは端末内（localStorage）に保存（DB側のテーブルは用意済み）
+- お気に入り・フォロー：Supabase の favorites / follows に会員ごと（user_id = auth.uid()）に保存。RLSで本人の行だけ取得・追加・削除できる。フォロワー数は artist_follower_count で人数のみ取得
 - 架空のデータは入れていない
 
 ## 管理者の設定

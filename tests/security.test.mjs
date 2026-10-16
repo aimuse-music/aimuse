@@ -292,8 +292,13 @@ test("追加SQL：既存テーブルの変更・削除をしない／全BOOSTテ
 });
 test("AIMUSE本番の読み取り専用チェック：最初に読み取り専用へ切り替え、変更命令を含まない", () => {
   const s = readFileSync(join(root, "supabase/boost_precheck_readonly.sql"), "utf8").replace(/--.*$/gm, "");
-  const body = s.split("$chk$")[1];
-  assert.ok(/^\s*declare[\s\S]*?begin\s+set transaction read only;/.test(body), "冒頭で読み取り専用にしていません");
+  // 最初の命令が BEGIN READ ONLY、DOブロック、COMMIT、表示の SELECT の順であること
+  const stmts = s.split("$chk$");
+  assert.equal(stmts.length, 3, "DOブロックが1つではありません");
+  assert.ok(/^\s*begin read only;\s*do\s*$/i.test(stmts[0]), "最初の命令が BEGIN READ ONLY ではありません");
+  assert.ok(/^;\s*commit;\s*select\b/i.test(stmts[2]), "DOの後が COMMIT → SELECT になっていません");
+  assert.ok(/if v_started_ro <> 'on' then\s+set transaction read only;/.test(stmts[1]), "DO内の念のための読み取り専用化がありません");
+  assert.ok(/exception when others then/.test(stmts[1]), "想定外のエラーを記録する処理がありません");
   assert.ok(!/\b(insert\s+into|update\s+public|delete\s+from|create\s+(table|function|policy|trigger|index)|alter\s+(table|function|role)|grant\s|revoke\s|drop\s|truncate)\b/i.test(s), "変更命令が含まれています");
 });
 test("アプリは管理者として開いたときだけ古いカウンターを片付ける（クリック処理では行わない）", () => {

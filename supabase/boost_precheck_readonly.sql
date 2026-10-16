@@ -1,12 +1,17 @@
 -- =====================================================================
--- AIMUSE 本番の読み取り専用チェック（BOOST の追加SQLを実行する前に使う）
+-- AIMUSE 本番の読み取り専用チェック v2（BOOST の追加SQLを実行する前に使う）
 --
--- ・このSQLは何も変更しません。最初に「読み取り専用の取引」に切り替えるため、
---   万一書き込もうとしてもデータベースが拒否します
+-- ・このSQLは何も変更しません。
+--   最初の命令 BEGIN READ ONLY で「読み取り専用の取引」を開始するため、
+--   万一書き込もうとしてもデータベースが拒否します（確認の処理はすべてこの取引の中）
 -- ・AIMUSE の管理者判定 public.is_admin() と、会員が自分を管理者にできないことを、
 --   定義・権限・実際の動作の3つの面から確認します
+-- ・確認の途中で想定外のエラーが起きても、エラーは表の1行として記録し、取引は正常に終えます
+--   （取引が開いたまま残らないようにするため）
 -- ・結果は1つの表で表示されます。「判定」がすべて OK（または 参考）なら問題ありません
 -- =====================================================================
+
+begin read only;
 
 do $chk$
 declare
@@ -19,11 +24,29 @@ declare
   v_bad text := '';
   v_checked integer := 0;
   v_role text;
+  v_started_ro text := current_setting('transaction_read_only');
 begin
-  -- この取引を読み取り専用にする（以降、書き込みはすべて拒否される）
-  set transaction read only;
-  v_rows := v_rows || jsonb_build_object('区分', '安全', '項目', 'このチェックは読み取り専用か',
+  -- 最初の命令 BEGIN READ ONLY で、すでに読み取り専用になっているはず。
+  -- 念のため、なっていなければここで読み取り専用に切り替える（読み取り専用への切り替えは、
+  -- 取引の途中でも PostgreSQL で認められている。逆の「書き込み可能へ」は不可）
+  if v_started_ro <> 'on' then
+    set transaction read only;
+  end if;
+  v_rows := v_rows || jsonb_build_object('区分', '安全', '項目', '取引の開始時点で読み取り専用か（BEGIN READ ONLY）',
+             '結果', v_started_ro, '期待', 'on');
+  v_rows := v_rows || jsonb_build_object('区分', '安全', '項目', '確認中の取引は読み取り専用か',
              '結果', current_setting('transaction_read_only'), '期待', 'on');
+  v_rows := v_rows || jsonb_build_object('区分', '安全', '項目', '実行日時（参考表示）',
+             '結果', to_char(now() at time zone 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS'), '期待', to_char(now() at time zone 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS'));
+  v_rows := v_rows || jsonb_build_object('区分', '安全', '項目', '実行者（参考表示）',
+             '結果', current_user || '（PostgreSQL ' || current_setting('server_version') || '）',
+             '期待', current_user || '（PostgreSQL ' || current_setting('server_version') || '）');
+  v_rows := v_rows || jsonb_build_object('区分', '安全', '項目', '実行者が anon・authenticated に切り替え可能か（ロールの所属）',
+             '結果', case when (select count(*) from pg_roles where rolname in ('anon', 'authenticated')) = 2
+                              and pg_has_role(current_user, 'anon', 'MEMBER') and pg_has_role(current_user, 'authenticated', 'MEMBER') then '可能' else '不可' end,
+             '期待', '可能');
+
+  begin  -- ここから先の想定外のエラーは、表の1行として記録する
 
   -- ---- 1. 定義 --------------------------------------------------------
   select btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g')) into v_body from pg_proc p where p.oid = to_regprocedure('public.is_admin()');
@@ -106,9 +129,21 @@ begin
                                  and p.prosrc ~* '(set\s+is_admin|is_admin\s*:?=\s*(true|new\.|p_|\$))'), 'なし'),
              '期待', 'なし');
 
+  exception when others then
+    -- 想定外のエラー（例：テーブルや関数が無い）。ここまでの結果は残し、エラーを NG として記録する
+    -- （このブロック内の変更は取り消されるが、読み取り専用なので元々変更は無い）
+    v_rows := v_rows || jsonb_build_object('区分', 'エラー', '項目', '確認の途中でエラー',
+               '結果', sqlstate || '：' || sqlerrm, '期待', 'なし');
+  end;
+
+  -- 結果を、この接続の中だけで有効な一時的な設定値に入れる（データベースには保存されない）
   perform set_config('boost.precheck', v_rows::text, false);
 end
 $chk$;
+
+-- 読み取り専用の取引を終える（何も変更していないので、確定しても取り消しても同じ。
+-- 結果の一時的な設定値を残すために COMMIT で終える）
+commit;
 
 select x.区分, x.項目, x.結果, x.期待,
        case when x.項目 like '%（参考表示）' then '参考'

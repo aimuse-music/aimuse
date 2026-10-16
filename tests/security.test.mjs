@@ -290,21 +290,16 @@ test("追加SQL：既存テーブルの変更・削除をしない／全BOOSTテ
   assert.equal(blocks[0], blocks[1], "DO内の必須確認と一覧表示の確認内容が一致しません");
   assert.ok(raw.split("$boost$")[1].includes("[CHECK-BEGIN]") && /if v_ng > 0 then\s+raise exception/.test(raw.split("$boost$")[1]), "必須確認がDOブロック内にありません");
 });
-test("AIMUSE本番の読み取り専用チェック：SELECT文1つだけ・変更命令なし・定義が一致した場合だけ is_admin() を呼ぶ", () => {
+test("AIMUSE本番の読み取り専用チェック：純粋なSELECT文1つ・ログイン情報の変更なし・AIMUSEの関数を実行しない", () => {
   const raw = readFileSync(join(root, "supabase/boost_precheck_readonly.sql"), "utf8");
   const s = raw.replace(/--.*$/gm, "").trim();
   assert.ok(/^with\b/i.test(s), "WITH ... SELECT の1文で始まっていません");
   assert.equal((s.match(/;/g) || []).length, 1, "文が1つではありません");
-  assert.ok(s.endsWith(";"));
   assert.ok(!/\b(do\s+\$|insert\s+into|update\s+public|delete\s+from|create\s|alter\s|grant\s|revoke\s|drop\s|truncate|set\s+(local\s+)?role|set\s+transaction|begin|commit|rollback)\b/i.test(s), "変更命令・取引操作・ロール切り替えが含まれています");
-  const calls = [...s.matchAll(/case when d\.is_admin_ok and s\.ready then public\.is_admin\(\) end/g)].length;
-  const all = [...s.matchAll(/public\.is_admin\(\)(?!'|\))/g)].length;
-  assert.equal(calls, 3, "is_admin() の呼び出しが定義確認で守られていません");
-  assert.equal((s.match(/then public\.is_admin\(\)/g) || []).length, 3, "定義確認なしの is_admin() 呼び出しがあります");
-  // 必須項目の数と総合判定の基準が一致
-  const required = (s.match(/^\s*select \d+, true,/gm) || []).length + 2; // 権限（3ロール分）の行は1つの select で3行になる
-  assert.ok(/count\(\*\) filter \(where 判定 = 'OK'\) = 13/.test(s));
-  assert.equal(required, 13, "必須項目の数が13ではありません");
+  assert.ok(!/set_config\s*\(/i.test(s), "ログイン情報などの設定（set_config）が含まれています");
+  assert.ok(!/(public|auth)\.[a-z_]+\s*\(/i.test(s.replace(/to_reg(procedure|class)\('[^']*'\)/g, "")), "AIMUSE・認証の関数を呼び出しています");
+  assert.ok(/count\(\*\) filter \(where 判定 = 'OK'\) = 11/.test(s));
+  assert.equal((s.match(/^\s*select \d+, true,/gm) || []).length + 2, 11, "必須項目の数が11ではありません");
 });
 test("アプリは管理者として開いたときだけ古いカウンターを片付ける（クリック処理では行わない）", () => {
   const html = readFileSync(join(root, "public/index.html"), "utf8");

@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0b0912">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="BOOST">
+<title>AIMUSE BOOST</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Unbounded:wght@500;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+/* AIMUSE と同じ色・書体。iPhone幅の1カラム（PCでは中央520px） */
+:root{
+  color-scheme: dark;
+  --bg:#0b0912; --surface:#15121f; --surface2:#1e1a2c; --line:#2c2742;
+  --fg:#f2eefb; --muted:#9d95b8; --faint:#6b6488;
+  --violet:#a463ff; --indigo:#6b6cff;
+  --grad:linear-gradient(120deg,#b46bff 0%,#7c5cff 45%,#5a72ff 100%);
+  --glow:rgba(140,100,255,.35);
+  --ok:#3fd49a; --warn:#f6bd55; --bad:#ff5f7e;
+  --f-display:"Unbounded","Zen Kaku Gothic New",system-ui,sans-serif;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --gl:max(16px, env(safe-area-inset-left,0px)); --gr:max(16px, env(safe-area-inset-right,0px));
+  --sb:env(safe-area-inset-bottom,0px); --st:env(safe-area-inset-top,0px);
+  --nav-h:62px; --r:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.6}
+body{min-height:100vh;overscroll-behavior-y:none}
+button,input,textarea,select{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--violet)}
+a.btn{text-decoration:none;color:var(--fg)}
+.shell{max-width:520px;margin:0 auto;min-height:100vh;position:relative;padding-bottom:calc(var(--nav-h) + var(--sb) + 24px)}
+.hdr{position:sticky;top:0;z-index:20;padding:calc(var(--st) + 12px) var(--gr) 12px var(--gl);background:rgba(11,9,18,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.hdr h1{font-family:var(--f-display);font-size:17px;font-weight:700;margin:0;letter-spacing:.02em;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.logo{font-family:var(--f-display);font-weight:700;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.page{padding:16px var(--gr) 0 var(--gl)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.row{display:flex;align-items:center;gap:10px}
+.between{justify-content:space-between}
+.wrap{flex-wrap:wrap}
+.muted{color:var(--muted)} .faint{color:var(--faint)} .small{font-size:12.5px} .tiny{font-size:11px}
+.mono{font-family:var(--f-mono)}
+.sec{font-family:var(--f-display);font-size:13px;font-weight:700;letter-spacing:.06em;color:var(--muted);margin:22px 0 10px;text-transform:uppercase}
+.btn{min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);padding:10px 14px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn:active{transform:scale(.98)}
+.btn.primary{background:var(--grad);border:0;color:#fff;box-shadow:0 6px 24px var(--glow)}
+.btn.ghost{background:transparent}
+.btn.danger{color:var(--bad);border-color:rgba(255,95,126,.4)}
+.btn:disabled{opacity:.45;box-shadow:none}
+.btn.block{width:100%}
+.btn.sm{min-height:36px;padding:6px 10px;font-size:13px;border-radius:10px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+input.in,textarea.in,select.in{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:16px;outline:none}
+input.in:focus,textarea.in:focus,select.in:focus{border-color:var(--violet)}
+textarea.in{resize:vertical;min-height:120px;line-height:1.6}
+label.lb{display:block;font-size:12.5px;color:var(--muted);margin:0 0 6px;font-weight:700}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;min-height:38px;padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-size:13.5px;font-weight:700;color:var(--muted)}
+.chip.on{background:rgba(164,99,255,.16);border-color:var(--violet);color:var(--fg)}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.badge.ok{color:var(--ok);border-color:rgba(63,212,154,.4)}
+.badge.warn{color:var(--warn);border-color:rgba(246,189,85,.4)}
+.badge.bad{color:var(--bad);border-color:rgba(255,95,126,.4)}
+.badge.vio{color:#cdb3ff;border-color:rgba(164,99,255,.5)}
+.notice{border-radius:12px;padding:10px 12px;font-size:13px;border:1px solid var(--line);background:var(--surface2)}
+.notice.warn{border-color:rgba(246,189,85,.4);background:rgba(246,189,85,.07)}
+.notice.bad{border-color:rgba(255,95,126,.4);background:rgba(255,95,126,.07)}
+.notice.ok{border-color:rgba(63,212,154,.35);background:rgba(63,212,154,.06)}
+.cover{width:56px;height:56px;border-radius:10px;flex:none;object-fit:cover;background:var(--surface2)}
+.cover.lg{width:72px;height:72px}
+.ph{display:grid;place-items:center;font-family:var(--f-display);font-size:18px;color:#fff}
+.trk{display:flex;gap:12px;align-items:center;padding:10px;border-radius:var(--r);border:1px solid transparent;background:none;width:100%;text-align:left}
+.trk:active,.trk.sel{background:var(--surface);border-color:var(--line)}
+.trk .t{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ell{min-width:0;flex:1}
+.ell>*{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(15,12,24,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);padding-bottom:var(--sb)}
+.nav .in2{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr);height:var(--nav-h)}
+.nav button{background:none;border:0;color:var(--faint);font-size:10.5px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.nav button.on{color:var(--fg)}
+.nav button.on svg{stroke:url(#g)}
+.nav svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + var(--sb) + 14px);transform:translateX(-50%);z-index:60;background:#2a2340;border:1px solid var(--violet);padding:10px 16px;border-radius:999px;font-size:13.5px;font-weight:700;box-shadow:0 8px 30px rgba(0,0,0,.5);max-width:calc(100% - 32px);text-align:center}
+.sheet-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+.sheet{width:100%;max-width:520px;max-height:92vh;overflow:auto;background:var(--surface);border:1px solid var(--line);border-bottom:0;border-radius:20px 20px 0 0;padding:16px var(--gr) calc(20px + var(--sb)) var(--gl)}
+.ptabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.ptab{min-height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:700;font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.2;padding:4px}
+.ptab.on{border-color:var(--violet);color:var(--fg);background:rgba(164,99,255,.14)}
+.ptab .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);margin-top:3px}
+.preview{white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px dashed var(--line);border-radius:12px;padding:12px;font-size:14px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal .dow{text-align:center;font-size:11px;color:var(--faint);font-weight:700;padding:2px 0}
+.cal .d{aspect-ratio:1/1.05;border-radius:10px;border:1px solid transparent;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:5px;font-size:13px;font-weight:700;gap:3px;min-height:40px}
+.cal .d.out{opacity:.3}
+.cal .d.today{border-color:var(--line);color:#cdb3ff}
+.cal .d.sel{border-color:var(--violet);background:rgba(164,99,255,.16)}
+.cal .dots{display:flex;gap:2px;flex-wrap:wrap;justify-content:center;max-width:90%}
+.cal .dots i{width:5px;height:5px;border-radius:50%;background:var(--violet)}
+.cal .dots i.posted{background:var(--ok)}
+.cal .dots i.overdue{background:var(--warn)}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px}
+.kpi .v{font-family:var(--f-display);font-size:24px;font-weight:700;line-height:1.2}
+.kpi .l{font-size:11.5px;color:var(--muted);font-weight:700}
+.bars{display:flex;align-items:flex-end;gap:2px;height:150px;border-bottom:1px solid var(--line);position:relative}
+.bars button{flex:1;height:100%;display:flex;align-items:flex-end;background:none;border:0;padding:0;min-width:0}
+.bars button span{display:block;width:100%;background:var(--violet);border-radius:4px 4px 0 0;min-height:0}
+.bars button.on span{background:#cdb3ff}
+.axis{display:flex;justify-content:space-between;font-size:10.5px;color:var(--faint);margin-top:4px}
+.hbar{height:8px;border-radius:0 4px 4px 0;background:var(--violet)}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th{text-align:left;font-size:11px;color:var(--faint);font-weight:700;padding:6px 4px;border-bottom:1px solid var(--line)}
+.tbl td{padding:8px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+.tbl td.n,.tbl th.n{text-align:right;font-family:var(--f-mono);white-space:nowrap}
+.spin{width:20px;height:20px;border:2px solid var(--line);border-top-color:var(--violet);border-radius:50%;animation:sp 0.8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.center{display:grid;place-items:center;min-height:50vh}
+.login{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:24px var(--gr) 24px var(--gl);max-width:420px;margin:0 auto}
+.hero{font-family:var(--f-display);font-size:30px;font-weight:700;line-height:1.15;margin:0 0 4px}
+ul.plain{margin:6px 0 0;padding-left:18px} ul.plain li{margin:3px 0}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b46bff"/><stop offset="1" stop-color="#5a72ff"/></linearGradient></defs></svg>
+<div id="root"></div>
+<noscript><p style="padding:24px">JavaScriptを有効にしてください。</p></noscript>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+"use strict";
+const BUILD = "boost-0.1.0";
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+const html = htm.bind(React.createElement);
+const CFG = window.BOOST_CONFIG || {};
+const sb = (window.supabase && CFG.supabaseUrl) ? window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {
+  auth: { persistSession: true, autoRefreshToken: true, storageKey: "aimuse-boost-auth" }
+}) : null;
+const AIMUSE_URL = String(CFG.aimuseUrl || "").replace(/\/+$/, "");
+
+/* ---------------- 定数 ---------------- */
+const PLATFORMS = [
+  { id: "x", name: "X", long: "X（旧Twitter）" },
+  { id: "instagram", name: "Instagram", long: "Instagram" },
+  { id: "tiktok", name: "TikTok", long: "TikTok" },
+  { id: "youtube", name: "Shorts", long: "YouTube Shorts" },
+];
+const PNAME = Object.fromEntries(PLATFORMS.map(p => [p.id, p.long]));
+const TONES = [
+  { id: "emotional", name: "感動系" }, { id: "cool", name: "かっこいい系" }, { id: "love", name: "恋愛系" },
+  { id: "friendly", name: "親しみやすい系" }, { id: "simple", name: "シンプル系" },
+];
+const ACTION_LABELS = { open_app: "BOOSTを開いた", generate_template: "テンプレートで作成", generate_ai: "AIで作成", create_link: "計測リンクを作成", copy: "コピー", share_x_intent: "Xの投稿画面を開いた", share_sheet: "共有シートで共有", save_post: "投稿を保存", post_status: "投稿の状態を変更", edit_post: "投稿を編集", delete_post: "投稿を削除", set_ai_limit: "AIの上限を変更", logout: "ログアウト", js_error: "画面のエラー", unhandled: "処理のエラー", load_tracks: "楽曲の読み込み", load_posts: "投稿の読み込み", update_status: "状態の変更" };
+const STATUS = { draft: "下書き", scheduled: "予定", posted: "投稿済み", skipped: "見送り" };
+
+/* ---------------- 小さな道具 ---------------- */
+const pad = n => String(n).padStart(2, "0");
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const fmtDT = iso => { if (!iso) return ""; const d = new Date(iso); return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const fmtDate = s => { if (!s) return "—"; const d = new Date(s); return isNaN(d) ? String(s).slice(0, 10) : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`; };
+const toLocalInput = iso => { const d = iso ? new Date(iso) : new Date(Date.now() + 3600e3); return `${ymd(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const fromLocalInput = v => v ? new Date(v).toISOString() : null;
+const num = n => (n == null ? "—" : Number(n).toLocaleString("ja-JP"));
+const pick = a => a[Math.floor(Math.random() * a.length)];
+function randCode(len = 7) {
+  const ch = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const buf = new Uint32Array(len); crypto.getRandomValues(buf);
+  return Array.from(buf, x => ch[x % ch.length]).join("");
+}
+function tagify(s) { return "#" + String(s || "").replace(/[\s#＃・,，、。.\-\/&()（）!！?？'"]+/g, ""); }
+function uniqTags(list) { const seen = new Set(); return list.filter(t => t && t.length > 1 && !seen.has(t) && seen.add(t)).join(" "); }
+// X の文字数（全角=2、URL=23 として概算）
+function xWeight(text) {
+  let n = 0; const urls = text.match(/https?:\/\/\S+/g) || [];
+  const rest = text.replace(/https?:\/\/\S+/g, "");
+  for (const ch of rest) { const c = ch.codePointAt(0); n += (c <= 0x10FF || (c >= 0x2000 && c <= 0x200D) || (c >= 0x2010 && c <= 0x201F) || (c >= 0x2032 && c <= 0x2037)) ? 1 : 2; }
+  return n + urls.length * 23;
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) {
+    try { const ta = document.createElement("textarea"); ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0"; document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, 99999); const ok = document.execCommand("copy"); ta.remove(); return ok; } catch (e2) { return false; }
+  }
+}
+function composeText(p, d, link) {
+  const parts = [];
+  if (p === "youtube" && d.title) parts.push(d.title);
+  if (d.body) parts.push(d.body.trim());
+  if (link) parts.push(link);
+  if (d.hashtags) parts.push(d.hashtags.trim());
+  return parts.join("\n\n");
+}
+function destinationUrl(platform, trackId) {
+  if (!AIMUSE_URL) return "";
+  const q = new URLSearchParams({ utm_source: platform, utm_medium: "social", utm_campaign: "aimuse_boost", utm_content: trackId || "" });
+  return `${AIMUSE_URL}/?${q.toString()}`;
+}
+function shortUrl(code) { return `${location.origin}/go/${code}`; }
+
+/* ---------------- 記録（操作履歴・エラー） ---------------- */
+let CURRENT_UID = null;
+async function logEvent(kind, action, detail) {
+  if (!sb || !CURRENT_UID) return;
+  try { await sb.from("boost_logs").insert({ kind, action: String(action).slice(0, 80), detail: detail || {}, actor: CURRENT_UID }); } catch (e) {}
+}
+function errMsg(e) { return (e && (e.message || e.error_description || e.hint)) || String(e || "不明なエラー"); }
+async function must(promise, action) {
+  const res = await promise;
+  if (res && res.error) { logEvent("error", action, { message: errMsg(res.error), code: res.error.code || null }); throw res.error; }
+  return res;
+}
+
+/* ---------------- テンプレート文章（AI未接続でも使える） ---------------- */
+const HOOKS = {
+  emotional: ["心にそっと寄り添う一曲。", "聴き終えたあと、景色が少し違って見える。", "静かに、でも確かに響く音。", "言葉にできない気持ちを、音にしました。"],
+  cool: ["一音目から、空気が変わる。", "研ぎ澄まされたサウンド、ここに。", "夜に溶けるビートを。", "ボリュームを上げて聴いてほしい。"],
+  love: ["会いたい夜に、この曲を。", "胸の奥がきゅっとなる、恋のうた。", "あの人を思い出す、甘くて切ない一曲。", "好きって言えない夜に。"],
+  friendly: ["ちょっと一息つきたいときに、どうぞ！", "今日のBGMにいかがですか？", "気軽に聴いてみてください♪", "新しい曲、届きました！"],
+  simple: ["新曲を紹介します。", "AIMUSEで配信中です。", "ぜひ聴いてみてください。", "今週の一曲。"],
+};
+const TONE_TAGS = { emotional: ["#エモい曲", "#心に響く"], cool: ["#かっこいい曲", "#NewMusic"], love: ["#ラブソング", "#恋愛ソング"], friendly: ["#おすすめ曲", "#今日のBGM"], simple: ["#新曲", "#NewMusic"] };
+const YT_SUFFIX = { emotional: "心に響くAI音楽", cool: "クールなAI音楽", love: "切ない恋のAI音楽", friendly: "気軽に聴けるAI音楽", simple: "AI音楽" };
+function templateFor(track, tone) {
+  const t = track.title, a = track.artist, g = track.genre || "";
+  const gt = g ? tagify(g) : "";
+  const hook = () => pick(HOOKS[tone] || HOOKS.simple);
+  const tt = TONE_TAGS[tone] || TONE_TAGS.simple;
+  return {
+    x: { title: "", body: `${hook()}\n\n「${t}」/ ${a}\nAIMUSEで配信中`, hashtags: uniqTags(["#AIMUSE", "#AI音楽", gt]) },
+    instagram: { title: "", body: `${hook()}\n\n🎧「${t}」\nArtist：${a}${g ? `\nGenre：${g}` : ""}\n\nAIで生まれた音楽だけが集まる「AIMUSE」で配信中です。`, hashtags: uniqTags(["#AIMUSE", "#AI音楽", "#AIミュージック", gt, ...tt, "#新曲", "#音楽好きな人と繋がりたい", "#音楽紹介"]) },
+    tiktok: { title: "", body: `${hook()}「${t}」/ ${a}`, hashtags: uniqTags(["#AIMUSE", "#AI音楽", gt, tt[0], "#おすすめ"]) },
+    youtube: { title: `「${t}」${a}｜${YT_SUFFIX[tone] || "AI音楽"}`.slice(0, 100), body: `${hook()}\n${a}の「${t}」をAIMUSEで配信中です。`, hashtags: uniqTags(["#Shorts", "#AIMUSE", "#AI音楽", gt]) },
+  };
+}
+
+/* ---------------- アイコン ---------------- */
+const I = {
+  music: html`<svg viewBox="0 0 24 24"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg>`,
+  pen: html`<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`,
+  cal: html`<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>`,
+  chart: html`<svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 15v3M12 10v8M17 6v12"/></svg>`,
+  gear: html`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>`,
+};
+
+/* ---------------- 共通部品 ---------------- */
+function Toast({ msg }) { return msg ? html`<div class="toast" role="status">${msg}</div>` : null; }
+function Spinner() { return html`<div class="center"><div class="spin" aria-label="読み込み中"></div></div>`; }
+function Cover({ url, title, lg }) {
+  const [bad, setBad] = useState(false);
+  if (url && !bad) return html`<img class=${"cover" + (lg ? " lg" : "")} src=${url} alt="" loading="lazy" onError=${() => setBad(true)} />`;
+  return html`<div class=${"cover ph" + (lg ? " lg" : "")} style=${{ background: "var(--grad)" }}>${(title || "?").slice(0, 1)}</div>`;
+}
+function Sheet({ onClose, children }) {
+  return html`<div class="sheet-bg" onClick=${e => { if (e.target === e.currentTarget) onClose(); }}><div class="sheet" role="dialog">${children}</div></div>`;
+}
+
+/* ======================================================================
+   ログイン（AIMUSE の管理者アカウントのみ）
+   ====================================================================== */
+function Login({ onDone, initialError }) {
+  const [email, setEmail] = useState(""); const [pw, setPw] = useState("");
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState(initialError || "");
+  useEffect(() => { if (initialError) setErr(initialError); }, [initialError]);
+  async function submit(e) {
+    e.preventDefault(); setErr(""); setBusy(true);
+    try {
+      const { error } = await sb.auth.signInWithPassword({ email: email.trim(), password: pw });
+      if (error) throw error;
+      await onDone();
+    } catch (e2) {
+      setErr(/invalid login/i.test(errMsg(e2)) ? "メールアドレスまたはパスワードが違います" : /not confirmed/i.test(errMsg(e2)) ? "メール認証が完了していません" : "ログインできませんでした：" + errMsg(e2));
+    } finally { setBusy(false); }
+  }
+  return html`<div class="login">
+    <div class="hero"><span class="logo">AIMUSE</span><br/>BOOST</div>
+    <p class="muted small" style=${{ margin: "0 0 24px" }}>運営者専用の宣伝・集客ツール</p>
+    ${!sb && html`<div class="notice bad" style=${{ marginBottom: 12 }}>接続設定（config.js）が読み込めません</div>`}
+    <form class="stack" onSubmit=${submit}>
+      <div><label class="lb" for="em">メールアドレス</label><input id="em" class="in" type="email" autocomplete="username" required value=${email} onInput=${e => setEmail(e.target.value)} /></div>
+      <div><label class="lb" for="pw">パスワード</label><input id="pw" class="in" type="password" autocomplete="current-password" required value=${pw} onInput=${e => setPw(e.target.value)} /></div>
+      ${err && html`<div class="notice bad">${err}</div>`}
+      <button class="btn primary block" disabled=${busy || !sb}>${busy ? "確認中…" : "ログイン"}</button>
+    </form>
+    <p class="faint tiny" style=${{ marginTop: 20 }}>AIMUSEの管理者アカウントでログインします。管理者以外はログインできません。</p>
+  </div>`;
+}
+
+/* ======================================================================
+   楽曲一覧（AIMUSE の公開済み楽曲を読み取りのみ）
+   ====================================================================== */
+function Tracks({ tracks, loading, error, reload, selectedId, onSelect }) {
+  const [q, setQ] = useState(""); const [sort, setSort] = useState("new");
+  const list = useMemo(() => {
+    const k = q.trim().toLowerCase();
+    let l = tracks.filter(t => !k || [t.title, t.artist, t.genre].some(v => String(v || "").toLowerCase().includes(k)));
+    if (sort === "plays") l = [...l].sort((a, b) => (b.plays || 0) - (a.plays || 0));
+    return l;
+  }, [tracks, q, sort]);
+  return html`<div class="page">
+    <input class="in" type="search" placeholder="曲名・アーティスト・ジャンルで検索" value=${q} onInput=${e => setQ(e.target.value)} aria-label="検索" />
+    <div class="row between" style=${{ margin: "12px 0 6px" }}>
+      <span class="muted small">公開中 ${num(tracks.length)}曲</span>
+      <div class="chips">
+        <button class=${"chip" + (sort === "new" ? " on" : "")} onClick=${() => setSort("new")}>新しい順</button>
+        <button class=${"chip" + (sort === "plays" ? " on" : "")} onClick=${() => setSort("plays")}>再生数順</button>
+      </div>
+    </div>
+    ${error && html`<div class="notice bad">楽曲を読み込めませんでした：${error} <button class="btn sm" style=${{ marginLeft: 8 }} onClick=${reload}>再読み込み</button></div>`}
+    ${loading ? html`<${Spinner}/>` : list.length === 0 ? html`<div class="card muted small" style=${{ marginTop: 8 }}>${tracks.length ? "該当する楽曲がありません" : "AIMUSEに公開中の楽曲がまだありません（審査で承認された曲だけが表示されます）"}</div>` :
+      html`<div class="stack" style=${{ gap: 2 }}>${list.map(t => html`<button key=${t.id} class=${"trk" + (t.id === selectedId ? " sel" : "")} onClick=${() => onSelect(t)}>
+        <${Cover} url=${t.coverUrl} title=${t.title} />
+        <div class="ell"><div class="t">${t.title}</div><div class="muted small">${t.artist}</div>
+          <div class="faint tiny">${t.genre} ・ 再生 ${num(t.plays)} ・ 公開 ${fmtDate(t.approved_at || t.created_at)}</div></div>
+        <span class="badge vio">宣伝する</span>
+      </button>`)}</div>`}
+    <p class="faint tiny" style=${{ marginTop: 14 }}>※ AIMUSEのデータは読み取りのみで、変更・削除はしません。再生数はAIMUSEの累計値です。</p>
+  </div>`;
+}
+
+/* ======================================================================
+   宣伝文の作成・共有・保存
+   ====================================================================== */
+function Compose({ track, ai, toast, goTracks, onSaved }) {
+  const [tone, setTone] = useState("emotional");
+  const [plat, setPlat] = useState("x");
+  const [drafts, setDrafts] = useState(null);
+  const [source, setSource] = useState("template");
+  const [busy, setBusy] = useState(false);
+  const [aiErr, setAiErr] = useState("");
+  const [links, setLinks] = useState({}); // platform -> {id, code}
+  const [saveOpen, setSaveOpen] = useState(false);
+  useEffect(() => { setDrafts(null); setLinks({}); setAiErr(""); }, [track && track.id]);
+
+  if (!track) return html`<div class="page"><div class="card stack"><div class="muted">宣伝する曲を選んでください。</div><button class="btn primary" onClick=${goTracks}>楽曲一覧から選ぶ</button></div></div>`;
+
+  function genTemplate() { setDrafts(templateFor(track, tone)); setSource("template"); setAiErr(""); logEvent("action", "generate_template", { track_id: track.id, tone }); }
+  async function genAI() {
+    setBusy(true); setAiErr("");
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      const res = await fetch("/api/generate", { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + (session && session.access_token) }, body: JSON.stringify({ title: track.title, artist: track.artist, genre: track.genre, tone }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.message || `エラー（${res.status}）`);
+      setDrafts(j.result); setSource("ai");
+      logEvent("action", "generate_ai", { track_id: track.id, tone, used: j.usage && j.usage.used });
+      toast(`AIで作成しました（本日 ${j.usage ? j.usage.used + "/" + j.usage.limit : "?"} 回）`);
+    } catch (e) { setAiErr(errMsg(e)); logEvent("error", "generate_ai", { message: errMsg(e) }); }
+    finally { setBusy(false); }
+  }
+  function edit(field, v) { setDrafts(d => ({ ...d, [plat]: { ...d[plat], [field]: v } })); if (source !== "manual") setSource(s => s === "ai" ? "ai" : "template"); }
+
+  async function ensureLink(p) {
+    if (links[p]) return links[p];
+    if (!AIMUSE_URL) return null;
+    for (let i = 0; i < 3; i++) {
+      const code = randCode();
+      const { data, error } = await sb.from("boost_links").insert({ code, track_id: track.id, track_title: track.title, artist: track.artist, platform: p, destination: destinationUrl(p, track.id), utm_campaign: "aimuse_boost" }).select("id,code").single();
+      if (!error) { setLinks(l => ({ ...l, [p]: data })); logEvent("action", "create_link", { platform: p, track_id: track.id, code }); return data; }
+      if (error.code !== "23505") { logEvent("error", "create_link", { message: errMsg(error) }); throw error; }
+    }
+    throw new Error("リンクを作成できませんでした");
+  }
+  async function fullText(p) {
+    const l = await ensureLink(p);
+    return { text: composeText(p, drafts[p], l ? shortUrl(l.code) : ""), link: l };
+  }
+  async function doCopy() {
+    try { const { text } = await fullText(plat); const ok = await copyText(text); toast(ok ? "コピーしました" : "コピーできませんでした"); if (ok) logEvent("action", "copy", { platform: plat, track_id: track.id }); }
+    catch (e) { toast("失敗：" + errMsg(e)); }
+  }
+  async function doShare() {
+    try {
+      const { text } = await fullText(plat);
+      if (plat === "x") { window.open("https://x.com/intent/post?text=" + encodeURIComponent(text), "_blank", "noopener"); logEvent("action", "share_x_intent", { track_id: track.id }); return; }
+      await copyText(text);
+      if (navigator.share) { try { await navigator.share({ text }); logEvent("action", "share_sheet", { platform: plat, track_id: track.id }); } catch (e) {} }
+      else toast("コピーしました。アプリを開いて貼り付けてください");
+    } catch (e) { toast("失敗：" + errMsg(e)); }
+  }
+
+  const d = drafts && drafts[plat];
+  const linkPreview = links[plat] ? shortUrl(links[plat].code) : (AIMUSE_URL ? "（計測リンクはコピー時に自動で付きます）" : "");
+  const preview = d ? composeText(plat, d, linkPreview) : "";
+  const xw = plat === "x" && d ? xWeight(composeText("x", d, AIMUSE_URL ? "https://x.co/xxxxxxx" : "")) : 0;
+  const openApp = { instagram: "https://www.instagram.com/", tiktok: "https://www.tiktok.com/upload", youtube: "https://studio.youtube.com/" }[plat];
+
+  return html`<div class="page stack">
+    <div class="card row">
+      <${Cover} url=${track.coverUrl} title=${track.title} lg />
+      <div class="ell"><div style=${{ fontWeight: 700 }}>${track.title}</div><div class="muted small">${track.artist}</div><div class="faint tiny">${track.genre} ・ 再生 ${num(track.plays)}</div></div>
+      <button class="btn sm ghost" onClick=${goTracks}>変更</button>
+    </div>
+    ${!AIMUSE_URL && html`<div class="notice warn">AIMUSEの公開URLが未設定のため、クリック計測リンクは付きません（文章のコピー・共有は使えます）。</div>`}
+    <div><label class="lb">文章の雰囲気</label>
+      <div class="chips">${TONES.map(t => html`<button key=${t.id} class=${"chip" + (tone === t.id ? " on" : "")} onClick=${() => setTone(t.id)}>${t.name}</button>`)}</div></div>
+    <div class="grid2">
+      <button class="btn primary" onClick=${genTemplate}>${drafts ? "もう一度作成" : "テンプレートで作成"}</button>
+      <button class="btn" onClick=${genAI} disabled=${!ai.connected || busy}>${busy ? "AI作成中…" : ai.connected ? "AIで作成" : "AI：未接続"}</button>
+    </div>
+    ${!ai.connected && html`<div class="faint tiny">${ai.checked ? "AI文章生成は未接続です。テンプレート方式で作成できます（設定画面で状況を確認できます）。" : "AIの接続状況を確認中…"}</div>`}
+    ${aiErr && html`<div class="notice bad">${aiErr}</div>`}
+    ${drafts && html`<div class="stack">
+      <div class="ptabs">${PLATFORMS.map(p => html`<button key=${p.id} class=${"ptab" + (plat === p.id ? " on" : "")} onClick=${() => setPlat(p.id)}>${p.name}${links[p.id] && html`<span class="dot" title="計測リンク作成済み"></span>`}</button>`)}</div>
+      <div class="row between"><span class="badge ${source === "ai" ? "vio" : ""}">${source === "ai" ? "AIが作成" : "テンプレート"}</span>
+        ${plat === "x" && html`<span class=${"small mono " + (xw > 280 ? "" : "muted")} style=${xw > 280 ? { color: "var(--bad)" } : null}>約 ${xw}/280</span>`}</div>
+      ${plat === "youtube" && html`<div><label class="lb" for="yt">タイトル</label><input id="yt" class="in" value=${d.title} onInput=${e => edit("title", e.target.value)} maxlength="100" /></div>`}
+      <div><label class="lb" for="bd">${plat === "tiktok" ? "動画説明文" : plat === "youtube" ? "説明文" : "本文"}</label><textarea id="bd" class="in" value=${d.body} onInput=${e => edit("body", e.target.value)}></textarea></div>
+      <div><label class="lb" for="ht">ハッシュタグ</label><textarea id="ht" class="in" style=${{ minHeight: 70 }} value=${d.hashtags} onInput=${e => edit("hashtags", e.target.value)}></textarea></div>
+      <div><label class="lb">プレビュー</label><div class="preview">${preview}</div></div>
+      <div class="grid3">
+        <button class="btn" onClick=${doCopy}>コピー</button>
+        <button class="btn" onClick=${doShare}>${plat === "x" ? "Xで投稿" : "共有"}</button>
+        <button class="btn primary" onClick=${() => setSaveOpen(true)}>保存</button>
+      </div>
+      ${openApp && html`<a class="btn ghost block" href=${openApp} target="_blank" rel="noopener">${PNAME[plat]}を開く（貼り付けて投稿）</a>`}
+      <div class="faint tiny">自動投稿は未接続です。投稿はSNSアプリで手動で行い、予定画面で「投稿済み」にしてください。</div>
+    </div>`}
+    ${saveOpen && html`<${SaveSheet} onClose=${() => setSaveOpen(false)} onSave=${async (status, when) => {
+      try {
+        const l = await ensureLink(plat);
+        await must(sb.from("boost_posts").insert({ track_id: track.id, track_title: track.title, artist: track.artist, platform: plat, tone, source, title: plat === "youtube" ? d.title : null, body: d.body, hashtags: d.hashtags, link_id: l ? l.id : null, status, scheduled_at: when }), "save_post");
+        logEvent("action", "save_post", { platform: plat, status, track_id: track.id });
+        setSaveOpen(false); toast(status === "scheduled" ? "投稿予定に保存しました" : status === "posted" ? "投稿済みとして保存しました" : "下書きに保存しました"); onSaved && onSaved();
+      } catch (e) { toast("保存できませんでした：" + errMsg(e)); }
+    }} />`}
+  </div>`;
+}
+
+function SaveSheet({ onClose, onSave, initial }) {
+  const [status, setStatus] = useState((initial && initial.status) || "scheduled");
+  const [when, setWhen] = useState(toLocalInput(initial && initial.scheduled_at));
+  const [busy, setBusy] = useState(false);
+  return html`<${Sheet} onClose=${onClose}>
+    <div class="stack">
+      <div style=${{ fontWeight: 700, fontSize: 16 }}>保存</div>
+      <div class="chips">${["scheduled", "draft", "posted"].map(s => html`<button key=${s} class=${"chip" + (status === s ? " on" : "")} onClick=${() => setStatus(s)}>${STATUS[s]}</button>`)}</div>
+      ${status === "scheduled" && html`<div><label class="lb" for="when">投稿予定日時</label><input id="when" class="in" type="datetime-local" value=${when} onInput=${e => setWhen(e.target.value)} /></div>`}
+      <button class="btn primary block" disabled=${busy || (status === "scheduled" && !when)} onClick=${async () => { setBusy(true); await onSave(status, status === "scheduled" ? fromLocalInput(when) : null); setBusy(false); }}>${busy ? "保存中…" : "保存する"}</button>
+      <button class="btn ghost block" onClick=${onClose}>キャンセル</button>
+    </div>
+  <//>`;
+}
+
+/* ======================================================================
+   投稿カレンダー・投稿管理
+   ====================================================================== */
+function Calendar({ toast, refreshKey }) {
+  const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
+  const [sel, setSel] = useState(() => ymd(new Date()));
+  const [posts, setPosts] = useState([]); const [loading, setLoading] = useState(true); const [err, setErr] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [view, setView] = useState("cal");
+  const load = useCallback(async () => {
+    setLoading(true); setErr("");
+    try { const { data } = await must(sb.from("boost_posts").select("*, boost_links(code)").order("scheduled_at", { ascending: true, nullsFirst: false }).limit(1000), "load_posts"); setPosts(data || []); }
+    catch (e) { setErr(errMsg(e)); } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load, refreshKey]);
+
+  const now = Date.now();
+  const byDay = useMemo(() => { const m = {}; posts.forEach(p => { const k = p.scheduled_at ? ymd(new Date(p.scheduled_at)) : p.posted_at ? ymd(new Date(p.posted_at)) : null; if (k) (m[k] = m[k] || []).push(p); }); return m; }, [posts]);
+  const overdue = posts.filter(p => p.status === "scheduled" && p.scheduled_at && new Date(p.scheduled_at).getTime() < now);
+  const drafts = posts.filter(p => p.status === "draft");
+  const cells = useMemo(() => { const first = new Date(month); const start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7)); return Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; }); }, [month]);
+  const today = ymd(new Date());
+
+  async function setStatus(p, status) {
+    try { await must(sb.from("boost_posts").update({ status }).eq("id", p.id), "update_status"); logEvent("action", "post_status", { id: p.id, status }); toast(STATUS[status] + "にしました"); load(); }
+    catch (e) { toast("更新できませんでした：" + errMsg(e)); }
+  }
+  async function copyPost(p) {
+    const link = p.boost_links && p.boost_links.code ? shortUrl(p.boost_links.code) : "";
+    const ok = await copyText(composeText(p.platform, p, link)); toast(ok ? "コピーしました" : "コピーできませんでした");
+    if (ok) logEvent("action", "copy", { platform: p.platform, post_id: p.id });
+  }
+  async function sharePost(p) {
+    const link = p.boost_links && p.boost_links.code ? shortUrl(p.boost_links.code) : "";
+    const text = composeText(p.platform, p, link);
+    if (p.platform === "x") { window.open("https://x.com/intent/post?text=" + encodeURIComponent(text), "_blank", "noopener"); return; }
+    await copyText(text);
+    if (navigator.share) { try { await navigator.share({ text }); } catch (e) {} } else toast("コピーしました。アプリを開いて貼り付けてください");
+  }
+  function PostCard({ p }) {
+    const late = p.status === "scheduled" && p.scheduled_at && new Date(p.scheduled_at).getTime() < now;
+    return html`<div class="card stack" style=${{ gap: 8 }}>
+      <div class="row between"><div class="row" style=${{ gap: 6 }}><span class="badge vio">${PNAME[p.platform]}</span>
+        <span class=${"badge " + (p.status === "posted" ? "ok" : late ? "warn" : "")}>${late ? "予定超過・未投稿" : STATUS[p.status]}</span></div>
+        <span class="small muted mono">${p.status === "posted" ? fmtDT(p.posted_at) : fmtDT(p.scheduled_at)}</span></div>
+      <div class="small"><b>${p.track_title || "（曲名なし）"}</b> <span class="muted">/ ${p.artist || ""}</span></div>
+      <div class="small muted" style=${{ whiteSpace: "pre-wrap", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>${p.title ? p.title + "\n" : ""}${p.body}</div>
+      <div class="row wrap" style=${{ gap: 6 }}>
+        <button class="btn sm" onClick=${() => copyPost(p)}>コピー</button>
+        <button class="btn sm" onClick=${() => sharePost(p)}>${p.platform === "x" ? "Xで投稿" : "共有"}</button>
+        ${p.status !== "posted" ? html`<button class="btn sm primary" onClick=${() => setStatus(p, "posted")}>投稿済みにする</button>` : html`<button class="btn sm" onClick=${() => setStatus(p, "scheduled")}>未投稿に戻す</button>`}
+        <button class="btn sm ghost" onClick=${() => setEditing(p)}>編集</button>
+      </div>
+      <div class="faint tiny">手動投稿${p.boost_links && p.boost_links.code ? " ・ 計測リンクあり" : " ・ 計測リンクなし"}</div>
+    </div>`;
+  }
+  const dayPosts = (byDay[sel] || []).slice().sort((a, b) => String(a.scheduled_at || a.posted_at).localeCompare(String(b.scheduled_at || b.posted_at)));
+
+  return html`<div class="page stack">
+    <div class="chips"><button class=${"chip" + (view === "cal" ? " on" : "")} onClick=${() => setView("cal")}>カレンダー</button>
+      <button class=${"chip" + (view === "todo" ? " on" : "")} onClick=${() => setView("todo")}>未投稿 ${overdue.length ? `（超過${overdue.length}）` : ""}</button>
+      <button class=${"chip" + (view === "draft" ? " on" : "")} onClick=${() => setView("draft")}>下書き ${drafts.length || ""}</button></div>
+    ${err && html`<div class="notice bad">読み込めませんでした：${err}</div>`}
+    ${loading ? html`<${Spinner}/>` : view === "cal" ? html`
+      <div class="card">
+        <div class="row between" style=${{ marginBottom: 8 }}>
+          <button class="btn sm ghost" aria-label="前の月" onClick=${() => setMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}>‹</button>
+          <b>${month.getFullYear()}年 ${month.getMonth() + 1}月</b>
+          <button class="btn sm ghost" aria-label="次の月" onClick=${() => setMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}>›</button>
+        </div>
+        <div class="cal">${["月", "火", "水", "木", "金", "土", "日"].map(w => html`<div class="dow" key=${w}>${w}</div>`)}
+          ${cells.map(d => { const k = ymd(d); const ps = byDay[k] || []; return html`<button key=${k} class=${"d" + (d.getMonth() !== month.getMonth() ? " out" : "") + (k === today ? " today" : "") + (k === sel ? " sel" : "")} onClick=${() => setSel(k)} aria-label=${`${d.getMonth() + 1}月${d.getDate()}日 ${ps.length}件`}>
+            ${d.getDate()}<span class="dots">${ps.slice(0, 6).map(p => html`<i key=${p.id} class=${p.status === "posted" ? "posted" : (p.status === "scheduled" && new Date(p.scheduled_at).getTime() < now) ? "overdue" : ""}></i>`)}</span></button>`; })}
+        </div>
+        <div class="row faint tiny" style=${{ gap: 12, marginTop: 8 }}><span><span style=${{ color: "var(--violet)" }}>■</span> 予定</span><span><span style=${{ color: "var(--ok)" }}>■</span> 投稿済み</span><span><span style=${{ color: "var(--warn)" }}>■</span> 予定超過</span></div>
+      </div>
+      <div class="sec" style=${{ margin: "8px 0 0" }}>${sel.replace(/-/g, "/")} の投稿</div>
+      ${dayPosts.length ? dayPosts.map(p => html`<${PostCard} key=${p.id} p=${p} />`) : html`<div class="card muted small">この日の投稿はありません。「作成」から宣伝文を作って予定に保存できます。</div>`}
+    ` : view === "todo" ? html`
+      ${posts.filter(p => p.status === "scheduled").length ? posts.filter(p => p.status === "scheduled").map(p => html`<${PostCard} key=${p.id} p=${p} />`) : html`<div class="card muted small">未投稿の予定はありません。</div>`}
+    ` : html`${drafts.length ? drafts.map(p => html`<${PostCard} key=${p.id} p=${p} />`) : html`<div class="card muted small">下書きはありません。</div>`}`}
+    ${editing && html`<${EditSheet} post=${editing} onClose=${() => setEditing(null)} onDone=${(m) => { setEditing(null); toast(m); load(); }} />`}
+  </div>`;
+}
+
+function EditSheet({ post, onClose, onDone }) {
+  const [f, setF] = useState({ title: post.title || "", body: post.body || "", hashtags: post.hashtags || "", status: post.status, when: toLocalInput(post.scheduled_at) });
+  const [busy, setBusy] = useState(false); const [confirmDel, setConfirmDel] = useState(false);
+  async function save() {
+    setBusy(true);
+    try {
+      await must(sb.from("boost_posts").update({ title: post.platform === "youtube" ? f.title : null, body: f.body, hashtags: f.hashtags, status: f.status, scheduled_at: f.status === "scheduled" ? fromLocalInput(f.when) : post.scheduled_at }).eq("id", post.id), "edit_post");
+      logEvent("action", "edit_post", { id: post.id }); onDone("保存しました");
+    } catch (e) { onDone("保存できませんでした：" + errMsg(e)); } finally { setBusy(false); }
+  }
+  async function del() {
+    setBusy(true);
+    try { await must(sb.from("boost_posts").delete().eq("id", post.id), "delete_post"); logEvent("action", "delete_post", { id: post.id }); onDone("削除しました"); }
+    catch (e) { onDone("削除できませんでした：" + errMsg(e)); } finally { setBusy(false); }
+  }
+  return html`<${Sheet} onClose=${onClose}><div class="stack">
+    <div class="row between"><b>${PNAME[post.platform]} の投稿を編集</b><span class="faint small">${post.track_title}</span></div>
+    ${post.platform === "youtube" && html`<div><label class="lb">タイトル</label><input class="in" value=${f.title} onInput=${e => setF({ ...f, title: e.target.value })} /></div>`}
+    <div><label class="lb">本文</label><textarea class="in" value=${f.body} onInput=${e => setF({ ...f, body: e.target.value })}></textarea></div>
+    <div><label class="lb">ハッシュタグ</label><textarea class="in" style=${{ minHeight: 70 }} value=${f.hashtags} onInput=${e => setF({ ...f, hashtags: e.target.value })}></textarea></div>
+    <div class="chips">${Object.keys(STATUS).map(s => html`<button key=${s} class=${"chip" + (f.status === s ? " on" : "")} onClick=${() => setF({ ...f, status: s })}>${STATUS[s]}</button>`)}</div>
+    ${f.status === "scheduled" && html`<div><label class="lb">投稿予定日時</label><input class="in" type="datetime-local" value=${f.when} onInput=${e => setF({ ...f, when: e.target.value })} /></div>`}
+    <button class="btn primary block" disabled=${busy} onClick=${save}>保存</button>
+    ${confirmDel ? html`<div class="notice bad stack" style=${{ gap: 8 }}>この投稿を削除しますか？（AIMUSEの楽曲には影響しません）<div class="grid2"><button class="btn danger" disabled=${busy} onClick=${del}>削除する</button><button class="btn" onClick=${() => setConfirmDel(false)}>やめる</button></div></div>`
+      : html`<button class="btn ghost danger block" onClick=${() => setConfirmDel(true)}>この投稿を削除</button>`}
+  </div><//>`;
+}
+
+/* ======================================================================
+   宣伝効果の分析（実際のクリック記録だけを表示）
+   ====================================================================== */
+function startOfWeek(d) { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; }
+function Analytics({ tracks }) {
+  const [range, setRange] = useState(30); const [gran, setGran] = useState("day");
+  const [clicks, setClicks] = useState([]); const [posts, setPosts] = useState([]); const [links, setLinks] = useState(0);
+  const [loading, setLoading] = useState(true); const [err, setErr] = useState(""); const [tip, setTip] = useState(null); const [capped, setCapped] = useState(false);
+  useEffect(() => { (async () => {
+    setLoading(true); setErr(""); setTip(null);
+    const from = new Date(); from.setHours(0, 0, 0, 0); from.setDate(from.getDate() - (range - 1));
+    try {
+      const LIM = 20000;
+      const [c, p, l] = await Promise.all([
+        must(sb.from("boost_clicks").select("clicked_at,platform,track_id").gte("clicked_at", from.toISOString()).order("clicked_at", { ascending: false }).limit(LIM), "load_clicks"),
+        must(sb.from("boost_posts").select("platform,status,posted_at,track_id").eq("status", "posted").gte("posted_at", from.toISOString()).limit(5000), "load_posted"),
+        must(sb.from("boost_links").select("id", { count: "exact", head: true }), "count_links"),
+      ]);
+      setClicks(c.data || []); setCapped((c.data || []).length >= LIM); setPosts(p.data || []); setLinks(l.count || 0);
+    } catch (e) { setErr(errMsg(e)); } finally { setLoading(false); }
+  })(); }, [range]);
+
+  const series = useMemo(() => {
+    const end = new Date(); const from = new Date(); from.setHours(0, 0, 0, 0); from.setDate(from.getDate() - (range - 1));
+    const keyOf = d => gran === "day" ? ymd(d) : gran === "week" ? ymd(startOfWeek(d)) : `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
+    const buckets = []; const idx = {};
+    let cur = gran === "week" ? startOfWeek(from) : gran === "month" ? new Date(from.getFullYear(), from.getMonth(), 1) : new Date(from);
+    while (cur <= end) { const k = keyOf(cur); if (!(k in idx)) { idx[k] = buckets.length; buckets.push({ k, d: new Date(cur), n: 0 }); }
+      cur = gran === "day" ? new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1) : gran === "week" ? new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 7) : new Date(cur.getFullYear(), cur.getMonth() + 1, 1); }
+    clicks.forEach(c => { const k = keyOf(new Date(c.clicked_at)); if (k in idx) buckets[idx[k]].n++; });
+    return buckets;
+  }, [clicks, range, gran]);
+  const label = b => gran === "month" ? `${b.d.getMonth() + 1}月` : gran === "week" ? `${b.d.getMonth() + 1}/${b.d.getDate()}週` : `${b.d.getMonth() + 1}/${b.d.getDate()}`;
+  const max = Math.max(1, ...series.map(b => b.n));
+  const byPlat = PLATFORMS.map(p => ({ ...p, clicks: clicks.filter(c => c.platform === p.id).length, posts: posts.filter(x => x.platform === p.id).length }));
+  const pmax = Math.max(1, ...byPlat.map(p => p.clicks));
+  const tmap = Object.fromEntries(tracks.map(t => [t.id, t]));
+  const byTrack = useMemo(() => { const m = {}; clicks.forEach(c => { if (!c.track_id) return; m[c.track_id] = (m[c.track_id] || 0) + 1; }); posts.forEach(p => { if (p.track_id && !(p.track_id in m)) m[p.track_id] = 0; });
+    return Object.entries(m).map(([id, n]) => ({ id, n, posts: posts.filter(p => p.track_id === id).length, t: tmap[id] })).sort((a, b) => b.n - a.n).slice(0, 20); }, [clicks, posts, tracks]);
+
+  return html`<div class="page stack">
+    <div class="chips" style=${{ flexWrap: "wrap" }}>${[7, 30, 90].map(r => html`<button key=${r} class=${"chip" + (range === r ? " on" : "")} onClick=${() => setRange(r)}>${r}日</button>`)}
+      <span style=${{ width: 6, flex: "none" }}></span>
+      ${[["day", "日別"], ["week", "週別"], ["month", "月別"]].map(([g, n]) => html`<button key=${g} class=${"chip" + (gran === g ? " on" : "")} onClick=${() => setGran(g)}>${n}</button>`)}</div>
+    ${err && html`<div class="notice bad">読み込めませんでした：${err}</div>`}
+    ${loading ? html`<${Spinner}/>` : html`
+      <div class="grid3">
+        <div class="kpi"><div class="v">${num(clicks.length)}</div><div class="l">リンククリック</div></div>
+        <div class="kpi"><div class="v">${num(posts.length)}</div><div class="l">投稿済み</div></div>
+        <div class="kpi"><div class="v">${num(links)}</div><div class="l">計測リンク</div></div>
+      </div>
+      ${capped && html`<div class="notice warn">クリック数が多いため、直近2万件までを集計しています。</div>`}
+      <div class="card">
+        <div class="row between"><b class="small">クリック数の推移（${gran === "day" ? "日別" : gran === "week" ? "週別" : "月別"}）</b>${tip != null && series[tip] && html`<span class="small mono">${label(series[tip])}：${series[tip].n}回</span>`}</div>
+        ${clicks.length === 0 ? html`<div class="muted small" style=${{ padding: "28px 0", textAlign: "center" }}>この期間のクリック記録はまだありません。<br/>計測リンク付きで投稿すると、ここに実際のクリック数が表示されます。</div>` : html`
+          <div class="bars" style=${{ marginTop: 10 }} role="img" aria-label="クリック数の推移">${series.map((b, i) => html`<button key=${b.k} class=${tip === i ? "on" : ""} onClick=${() => setTip(tip === i ? null : i)} aria-label=${`${label(b)} ${b.n}回`}><span style=${{ height: (b.n / max * 100) + "%" }}></span></button>`)}</div>
+          <div class="axis"><span>${label(series[0])}</span><span>最大 ${max}回</span><span>${label(series[series.length - 1])}</span></div>`}
+      </div>
+      <div class="card">
+        <b class="small">SNS別</b>
+        <table class="tbl" style=${{ marginTop: 6 }}><thead><tr><th>SNS</th><th style=${{ width: "38%" }}></th><th class="n">クリック</th><th class="n">投稿</th></tr></thead>
+          <tbody>${byPlat.map(p => html`<tr key=${p.id}><td>${p.long}</td><td><div class="hbar" style=${{ width: (p.clicks / pmax * 100) + "%", minWidth: p.clicks ? 4 : 0 }}></div></td><td class="n">${p.clicks}</td><td class="n">${p.posts}</td></tr>`)}</tbody></table>
+      </div>
+      <div class="card">
+        <b class="small">楽曲別（クリック上位）</b>
+        ${byTrack.length === 0 ? html`<div class="muted small" style=${{ marginTop: 6 }}>まだデータがありません。</div>` : html`
+        <table class="tbl" style=${{ marginTop: 6 }}><thead><tr><th>楽曲</th><th class="n">クリック</th><th class="n">投稿</th><th class="n">累計再生</th></tr></thead>
+          <tbody>${byTrack.map(r => html`<tr key=${r.id}><td><div style=${{ fontWeight: 700, maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>${r.t ? r.t.title : "（非公開/削除された曲）"}</div><div class="faint tiny">${r.t ? r.t.artist : ""}</div></td><td class="n">${r.n}</td><td class="n">${r.posts}</td><td class="n">${r.t ? num(r.t.plays) : "—"}</td></tr>`)}</tbody></table>
+        <div class="faint tiny" style=${{ marginTop: 6 }}>累計再生はAIMUSE全体の再生数で、SNS経由とは限りません（参考値）。</div>`}
+      </div>
+      <div class="card small">
+        <b>計測できる項目</b>
+        <ul class="plain muted"><li>BOOSTの計測リンク（/go/…）のクリック数（ロボット・プレビュー取得は除外）</li><li>SNS別・楽曲別・日別/週別/月別のクリック数</li><li>投稿実績（BOOSTで「投稿済み」にした件数）</li><li>AIMUSEの楽曲ごとの累計再生数（参考）</li></ul>
+        <b style=${{ display: "block", marginTop: 10 }}>追加実装が必要な項目</b>
+        <ul class="plain muted"><li>SNS経由の再生数・会員登録数（AIMUSE側でUTMを記録する機能の追加が必要）</li><li>曲ごとのページへの直接リンク（AIMUSE側に曲ページURLの追加が必要）</li><li>SNS上のいいね・表示回数（各SNS公式APIの接続が必要）</li><li>同じ人の重複クリックの除外（個人を識別しないため、クリックは延べ回数）</li></ul>
+      </div>`}
+  </div>`;
+}
+
+/* ======================================================================
+   設定・接続状況・ログ
+   ====================================================================== */
+function Settings({ user, ai, onLogout, toast }) {
+  const [sns, setSns] = useState([]); const [usage, setUsage] = useState(null); const [limit, setLimit] = useState(null);
+  const [logs, setLogs] = useState([]); const [logKind, setLogKind] = useState("action"); const [err, setErr] = useState("");
+  const load = useCallback(async () => {
+    setErr("");
+    try {
+      const today = ymd(new Date());
+      const [a, u, s, l] = await Promise.all([
+        must(sb.from("boost_sns_accounts").select("*").order("platform"), "load_sns"),
+        must(sb.from("boost_ai_usage").select("count").eq("day", today).maybeSingle(), "load_usage"),
+        must(sb.from("boost_settings").select("value").eq("key", "ai_daily_limit").maybeSingle(), "load_settings"),
+        must(sb.from("boost_logs").select("*").eq("kind", logKind).order("created_at", { ascending: false }).limit(30), "load_logs"),
+      ]);
+      setSns(a.data || []); setUsage(u.data ? u.data.count : 0); setLimit(s.data ? s.data.value : 30); setLogs(l.data || []);
+    } catch (e) { setErr(errMsg(e)); }
+  }, [logKind]);
+  useEffect(() => { load(); }, [load]);
+  async function saveLimit(v) {
+    const n = Math.max(0, Math.min(500, parseInt(v, 10) || 0));
+    try { await must(sb.from("boost_settings").update({ value: n, updated_at: new Date().toISOString() }).eq("key", "ai_daily_limit"), "set_ai_limit"); setLimit(n); logEvent("action", "set_ai_limit", { value: n }); toast("上限を" + n + "回にしました"); }
+    catch (e) { toast("保存できませんでした：" + errMsg(e)); }
+  }
+  return html`<div class="page stack">
+    ${err && html`<div class="notice bad">${/boost_/.test(err) || /relation|does not exist|schema cache/i.test(err) ? "BOOST用のデータベース（追加SQL）が未実行の可能性があります：" : ""}${err}</div>`}
+    <div class="sec" style=${{ marginTop: 4 }}>接続状況</div>
+    <div class="card stack" style=${{ gap: 10 }}>
+      <div class="row between"><span>AIMUSE 楽曲データ</span><span class="badge ok">接続済み（読み取りのみ）</span></div>
+      <div class="row between"><span>AIMUSE 公開URL</span>${AIMUSE_URL ? html`<span class="badge ok">設定済み</span>` : html`<span class="badge warn">未設定</span>`}</div>
+      <div class="row between"><span>AI文章生成</span>${!ai.checked ? html`<span class="badge">確認中</span>` : ai.connected ? html`<span class="badge ok">接続済み</span>` : html`<span class="badge warn">未接続（テンプレートのみ）</span>`}</div>
+      ${ai.checked && !ai.connected && ai.reason && html`<div class="faint tiny">${ai.reason}</div>`}
+      ${ai.connected && html`<div class="faint tiny">${ai.provider}（${ai.model}）・本日 ${usage == null ? "—" : usage} / ${limit == null ? "—" : limit} 回</div>`}
+      <div class="row between"><span class="small">AI生成の1日の上限</span>
+        <select class="in" style=${{ width: 110, padding: "8px" }} value=${limit == null ? "" : String(limit)} onChange=${e => saveLimit(e.target.value)} aria-label="AI生成の1日の上限">
+          ${[0, 10, 20, 30, 50, 100].concat(limit != null && ![0, 10, 20, 30, 50, 100].includes(limit) ? [limit] : []).map(v => html`<option key=${v} value=${String(v)}>${v}回</option>`)}
+        </select></div>
+    </div>
+    <div class="sec">SNS自動投稿</div>
+    <div class="card stack" style=${{ gap: 10 }}>
+      ${PLATFORMS.map(pl => sns.find(a => a.platform === pl.id)).filter(Boolean).map(a => html`<div key=${a.platform} class="row between"><span>${PNAME[a.platform]}</span>${a.auto_post_enabled ? html`<span class="badge ok">自動投稿 有効</span>` : a.connected ? html`<span class="badge">接続済み・自動投稿オフ</span>` : html`<span class="badge">未接続（手動投稿のみ）</span>`}</div>`)}
+      <div class="faint tiny">Ver.0.1では自動投稿はありません。各SNSの公式APIの利用審査・権限が揃ったSNSから順に追加します。</div>
+    </div>
+    <div class="sec">履歴</div>
+    <div class="chips"><button class=${"chip" + (logKind === "action" ? " on" : "")} onClick=${() => setLogKind("action")}>操作履歴</button><button class=${"chip" + (logKind === "error" ? " on" : "")} onClick=${() => setLogKind("error")}>エラー</button></div>
+    <div class="card">${logs.length === 0 ? html`<div class="muted small">記録はまだありません。</div>` : html`<table class="tbl"><tbody>${logs.map(l => html`<tr key=${l.id}><td class="mono tiny" style=${{ whiteSpace: "nowrap" }}>${fmtDT(l.created_at)}</td><td class="small">${ACTION_LABELS[l.action] || l.action}${l.detail && l.detail.message ? html`<div class="faint tiny">${l.detail.message}</div>` : ""}</td></tr>`)}</tbody></table>`}</div>
+    <div class="sec">アカウント</div>
+    <div class="card stack" style=${{ gap: 8 }}>
+      <div class="small"><span class="muted">ログイン中：</span>${user.email}</div>
+      <div class="faint tiny">管理者権限はAIMUSEと共通です（AIMUSEで管理者を外すとBOOSTも使えなくなります）。</div>
+      <button class="btn block" onClick=${onLogout}>ログアウト</button>
+    </div>
+    <p class="faint tiny" style=${{ textAlign: "center" }}>AIMUSE BOOST ${BUILD}</p>
+  </div>`;
+}
+
+/* ======================================================================
+   アプリ本体
+   ====================================================================== */
+function App() {
+  const [phase, setPhase] = useState("loading"); // loading | login | denied | app
+  const [user, setUser] = useState(null); const [loginErr, setLoginErr] = useState("");
+  const [tab, setTab] = useState("tracks");
+  const [tracks, setTracks] = useState([]); const [tLoading, setTLoading] = useState(true); const [tErr, setTErr] = useState("");
+  const [selected, setSelected] = useState(null);
+  const [ai, setAi] = useState({ checked: false, connected: false });
+  const [toastMsg, setToastMsg] = useState(""); const tRef = useRef(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const toast = useCallback(m => { setToastMsg(m); clearTimeout(tRef.current); tRef.current = setTimeout(() => setToastMsg(""), 2400); }, []);
+
+  const check = useCallback(async () => {
+    if (!sb) { setPhase("login"); return; }
+    setLoginErr("");
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { setPhase("login"); return; }
+    const { data: isAdmin, error } = await sb.rpc("is_admin");
+    if (error || !isAdmin) {
+      await sb.auth.signOut();
+      setLoginErr(error ? "管理者権限を確認できませんでした：" + errMsg(error) : "このアカウントは管理者ではないため利用できません");
+      setPhase("login"); return;
+    }
+    CURRENT_UID = session.user.id; setUser(session.user); setLoginErr(""); setPhase("app");
+  }, []);
+  useEffect(() => { check(); const { data } = sb ? sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") { CURRENT_UID = null; setUser(null); setPhase("login"); } }) : { data: null }; return () => data && data.subscription && data.subscription.unsubscribe(); }, [check]);
+
+  const loadTracks = useCallback(async () => {
+    setTLoading(true); setTErr("");
+    try {
+      const { data } = await must(sb.from("tracks").select("id,title,artist,genre,plays,image_path,approved_at,created_at,hues").eq("status", "public").order("created_at", { ascending: false }).limit(500), "load_tracks");
+      const list = data || [];
+      const paths = list.map(t => t.image_path).filter(Boolean);
+      let urls = {};
+      if (paths.length) {
+        const { data: signed } = await sb.storage.from("covers").createSignedUrls(paths, 3600);
+        (signed || []).forEach(s => { if (s && s.signedUrl) urls[s.path] = s.signedUrl; });
+      }
+      setTracks(list.map(t => ({ ...t, coverUrl: t.image_path ? urls[t.image_path] || null : null })));
+    } catch (e) { setTErr(errMsg(e)); } finally { setTLoading(false); }
+  }, []);
+  useEffect(() => { if (phase !== "app") return; loadTracks(); logEvent("action", "open_app", { build: BUILD });
+    fetch("/api/status", { cache: "no-store" }).then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(j => setAi({ checked: true, connected: !!(j.ai && j.ai.connected), provider: j.ai && j.ai.provider, model: j.ai && j.ai.model, reason: j.ai && j.ai.connected ? "" : "Cloudflare で Workers AI のバインディング（名前：AI）が未設定です" }))
+      .catch(() => setAi({ checked: true, connected: false, reason: "サーバー処理（/api/status）に接続できません（プレビュー表示や静的ファイルのみの公開ではAIは使えません）" }));
+  }, [phase, loadTracks]);
+
+  if (phase === "loading") return html`<${Spinner}/>`;
+  if (phase === "login") return html`<${Login} initialError=${loginErr} onDone=${check} />`;
+
+  const titles = { tracks: "楽曲を選ぶ", compose: "宣伝文を作成", calendar: "投稿カレンダー", analytics: "宣伝効果", settings: "設定" };
+  const navs = [["tracks", "楽曲", I.music], ["compose", "作成", I.pen], ["calendar", "予定", I.cal], ["analytics", "分析", I.chart], ["settings", "設定", I.gear]];
+  return html`<div class="shell">
+    <header class="hdr"><span class="logo" style=${{ fontSize: 13 }}>BOOST</span><h1>${titles[tab]}</h1>
+      ${!ai.connected && ai.checked && html`<span class="badge warn" title="AI未接続">AI未接続</span>`}</header>
+    <main>
+      ${tab === "tracks" && html`<${Tracks} tracks=${tracks} loading=${tLoading} error=${tErr} reload=${loadTracks} selectedId=${selected && selected.id} onSelect=${t => { setSelected(t); setTab("compose"); window.scrollTo(0, 0); }} />`}
+      ${tab === "compose" && html`<${Compose} track=${selected} ai=${ai} toast=${toast} goTracks=${() => setTab("tracks")} onSaved=${() => setRefreshKey(k => k + 1)} />`}
+      ${tab === "calendar" && html`<${Calendar} toast=${toast} refreshKey=${refreshKey} />`}
+      ${tab === "analytics" && html`<${Analytics} tracks=${tracks} />`}
+      ${tab === "settings" && html`<${Settings} user=${user} ai=${ai} toast=${toast} onLogout=${async () => { await logEvent("action", "logout", {}); await sb.auth.signOut(); }} />`}
+    </main>
+    <nav class="nav"><div class="in2">${navs.map(([id, n, ic]) => html`<button key=${id} class=${tab === id ? "on" : ""} onClick=${() => { setTab(id); window.scrollTo(0, 0); }} aria-current=${tab === id ? "page" : null}>${ic}<span>${n}</span></button>`)}</div></nav>
+    <${Toast} msg=${toastMsg} />
+  </div>`;
+}
+
+window.addEventListener("error", e => logEvent("error", "js_error", { message: String(e.message || "").slice(0, 300) }));
+window.addEventListener("unhandledrejection", e => logEvent("error", "unhandled", { message: errMsg(e.reason).slice(0, 300) }));
+ReactDOM.createRoot(document.getElementById("root")).render(html`<${App}/>`);
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 -- =====================================================================
--- AIMUSE BOOST 追加SQL（Ver.0.2 r6）
+-- AIMUSE BOOST 追加SQL（Ver.0.2 r7）
 -- AIMUSE と同じ Supabase プロジェクトの SQL Editor に全文を貼り付けて、1回実行してください。
 --
 -- ・AIMUSE の既存テーブル・データ・認証設定・関数は一切変更しません（読むだけ）
@@ -8,7 +8,9 @@
 --   実行方法に関係なく全体が自動的に取り消され、データベースは実行前の状態のままです
 -- ・最初に構造チェックを行い、想定外の状態なら何も変更せずに中止します
 -- ・何度実行しても壊れません（既存のBOOSTデータも消えません）
--- ・最後の確認（読み取りのみ）で、権限・RLS・ポリシー条件を一覧表示します
+-- ・変更の最後に、同じ取引の中で必須の確認（RLS・権限・ポリシー条件など）を行い、
+--   NGが1件でもあれば全体を取り消します（NGのまま変更が残ることはありません）
+-- ・最後の表（読み取りのみ）は、確認結果を一覧で見るためのものです
 -- ・管理者の判定は AIMUSE と同じ public.is_admin()（profiles.is_admin = true）を使います
 -- =====================================================================
 
@@ -17,6 +19,9 @@ declare
   v_def text;
   v_rec record;
   v_tbl text;
+  v_ng integer;
+  v_total integer;
+  v_detail text;
   -- BOOSTテーブルの想定構造（列名 → 型）。既存テーブルがあれば、これと照合する
   v_expected jsonb := '{
     "boost_links": {"id":"uuid","code":"text","track_id":"uuid","track_title":"text","artist":"text","platform":"text","utm_campaign":"text","created_by":"uuid","created_at":"timestamp with time zone"},
@@ -501,13 +506,119 @@ begin
   grant execute on function public.boost_record_listen(uuid, text) to anon, authenticated;
   grant execute on function public.boost_ai_take_quota() to authenticated;
 
-  raise notice 'AIMUSE BOOST r6：設定が完了しました。下の確認表で「総合判定」が OK か確認してください。';
+  -- ===================================================================
+  -- 16. 必須の確認（変更と同じ取引の中で実行）
+  --     下の「最終確認」と同じ内容をここで検査し、NG が1件でもあれば例外を出して
+  --     このブロックの変更をすべて取り消す（NGのまま変更が残ることはない）
+  -- ===================================================================
+  -- [CHECK-BEGIN]
+  with
+  tbl(name) as (values ('boost_ai_usage'), ('boost_clicks'), ('boost_links'), ('boost_logs'), ('boost_post_attempts'),
+                       ('boost_posts'), ('boost_rate_counters'), ('boost_settings'), ('boost_sns_accounts')),
+  fn(sig, anon_ok, auth_ok) as (values
+    ('public.boost_resolve_link(text,boolean)',                true,  true),
+    ('public.boost_record_listen(uuid,text)',                  true,  true),
+    ('public.boost_ai_take_quota()',                           false, true),
+    ('public.boost_record_click(text,uuid,uuid,text,text)',    false, false),
+    ('public.boost_posts_touch()',                             false, false)),
+  checks as (
+    select 1 as ord, 'RLS（有効/強制）' as 区分, t.name as 対象,
+           coalesce((select c.relrowsecurity::text || '/' || c.relforcerowsecurity::text from pg_class c
+                     where c.oid = to_regclass('public.' || t.name)), 'テーブルなし') as 状態,
+           'true/false' as 期待
+    from tbl t
+    union all
+    select 2, '未ログインの権限', t.name,
+           case when to_regclass('public.' || t.name) is null then 'テーブルなし'
+                when has_table_privilege('anon', to_regclass('public.' || t.name), 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+                  or has_any_column_privilege('anon', to_regclass('public.' || t.name), 'SELECT,INSERT,UPDATE,REFERENCES') then 'あり'
+                else 'なし' end,
+           'なし'
+    from tbl t
+    union all
+    -- ポリシーの中身：名前:操作:許可型:ロール:USING=条件:CHECK=条件（スキーマ名・空白は除いて比較）
+    select 3, 'ポリシーの中身', t.name,
+           coalesce((select string_agg(p.policyname || ':' || p.cmd || ':' || p.permissive || ':' || array_to_string(p.roles, ',')
+                                       || ':USING=' || coalesce(regexp_replace(p.qual, '\s+|public\.|auth\.', '', 'g'), '-')
+                                       || ':CHECK=' || coalesce(regexp_replace(p.with_check, '\s+|public\.|auth\.', '', 'g'), '-'),
+                                       ' | ' order by p.policyname)
+                     from pg_policies p where p.schemaname = 'public' and p.tablename = t.name), 'なし'),
+           case t.name
+             when 'boost_rate_counters' then 'なし'
+             when 'boost_logs' then 'boost_logs_admin:ALL:PERMISSIVE:authenticated:USING=is_admin():CHECK=(is_admin()AND(actor=uid()))'
+             else t.name || '_admin:ALL:PERMISSIVE:authenticated:USING=is_admin():CHECK=is_admin()' end
+    from tbl t
+    union all
+    select 4, '関数：未ログイン実行', f.sig,
+           case when to_regprocedure(f.sig) is null then '関数なし'
+                when has_function_privilege('anon', to_regprocedure(f.sig), 'EXECUTE') then '可' else '不可' end,
+           case when f.anon_ok then '可' else '不可' end
+    from fn f
+    union all
+    select 5, '関数：ログイン会員実行', f.sig,
+           case when to_regprocedure(f.sig) is null then '関数なし'
+                when has_function_privilege('authenticated', to_regprocedure(f.sig), 'EXECUTE') then '可' else '不可' end,
+           case when f.auth_ok then '可' else '不可' end
+    from fn f
+    union all
+    select 6, '関数：PUBLICへの付与', f.sig,
+           case when to_regprocedure(f.sig) is null then '関数なし'
+                when exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                             where p.oid = to_regprocedure(f.sig) and a.grantee = 0 and a.privilege_type = 'EXECUTE') then 'あり'
+                else 'なし' end,
+           'なし'
+    from fn f
+    union all
+    select 7, 'DEFINER関数の search_path', p.proname,
+           coalesce((select c from unnest(p.proconfig) c where c like 'search_path=%'), '未設定'),
+           'search_path=""'
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname like 'boost\_%' and p.prosecdef
+    union all
+    -- 記録用の関数（所有者の権限で動く）がBOOSTテーブルの所有者と同じであること
+    select 8, '関数の所有者=テーブルの所有者', f.sig,
+           case when to_regprocedure(f.sig) is null then '関数なし'
+                when (select p.proowner from pg_proc p where p.oid = to_regprocedure(f.sig))
+                   = (select c.relowner from pg_class c where c.oid = 'public.boost_clicks'::regclass) then '同じ' else '異なる' end,
+           '同じ'
+    from fn f
+    union all
+    -- 旧版（r3・r4）の関数が残っている場合：無効化済み（常に false・特権なし・誰も実行不可）であること
+    select 9, '旧版の関数（無効化済みか）', p.oid::regprocedure::text,
+           case when not p.prosecdef and regexp_replace(p.prosrc, '\s', '', 'g') = 'selectfalse'
+                     and not has_function_privilege('anon', p.oid, 'EXECUTE')
+                     and not has_function_privilege('authenticated', p.oid, 'EXECUTE') then '無効化済み' else '有効' end,
+           '無効化済み'
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in ('boost_click_allowed', 'boost_click_gate', 'boost_take_slot')
+    union all
+    select 10, '想定外のBOOST関数', p.oid::regprocedure::text, 'あり', 'なし'
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname like 'boost\_%'
+      and p.proname not in ('boost_click_allowed', 'boost_click_gate', 'boost_take_slot')
+      and p.oid not in (select to_regprocedure(sig) from fn where to_regprocedure(sig) is not null)
+  ),
+  judged as (
+    select ord, 区分, 対象, 状態, 期待, case when 状態 = 期待 then 'OK' else 'NG' end as 判定 from checks
+  )
+  -- [CHECK-END]
+  select count(*) filter (where 判定 = 'NG'), count(*),
+         string_agg(区分 || '［' || 対象 || '］' || 状態 || '（期待：' || 期待 || '）', ' ／ ') filter (where 判定 = 'NG')
+    into v_ng, v_total, v_detail
+  from judged;
+  if v_ng > 0 then
+    raise exception 'BOOSTの必須確認でNGが % 件あったため、すべての変更を取り消しました（データベースは実行前のままです）：%', v_ng, v_detail;
+  end if;
+
+  raise notice 'AIMUSE BOOST r7：設定が完了し、必須確認 % 項目すべて OK でした。', v_total;
 end
 $boost$;
 
 
 -- =====================================================================
--- 最終確認（読み取りのみ。1つの表で表示。「判定」がすべて OK なら成功）
+-- 最終確認の一覧表示（読み取りのみ）
+--   上のブロックの最後で同じ確認を済ませ、NGなら全体を取り消しているため、
+--   ここまで進んだ場合は「総合判定 OK」になります（念のための目視用）
 --   ・9テーブルの RLS が有効か（FORCE なし）
 --   ・未ログイン（anon）がBOOSTテーブルに一切の権限を持たないか
 --   ・ポリシーの中身（操作種別・許可型・対象ロール・USING条件・WITH CHECK条件）が想定どおりか
@@ -515,6 +626,7 @@ $boost$;
 --   ・SECURITY DEFINER 関数の search_path が固定されているか
 --   ・関数とテーブルの所有者が同じか／旧版の関数が残っていれば無効化済みか／想定外のBOOST関数がないか
 -- =====================================================================
+-- [CHECK-BEGIN]
 with
 tbl(name) as (values ('boost_ai_usage'), ('boost_clicks'), ('boost_links'), ('boost_logs'), ('boost_post_attempts'),
                      ('boost_posts'), ('boost_rate_counters'), ('boost_settings'), ('boost_sns_accounts')),
@@ -604,6 +716,8 @@ checks as (
 judged as (
   select ord, 区分, 対象, 状態, 期待, case when 状態 = 期待 then 'OK' else 'NG' end as 判定 from checks
 )
+-- [CHECK-END]
+
 select 0 as ord, '総合判定' as 区分, '全' || count(*) || '項目' as 対象,
        'NG ' || count(*) filter (where 判定 = 'NG') || '件' as 状態, 'NG 0件' as 期待,
        case when count(*) filter (where 判定 = 'NG') = 0 then 'OK' else 'NG' end as 判定

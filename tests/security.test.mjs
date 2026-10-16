@@ -283,4 +283,10 @@ test("追加SQL：既存テーブルの変更・削除をしない／全BOOSTテ
   const body = s.split("$boost$");
   assert.equal(body.length, 3, "DOブロックが1つではありません");
   assert.ok(!/create table|alter table|grant |revoke |create policy|drop /i.test(body[2]), "DOブロックの外に変更処理があります");
+  // 必須確認：DOブロック内（変更と同じ取引）と最後の一覧表示で、確認内容が完全に同じであること
+  const raw = readFileSync(join(root, "supabase/boost_schema.sql"), "utf8");
+  const blocks = [...raw.matchAll(/-- \[CHECK-BEGIN\]([\s\S]*?)-- \[CHECK-END\]/g)].map((m) => m[1].replace(/\s+/g, " ").trim());
+  assert.equal(blocks.length, 2, "確認ブロックが2つではありません");
+  assert.equal(blocks[0], blocks[1], "DO内の必須確認と一覧表示の確認内容が一致しません");
+  assert.ok(raw.split("$boost$")[1].includes("[CHECK-BEGIN]") && /if v_ng > 0 then\s+raise exception/.test(raw.split("$boost$")[1]), "必須確認がDOブロック内にありません");
 });

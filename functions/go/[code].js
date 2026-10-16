@@ -3,6 +3,8 @@
 // 記録するのは「どのリンクが・いつ」だけ（IPアドレス・端末情報・Cookieは保存しません）。
 import { cfg, rpc, isBot, seenRecently, dedupeCookie } from "../../lib/shared.js";
 
+const PROMO_PATH_RE = /^\/s\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\?src=(x|instagram|tiktok|youtube))?$/;
+
 function page(msg, status) {
   const html = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>AIMUSE</title></head><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0912;color:#f2eefb;font-family:system-ui,sans-serif;text-align:center;padding:24px"><p>${msg}</p></body></html>`;
   return new Response(html, { status, headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
@@ -29,7 +31,10 @@ async function handle(context, record) {
   } catch (e) {
     r = { ok: false };
   }
-  if (r.ok && typeof r.body === "string" && r.body.startsWith("https://")) return redirect(r.body, shouldRecord ? dedupeCookie("bg", `/go/${code}`) : null);
+  // 移動先は「このサイトの宣伝ページ /s/<楽曲ID>」だけ。それ以外の値は無視する（外部サイトへの転送を防ぐ）
+  if (r.ok && typeof r.body === "string" && PROMO_PATH_RE.test(r.body)) {
+    return redirect(new URL(r.body, request.url).toString(), shouldRecord ? dedupeCookie("bg", `/go/${code}`) : null);
+  }
   if (r.ok) return c.aimuseUrl ? redirect(c.aimuseUrl) : page("このリンクは見つかりませんでした。", 404);
   // 計測サーバーに繋がらない場合も、利用者は AIMUSE へ移動させる（クリックは記録されない）
   return c.aimuseUrl ? redirect(c.aimuseUrl) : page("一時的に表示できません。時間をおいてお試しください。", 503);

@@ -141,7 +141,7 @@ ul.plain{margin:6px 0 0;padding-left:18px} ul.plain li{margin:3px 0}
 <script src="config.js"></script>
 <script>
 "use strict";
-const BUILD = "boost-0.2.0";
+const BUILD = "boost-0.2.1";
 const { useState, useEffect, useMemo, useCallback, useRef } = React;
 const html = htm.bind(React.createElement);
 const CFG = window.BOOST_CONFIG || {};
@@ -201,12 +201,8 @@ function composeText(p, d, link) {
   if (d.hashtags) parts.push(d.hashtags.trim());
   return parts.join("\n\n");
 }
-// 計測リンクの移動先＝楽曲ごとの宣伝ページ（そこから「AIMUSEで聴く」でAIMUSEへ）
+// 楽曲ごとの宣伝ページ。計測リンク /go/… の移動先はサーバー側でこのページに固定される
 function promoUrl(trackId, platform) { return `${location.origin}/s/${trackId}${platform ? `?src=${platform}` : ""}`; }
-function destinationUrl(platform, trackId) {
-  if (!AIMUSE_URL) return "";
-  return promoUrl(trackId, platform);
-}
 function shortUrl(code) { return `${location.origin}/go/${code}`; }
 
 /* ---------------- 記録（操作履歴・エラー） ---------------- */
@@ -378,7 +374,7 @@ function Compose({ track, ai, dbReady, toast, goTracks, onSaved }) {
     if (!AIMUSE_URL || !dbReady) return null;
     for (let i = 0; i < 3; i++) {
       const code = randCode();
-      const { data, error } = await sb.from("boost_links").insert({ code, track_id: track.id, track_title: track.title, artist: track.artist, platform: p, destination: destinationUrl(p, track.id), utm_campaign: "aimuse_boost" }).select("id,code").single();
+      const { data, error } = await sb.from("boost_links").insert({ code, track_id: track.id, track_title: track.title, artist: track.artist, platform: p, utm_campaign: "aimuse_boost" }).select("id,code").single();
       if (!error) { setLinks(l => ({ ...l, [p]: data })); logEvent("action", "create_link", { platform: p, track_id: track.id, code }); return data; }
       if (error.code !== "23505") { logEvent("error", "create_link", { message: errMsg(error) }); throw error; }
     }

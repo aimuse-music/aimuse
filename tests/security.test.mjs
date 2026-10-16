@@ -99,7 +99,7 @@ test("計測リンク：形式がおかしいコードはDBに問い合わせず
   assert.equal(r.status, 302); assert.equal(r.headers.get("location"), "https://aimusemusic.com"); assert.equal(calls.length, 0);
 });
 test("計測リンク：人のクリックは記録し、重複防止クッキーを付ける", async () => {
-  const calls = mockFetch(() => ({ json: `https://b.test/s/${TRACK}?src=x` }));
+  const calls = mockFetch(() => ({ json: `/s/${TRACK}?src=x` }));
   const r = await go.onRequestGet(goCtx("Abc1234"));
   assert.equal(calls[0].body.p_record, true);
   assert.equal(r.headers.get("location"), `https://b.test/s/${TRACK}?src=x`);
@@ -107,29 +107,35 @@ test("計測リンク：人のクリックは記録し、重複防止クッキ�
   assert.match(ck, /^bg=1; Max-Age=1800; Path=\/go\/Abc1234; Secure; HttpOnly; SameSite=Lax$/);
 });
 test("計測リンク：30分以内の同じ端末からの再クリックは数えない", async () => {
-  const calls = mockFetch(() => ({ json: "https://b.test/s/x" }));
+  const calls = mockFetch(() => ({ json: "/s/" + TRACK }));
   const r = await go.onRequestGet(goCtx("Abc1234", { cookie: "foo=2; bg=1" }));
   assert.equal(calls[0].body.p_record, false); assert.equal(r.status, 302); assert.equal(r.headers.get("set-cookie"), null);
 });
 test("計測リンク：SNSのプレビュー取得・ロボットは数えない", async () => {
   for (const ua of ["Twitterbot/1.0", "facebookexternalhit/1.1", "curl/8.0", ""]) {
-    const calls = mockFetch(() => ({ json: "https://b.test/s/x" }));
+    const calls = mockFetch(() => ({ json: "/s/" + TRACK }));
     await go.onRequestGet(goCtx("Abc1234", { "user-agent": ua }));
     assert.equal(calls[0].body.p_record, false, ua);
   }
-  const calls = mockFetch(() => ({ json: "https://b.test/s/x" }));
+  const calls = mockFetch(() => ({ json: "/s/" + TRACK }));
   await go.onRequestGet(goCtx("Abc1234", { "sec-purpose": "prefetch" }));
   assert.equal(calls[0].body.p_record, false);
 });
 test("計測リンク：HEADリクエストは数えない", async () => {
-  const calls = mockFetch(() => ({ json: "https://b.test/s/x" }));
+  const calls = mockFetch(() => ({ json: "/s/" + TRACK }));
   await go.onRequestHead(goCtx("Abc1234", {}, "HEAD"));
   assert.equal(calls[0].body.p_record, false);
 });
-test("計測リンク：https以外の移動先には飛ばさない（javascript: 等の防止）", async () => {
-  mockFetch(() => ({ json: "javascript:alert(1)" }));
-  const r = await go.onRequestGet(goCtx("Abc1234"));
-  assert.equal(r.headers.get("location"), "https://aimusemusic.com");
+test("計測リンク：宣伝ページ（/s/<楽曲ID>）以外には絶対に移動しない", async () => {
+  for (const bad of ["javascript:alert(1)", "https://evil.example/", "//evil.example/s/" + TRACK, "/s/" + TRACK + "?src=x&next=https://evil.example",
+                     "/s/../go/x", "/s/" + TRACK + "/../../evil", "https://b.test/s/" + TRACK, "/S/" + TRACK, "/s/" + TRACK + "\n"]) {
+    mockFetch(() => ({ json: bad }));
+    const r = await go.onRequestGet(goCtx("Abc1234"));
+    assert.equal(r.headers.get("location"), "https://aimusemusic.com", bad);
+  }
+  mockFetch(() => ({ json: "/s/" + TRACK }));
+  const ok = await go.onRequestGet(goCtx("Abc1234"));
+  assert.equal(ok.headers.get("location"), "https://b.test/s/" + TRACK);
 });
 test("計測リンク：計測サーバー障害時もAIMUSEへ移動", async () => {
   mockFetch(() => { throw new Error("down"); });
@@ -242,6 +248,10 @@ test("ブラウザに置くキーは公開用キーだけ", () => {
 test("セキュリティヘッダー（CSP・埋め込み禁止・検索除外）", () => {
   const h = readFileSync(join(root, "public/_headers"), "utf8");
   for (const k of ["Content-Security-Policy", "X-Frame-Options: DENY", "X-Content-Type-Options: nosniff", "X-Robots-Tag: noindex", "frame-ancestors 'none'"]) assert.ok(h.includes(k), k);
+});
+test("アプリは計測リンクに移動先URLを保存しない", () => {
+  const s = readFileSync(join(root, "public/index.html"), "utf8");
+  assert.ok(!/destination/.test(s));
 });
 test("アプリはAIMUSEの公開曲だけを読み、AIMUSEのテーブルへ書き込まない", () => {
   const s = readFileSync(join(root, "public/index.html"), "utf8");

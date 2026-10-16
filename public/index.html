@@ -211,8 +211,10 @@ function shortUrl(code) { return `${location.origin}/go/${code}`; }
 
 /* ---------------- 記録（操作履歴・エラー） ---------------- */
 let CURRENT_UID = null;
+let DB_READY = false; // BOOST用テーブル（追加SQL）が使えるか。未実行なら読み取り専用モード
+function isMissingTable(e) { const m = errMsg(e); return !!e && (["42P01", "PGRST205", "PGRST202", "42883"].includes(e.code) || /does not exist|Could not find the (table|function)|schema cache/i.test(m)); }
 async function logEvent(kind, action, detail) {
-  if (!sb || !CURRENT_UID) return;
+  if (!sb || !CURRENT_UID || !DB_READY) return;
   try { await sb.from("boost_logs").insert({ kind, action: String(action).slice(0, 80), detail: detail || {}, actor: CURRENT_UID }); } catch (e) {}
 }
 function errMsg(e) { return (e && (e.message || e.error_description || e.hint)) || String(e || "不明なエラー"); }
@@ -332,7 +334,7 @@ function Tracks({ tracks, loading, error, reload, selectedId, onSelect }) {
 /* ======================================================================
    宣伝文の作成・共有・保存
    ====================================================================== */
-function Compose({ track, ai, toast, goTracks, onSaved }) {
+function Compose({ track, ai, dbReady, toast, goTracks, onSaved }) {
   const [tone, setTone] = useState("emotional");
   const [plat, setPlat] = useState("x");
   const [drafts, setDrafts] = useState(null);
@@ -363,7 +365,7 @@ function Compose({ track, ai, toast, goTracks, onSaved }) {
 
   async function ensureLink(p) {
     if (links[p]) return links[p];
-    if (!AIMUSE_URL) return null;
+    if (!AIMUSE_URL || !dbReady) return null;
     for (let i = 0; i < 3; i++) {
       const code = randCode();
       const { data, error } = await sb.from("boost_links").insert({ code, track_id: track.id, track_title: track.title, artist: track.artist, platform: p, destination: destinationUrl(p, track.id), utm_campaign: "aimuse_boost" }).select("id,code").single();
@@ -374,7 +376,8 @@ function Compose({ track, ai, toast, goTracks, onSaved }) {
   }
   async function fullText(p) {
     const l = await ensureLink(p);
-    return { text: composeText(p, drafts[p], l ? shortUrl(l.code) : ""), link: l };
+    // 計測リンクが作れない（読み取り専用モード）ときは、宣伝ページのURLをそのまま載せる（クリック数は記録されない）
+    return { text: composeText(p, drafts[p], l ? shortUrl(l.code) : promoUrl(track.id, p)), link: l };
   }
   async function doCopy() {
     try { const { text } = await fullText(plat); const ok = await copyText(text); toast(ok ? "コピーしました" : "コピーできませんでした"); if (ok) logEvent("action", "copy", { platform: plat, track_id: track.id }); }
@@ -391,7 +394,7 @@ function Compose({ track, ai, toast, goTracks, onSaved }) {
   }
 
   const d = drafts && drafts[plat];
-  const linkPreview = links[plat] ? shortUrl(links[plat].code) : (AIMUSE_URL ? "（計測リンクはコピー時に自動で付きます）" : "");
+  const linkPreview = links[plat] ? shortUrl(links[plat].code) : (AIMUSE_URL && dbReady ? "（計測リンクはコピー時に自動で付きます）" : promoUrl(track.id, plat));
   const preview = d ? composeText(plat, d, linkPreview) : "";
   const xw = plat === "x" && d ? xWeight(composeText("x", d, AIMUSE_URL ? "https://x.co/xxxxxxx" : "")) : 0;
   const openApp = { instagram: "https://www.instagram.com/", tiktok: "https://www.tiktok.com/upload", youtube: "https://studio.youtube.com/" }[plat];
@@ -407,6 +410,7 @@ function Compose({ track, ai, toast, goTracks, onSaved }) {
       <a class="btn sm" href=${promoUrl(track.id)} target="_blank" rel="noopener">開く</a>
       <button class="btn sm" onClick=${async () => { const ok = await copyText(promoUrl(track.id)); toast(ok ? "宣伝ページのURLをコピーしました" : "コピーできませんでした"); }}>コピー</button>
     </div>
+    ${!dbReady && html`<div class="notice warn">読み取り専用モード：BOOST用のデータ保存が未設定のため、保存・予定・クリック計測は使えません。文章と宣伝ページURLのコピー・共有は使えます（クリック数は記録されません）。</div>`}
     ${!AIMUSE_URL && html`<div class="notice warn">AIMUSEの公開URLが未設定のため、クリック計測リンクは付きません（文章のコピー・共有は使えます）。</div>`}
     <div><label class="lb">文章の雰囲気</label>
       <div class="chips">${TONES.map(t => html`<button key=${t.id} class=${"chip" + (tone === t.id ? " on" : "")} onClick=${() => setTone(t.id)}>${t.name}</button>`)}</div></div>
@@ -427,7 +431,7 @@ function Compose({ track, ai, toast, goTracks, onSaved }) {
       <div class="grid3">
         <button class="btn" onClick=${doCopy}>コピー</button>
         <button class="btn" onClick=${doShare}>${plat === "x" ? "Xで投稿" : "共有"}</button>
-        <button class="btn primary" onClick=${() => setSaveOpen(true)}>保存</button>
+        <button class="btn primary" disabled=${!dbReady} onClick=${() => setSaveOpen(true)}>${dbReady ? "保存" : "保存（未設定）"}</button>
       </div>
       ${openApp && html`<a class="btn ghost block" href=${openApp} target="_blank" rel="noopener">${PNAME[plat]}を開く（貼り付けて投稿）</a>`}
       <div class="faint tiny">自動投稿は未接続です。投稿はSNSアプリで手動で行い、予定画面で「投稿済み」にしてください。</div>
@@ -461,7 +465,16 @@ function SaveSheet({ onClose, onSave, initial }) {
 /* ======================================================================
    投稿カレンダー・投稿管理
    ====================================================================== */
-function Calendar({ toast, refreshKey }) {
+function Calendar({ toast, refreshKey, dbReady }) {
+  if (!dbReady) return html`<div class="page"><${ReadOnlyCard} what="投稿の保存・予定・カレンダー" /></div>`;
+  return html`<${CalendarInner} toast=${toast} refreshKey=${refreshKey} />`;
+}
+function ReadOnlyCard({ what }) {
+  return html`<div class="card stack" style=${{ gap: 8 }}><span class="badge warn" style=${{ alignSelf: "flex-start" }}>読み取り専用モード</span>
+    <div class="small">${what}は、BOOST専用のデータ保存を設定すると使えるようになります。</div>
+    <div class="faint tiny">AIMUSEのデータ・設定は変更しません。設定方法は運営者の承認後にご案内します。</div></div>`;
+}
+function CalendarInner({ toast, refreshKey }) {
   const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [sel, setSel] = useState(() => ymd(new Date()));
   const [posts, setPosts] = useState([]); const [loading, setLoading] = useState(true); const [err, setErr] = useState("");
@@ -597,7 +610,7 @@ function BarChart({ title, series, gran, unit, empty }) {
       <div class="axis"><span>${label(series[0])}</span><span>最大 ${max}${unit}</span><span>${label(series[series.length - 1])}</span></div>`}
   </div>`;
 }
-function Analytics({ tracks }) {
+function Analytics({ tracks, dbReady }) {
   const [range, setRange] = useState(30); const [gran, setGran] = useState("day");
   const [clicks, setClicks] = useState([]); const [posts, setPosts] = useState([]); const [links, setLinks] = useState(0);
   const [members, setMembers] = useState(null); const [stats, setStats] = useState(null);
@@ -605,7 +618,7 @@ function Analytics({ tracks }) {
   useEffect(() => { (async () => {
     setLoading(true); setErr("");
     const from = new Date(); from.setHours(0, 0, 0, 0); from.setDate(from.getDate() - (range - 1));
-    try {
+    if (dbReady) try {
       const LIM = 20000;
       const [c, p, l] = await Promise.all([
         must(sb.from("boost_clicks").select("clicked_at,platform,track_id,kind").gte("clicked_at", from.toISOString()).order("clicked_at", { ascending: false }).limit(LIM), "load_clicks"),
@@ -618,7 +631,7 @@ function Analytics({ tracks }) {
     try { const r = await sb.rpc("admin_stats"); setStats(r.error ? null : r.data); } catch (e) { setStats(null); }
     try { const r = await sb.from("profiles").select("created_at").gte("created_at", from.toISOString()).limit(20000); setMembers(r.error ? null : (r.data || [])); } catch (e) { setMembers(null); }
     setLoading(false);
-  })(); }, [range]);
+  })(); }, [range, dbReady]);
 
   const linkClicks = clicks.filter(c => (c.kind || "link") === "link");
   const listens = clicks.filter(c => c.kind === "listen");
@@ -640,6 +653,7 @@ function Analytics({ tracks }) {
       ${[["day", "日別"], ["week", "週別"], ["month", "月別"]].map(([g, n]) => html`<button key=${g} class=${"chip" + (gran === g ? " on" : "")} onClick=${() => setGran(g)}>${n}</button>`)}</div>
     ${err && html`<div class="notice bad">読み込めませんでした：${err}</div>`}
     ${loading ? html`<${Spinner}/>` : html`
+      ${!dbReady ? html`<${ReadOnlyCard} what="リンクのクリック数・投稿実績の記録" />` : html`<div class="stack">
       <div class="grid3">
         <div class="kpi"><div class="v">${num(linkClicks.length)}</div><div class="l">リンククリック</div></div>
         <div class="kpi"><div class="v">${num(listens.length)}</div><div class="l">AIMUSEへ移動</div></div>
@@ -660,7 +674,7 @@ function Analytics({ tracks }) {
         <table class="tbl" style=${{ marginTop: 6 }}><thead><tr><th>楽曲</th><th class="n">クリック</th><th class="n">移動</th><th class="n">投稿</th><th class="n">累計再生</th></tr></thead>
           <tbody>${byTrack.map(r => html`<tr key=${r.id}><td><div style=${{ fontWeight: 700, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>${r.t ? r.t.title : "（非公開/削除）"}</div><div class="faint tiny">${r.t ? r.t.artist : ""}</div></td><td class="n">${r.n}</td><td class="n">${r.l}</td><td class="n">${r.posts}</td><td class="n">${r.t ? num(r.t.plays) : "—"}</td></tr>`)}</tbody></table>
         <div class="faint tiny" style=${{ marginTop: 6 }}>累計再生はAIMUSEでの全再生数で、SNS経由とは限りません（参考値）。</div>`}
-      </div>
+      </div></div>`}
       <div class="sec" style=${{ margin: "10px 0 0" }}>AIMUSE全体（実数）</div>
       ${stats ? html`<div class="grid3">
         <div class="kpi"><div class="v">${num(stats.members)}</div><div class="l">会員数</div></div>
@@ -682,11 +696,12 @@ function Analytics({ tracks }) {
 /* ======================================================================
    設定・接続状況・ログ
    ====================================================================== */
-function Settings({ user, ai, onLogout, toast }) {
+function Settings({ user, ai, dbReady, onLogout, toast }) {
   const [sns, setSns] = useState([]); const [usage, setUsage] = useState(null); const [limit, setLimit] = useState(null);
   const [logs, setLogs] = useState([]); const [logKind, setLogKind] = useState("action"); const [err, setErr] = useState("");
   const load = useCallback(async () => {
     setErr("");
+    if (!dbReady) return;
     try {
       const today = ymd(new Date());
       const [a, u, s, l] = await Promise.all([
@@ -697,7 +712,7 @@ function Settings({ user, ai, onLogout, toast }) {
       ]);
       setSns(a.data || []); setUsage(u.data ? u.data.count : 0); setLimit(s.data ? s.data.value : 30); setLogs(l.data || []);
     } catch (e) { setErr(errMsg(e)); }
-  }, [logKind]);
+  }, [logKind, dbReady]);
   useEffect(() => { load(); }, [load]);
   async function saveLimit(v) {
     const n = Math.max(0, Math.min(500, parseInt(v, 10) || 0));
@@ -709,23 +724,28 @@ function Settings({ user, ai, onLogout, toast }) {
     <div class="sec" style=${{ marginTop: 4 }}>接続状況</div>
     <div class="card stack" style=${{ gap: 10 }}>
       <div class="row between"><span>AIMUSE 楽曲データ</span><span class="badge ok">接続済み（読み取りのみ）</span></div>
+      <div class="row between"><span>BOOST用データ保存</span>${dbReady ? html`<span class="badge ok">設定済み</span>` : html`<span class="badge warn">未設定（読み取り専用）</span>`}</div>
       <div class="row between"><span>AIMUSE 公開URL</span>${AIMUSE_URL ? html`<span class="badge ok">設定済み</span>` : html`<span class="badge warn">未設定</span>`}</div>
       <div class="row between"><span>AI文章生成</span>${!ai.checked ? html`<span class="badge">確認中</span>` : ai.connected ? html`<span class="badge ok">接続済み</span>` : html`<span class="badge warn">未接続（テンプレートのみ）</span>`}</div>
       ${ai.checked && !ai.connected && ai.reason && html`<div class="faint tiny">${ai.reason}</div>`}
       ${ai.connected && html`<div class="faint tiny">${ai.provider}（${ai.model}）・本日 ${usage == null ? "—" : usage} / ${limit == null ? "—" : limit} 回</div>`}
-      <div class="row between"><span class="small">AI生成の1日の上限</span>
+      ${dbReady && html`<div class="row between"><span class="small">AI生成の1日の上限</span>
         <select class="in" style=${{ width: 110, padding: "8px" }} value=${limit == null ? "" : String(limit)} onChange=${e => saveLimit(e.target.value)} aria-label="AI生成の1日の上限">
           ${[0, 10, 20, 30, 50, 100].concat(limit != null && ![0, 10, 20, 30, 50, 100].includes(limit) ? [limit] : []).map(v => html`<option key=${v} value=${String(v)}>${v}回</option>`)}
-        </select></div>
+        </select></div>`}
     </div>
+    ${!dbReady && html`<${ReadOnlyCard} what="操作履歴・エラー記録・AIの利用回数管理" />`}
     <div class="sec">SNS自動投稿</div>
     <div class="card stack" style=${{ gap: 10 }}>
+      ${!dbReady && PLATFORMS.map(pl => html`<div key=${pl.id} class="row between"><span>${pl.long}</span><span class="badge">未接続（手動投稿のみ）</span></div>`)}
       ${PLATFORMS.map(pl => sns.find(a => a.platform === pl.id)).filter(Boolean).map(a => html`<div key=${a.platform} class="row between"><span>${PNAME[a.platform]}</span>${a.auto_post_enabled ? html`<span class="badge ok">自動投稿 有効</span>` : a.connected ? html`<span class="badge">接続済み・自動投稿オフ</span>` : html`<span class="badge">未接続（手動投稿のみ）</span>`}</div>`)}
       <div class="faint tiny">Ver.0.1では自動投稿はありません。各SNSの公式APIの利用審査・権限が揃ったSNSから順に追加します。</div>
     </div>
-    <div class="sec">履歴</div>
+    ${dbReady && html`<div class="stack" style=${{ gap: 12 }}>
+    <div class="sec" style=${{ marginBottom: 0 }}>履歴</div>
     <div class="chips"><button class=${"chip" + (logKind === "action" ? " on" : "")} onClick=${() => setLogKind("action")}>操作履歴</button><button class=${"chip" + (logKind === "error" ? " on" : "")} onClick=${() => setLogKind("error")}>エラー</button></div>
     <div class="card">${logs.length === 0 ? html`<div class="muted small">記録はまだありません。</div>` : html`<table class="tbl"><tbody>${logs.map(l => html`<tr key=${l.id}><td class="mono tiny" style=${{ whiteSpace: "nowrap" }}>${fmtDT(l.created_at)}</td><td class="small">${ACTION_LABELS[l.action] || l.action}${l.detail && l.detail.message ? html`<div class="faint tiny">${l.detail.message}</div>` : ""}</td></tr>`)}</tbody></table>`}</div>
+    </div>`}
     <div class="sec">アカウント</div>
     <div class="card stack" style=${{ gap: 8 }}>
       <div class="small"><span class="muted">ログイン中：</span>${user.email}</div>
@@ -746,6 +766,7 @@ function App() {
   const [tracks, setTracks] = useState([]); const [tLoading, setTLoading] = useState(true); const [tErr, setTErr] = useState("");
   const [selected, setSelected] = useState(null);
   const [ai, setAi] = useState({ checked: false, connected: false });
+  const [dbReady, setDbReady] = useState(false);
   const [toastMsg, setToastMsg] = useState(""); const tRef = useRef(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const toast = useCallback(m => { setToastMsg(m); clearTimeout(tRef.current); tRef.current = setTimeout(() => setToastMsg(""), 2400); }, []);
@@ -761,7 +782,10 @@ function App() {
       setLoginErr(error ? "管理者権限を確認できませんでした：" + errMsg(error) : "このアカウントは管理者ではないため利用できません");
       setPhase("login"); return;
     }
-    CURRENT_UID = session.user.id; setUser(session.user); setLoginErr(""); setPhase("app");
+    CURRENT_UID = session.user.id;
+    // BOOST用テーブルがあるか確認（読み取りのみ）。なければ読み取り専用モード
+    try { const r = await sb.from("boost_settings").select("key").limit(1); DB_READY = !r.error; setDbReady(!r.error); } catch (e) { DB_READY = false; setDbReady(false); }
+    setUser(session.user); setLoginErr(""); setPhase("app");
   }, []);
   useEffect(() => { check(); const { data } = sb ? sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") { CURRENT_UID = null; setUser(null); setPhase("login"); } }) : { data: null }; return () => data && data.subscription && data.subscription.unsubscribe(); }, [check]);
 
@@ -792,13 +816,14 @@ function App() {
   const navs = [["tracks", "楽曲", I.music], ["compose", "作成", I.pen], ["calendar", "予定", I.cal], ["analytics", "分析", I.chart], ["settings", "設定", I.gear]];
   return html`<div class="shell">
     <header class="hdr"><span class="logo" style=${{ fontSize: 13 }}>BOOST</span><h1>${titles[tab]}</h1>
+      ${!dbReady && html`<span class="badge warn">読み取り専用</span>`}
       ${!ai.connected && ai.checked && html`<span class="badge warn" title="AI未接続">AI未接続</span>`}</header>
     <main>
       ${tab === "tracks" && html`<${Tracks} tracks=${tracks} loading=${tLoading} error=${tErr} reload=${loadTracks} selectedId=${selected && selected.id} onSelect=${t => { setSelected(t); setTab("compose"); window.scrollTo(0, 0); }} />`}
-      ${tab === "compose" && html`<${Compose} track=${selected} ai=${ai} toast=${toast} goTracks=${() => setTab("tracks")} onSaved=${() => setRefreshKey(k => k + 1)} />`}
-      ${tab === "calendar" && html`<${Calendar} toast=${toast} refreshKey=${refreshKey} />`}
-      ${tab === "analytics" && html`<${Analytics} tracks=${tracks} />`}
-      ${tab === "settings" && html`<${Settings} user=${user} ai=${ai} toast=${toast} onLogout=${async () => { await logEvent("action", "logout", {}); await sb.auth.signOut(); }} />`}
+      ${tab === "compose" && html`<${Compose} track=${selected} ai=${ai} dbReady=${dbReady} toast=${toast} goTracks=${() => setTab("tracks")} onSaved=${() => setRefreshKey(k => k + 1)} />`}
+      ${tab === "calendar" && html`<${Calendar} toast=${toast} refreshKey=${refreshKey} dbReady=${dbReady} />`}
+      ${tab === "analytics" && html`<${Analytics} tracks=${tracks} dbReady=${dbReady} />`}
+      ${tab === "settings" && html`<${Settings} user=${user} ai=${ai} dbReady=${dbReady} toast=${toast} onLogout=${async () => { await logEvent("action", "logout", {}); await sb.auth.signOut(); }} />`}
     </main>
     <nav class="nav"><div class="in2">${navs.map(([id, n, ic]) => html`<button key=${id} class=${tab === id ? "on" : ""} onClick=${() => { setTab(id); window.scrollTo(0, 0); }} aria-current=${tab === id ? "page" : null}>${ic}<span>${n}</span></button>`)}</div></nav>
     <${Toast} msg=${toastMsg} />

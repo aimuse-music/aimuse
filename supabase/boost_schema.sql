@@ -1,5 +1,5 @@
 -- =====================================================================
--- AIMUSE BOOST 追加SQL（Ver.0.2 r4）
+-- AIMUSE BOOST 追加SQL（Ver.0.2 r5）
 -- AIMUSE と同じ Supabase プロジェクトの SQL Editor に全文を貼り付けて、1回実行してください。
 --
 -- ・AIMUSE の既存テーブル・データ・認証設定・関数は一切変更しません（読むだけ）
@@ -362,42 +362,61 @@ create policy boost_logs_admin on public.boost_logs for all to authenticated
 
 
 -- =====================================================================
--- 10. 回数の上限チェック（記録関数の中だけで使う。外部からは呼べない）
---     上限未満なら1増やして true、上限に達していれば何もせず false。
---     同じ行への同時更新はデータベースが順番に処理するため、上限を超えることはない
+-- 10. クリックの記録（上限チェックと記録を「全部成功するか、全部取り消すか」で行う）
+--     ・3つのカウンター（対象ごと1分60回／全体1分300回／全体1日2万回）を順に「上限未満なら+1」し、
+--       最後にクリックを1件記録する
+--     ・途中で1つでも上限に達したら、それまでに増やしたカウンターも含めて取り消す
+--       （PostgreSQL の「例外ブロック」は内部で保存点を作り、例外時にブロック内の変更を巻き戻す）
+--     ・カウンターは常に「対象→全体1分→全体1日」の同じ順で更新するため、同時アクセスでも
+--       行の取り合い（デッドロック）は起きず、上限も超えない
+--     ・外部からは呼べない（下の2つの公開関数の中だけで使う）
 -- =====================================================================
-drop function if exists public.boost_click_allowed();   -- r3 の旧方式（あれば削除）
+drop function if exists public.boost_click_allowed();                          -- r3 の旧方式（あれば削除）
+drop function if exists public.boost_click_gate(text);                         -- r4 の旧方式（あれば削除）
+drop function if exists public.boost_take_slot(text, timestamptz, integer);    -- r4 の旧方式（あれば削除）
 
-create or replace function public.boost_take_slot(p_scope text, p_bucket timestamptz, p_limit integer)
-returns boolean
-language plpgsql security definer set search_path = ''
-as $$
-declare v integer;
-begin
-  insert into public.boost_rate_counters as c (scope, bucket, n) values (p_scope, p_bucket, 1)
-  on conflict (scope, bucket) do update set n = c.n + 1 where c.n < p_limit
-  returning c.n into v;
-  return v is not null;
-end $$;
-
--- 1回の記録の可否：対象ごと1分60回 → 全体1分300回 → 全体1日（日本時間）2万回 の順に確認
-create or replace function public.boost_click_gate(p_scope text)
+create or replace function public.boost_record_click(
+  p_scope text, p_link uuid, p_track uuid, p_platform text, p_kind text)
 returns boolean
 language plpgsql security definer set search_path = ''
 as $$
 declare
   m timestamptz := date_trunc('minute', now());
   d timestamptz := date_trunc('day', now() at time zone 'Asia/Tokyo') at time zone 'Asia/Tokyo';
-  first_in_minute boolean;
+  v integer;
+  minute_total integer;
 begin
-  if not public.boost_take_slot(p_scope, m, 60) then return false; end if;
-  if not public.boost_take_slot('all:minute', m, 300) then return false; end if;
-  -- 1分に1回だけ、2日より古いカウンターを片付ける
-  select n = 1 into first_in_minute from public.boost_rate_counters where scope = 'all:minute' and bucket = m;
-  if first_in_minute then
+  begin
+    -- (1) 対象ごと：1分60回
+    insert into public.boost_rate_counters as c (scope, bucket, n) values (p_scope, m, 1)
+    on conflict (scope, bucket) do update set n = c.n + 1 where c.n < 60
+    returning c.n into v;
+    if v is null then raise exception using errcode = 'BST01', message = 'boost_limit'; end if;
+
+    -- (2) 全体：1分300回
+    insert into public.boost_rate_counters as c (scope, bucket, n) values ('all:minute', m, 1)
+    on conflict (scope, bucket) do update set n = c.n + 1 where c.n < 300
+    returning c.n into minute_total;
+    if minute_total is null then raise exception using errcode = 'BST01', message = 'boost_limit'; end if;
+
+    -- (3) 全体：1日（日本時間）2万回
+    v := null;
+    insert into public.boost_rate_counters as c (scope, bucket, n) values ('all:day', d, 1)
+    on conflict (scope, bucket) do update set n = c.n + 1 where c.n < 20000
+    returning c.n into v;
+    if v is null then raise exception using errcode = 'BST01', message = 'boost_limit'; end if;
+
+    -- (4) クリックを記録（ここで失敗した場合もカウンターごと取り消される）
+    insert into public.boost_clicks (link_id, track_id, platform, kind) values (p_link, p_track, p_platform, p_kind);
+  exception when sqlstate 'BST01' then
+    return false;   -- 上限到達：このブロックの変更はすべて取り消し済み
+  end;
+
+  -- 1分に1回だけ（その分の最初の記録のとき）、2日より古いカウンターを片付ける
+  if minute_total = 1 then
     delete from public.boost_rate_counters where bucket < now() - interval '2 days';
   end if;
-  return public.boost_take_slot('all:day', d, 20000);
+  return true;
 end $$;
 
 
@@ -415,8 +434,8 @@ begin
   if p_code is null or p_code !~ '^[A-Za-z0-9]{6,12}$' then return null; end if;
   select id, track_id, platform into l_id, l_track, l_platform from public.boost_links where code = p_code;
   if l_id is null or l_track is null then return null; end if;
-  if p_record is true and public.boost_click_gate('link:' || l_id::text) then
-    insert into public.boost_clicks (link_id, track_id, platform, kind) values (l_id, l_track, l_platform, 'link');
+  if p_record is true then
+    perform public.boost_record_click('link:' || l_id::text, l_id, l_track, l_platform, 'link');
   end if;
   return '/s/' || l_track::text || case when l_platform in ('x', 'instagram', 'tiktok', 'youtube') then '?src=' || l_platform else '' end;
 end $$;
@@ -435,9 +454,7 @@ begin
   if p_track is null or not exists (select 1 from public.tracks t where t.id = p_track and t.status = 'public') then
     return false;
   end if;
-  if not public.boost_click_gate('listen:' || p_track::text) then return false; end if;
-  insert into public.boost_clicks (link_id, track_id, platform, kind) values (null, p_track, plat, 'listen');
-  return true;
+  return public.boost_record_click('listen:' || p_track::text, null, p_track, plat, 'listen');
 end $$;
 
 
@@ -474,8 +491,7 @@ end $$;
 --     ・未ログインで呼べるのは「クリック記録」の2つだけ
 -- =====================================================================
 revoke all on function public.boost_posts_touch() from public, anon, authenticated;
-revoke all on function public.boost_take_slot(text, timestamptz, integer) from public, anon, authenticated;
-revoke all on function public.boost_click_gate(text) from public, anon, authenticated;
+revoke all on function public.boost_record_click(text, uuid, uuid, text, text) from public, anon, authenticated;
 revoke all on function public.boost_resolve_link(text, boolean) from public, anon, authenticated;
 revoke all on function public.boost_record_listen(uuid, text) from public, anon, authenticated;
 revoke all on function public.boost_ai_take_quota() from public, anon, authenticated;
@@ -485,11 +501,88 @@ grant execute on function public.boost_ai_take_quota() to authenticated;
 
 
 -- =====================================================================
--- 15. 確認（結果に9行・すべて RLS有効 = true、未ログイン権限 = なし と表示されればOK）
+-- 15. 最終確認（1つの表で表示。「判定」がすべて OK なら成功）
+--     ・9テーブルの RLS が有効か
+--     ・未ログイン（anon）がBOOSTテーブルに一切の権限を持たないか
+--     ・ポリシーが想定どおりか（管理者のみ／カウンターはポリシーなし）
+--     ・関数ごとに、未ログイン・ログイン会員・全員（PUBLIC）が実行できるかが想定どおりか
+--     ・SECURITY DEFINER 関数の search_path が固定されているか
 -- =====================================================================
-select c.relname as "BOOSTテーブル",
-       c.relrowsecurity as "RLS有効",
-       case when has_table_privilege('anon', c.oid, 'SELECT,INSERT,UPDATE,DELETE') then 'あり（要確認）' else 'なし' end as "未ログイン権限"
-from pg_class c join pg_namespace n on n.oid = c.relnamespace
-where n.nspname = 'public' and c.relname like 'boost\_%' and c.relkind = 'r'
-order by 1;
+with
+tbl(name) as (values ('boost_ai_usage'), ('boost_clicks'), ('boost_links'), ('boost_logs'), ('boost_post_attempts'),
+                     ('boost_posts'), ('boost_rate_counters'), ('boost_settings'), ('boost_sns_accounts')),
+fn(sig, anon_ok, auth_ok) as (values
+  ('public.boost_resolve_link(text,boolean)',                true,  true),
+  ('public.boost_record_listen(uuid,text)',                  true,  true),
+  ('public.boost_ai_take_quota()',                           false, true),
+  ('public.boost_record_click(text,uuid,uuid,text,text)',    false, false),
+  ('public.boost_posts_touch()',                             false, false)),
+checks as (
+  -- RLS
+  select 1 as ord, 'RLS' as 区分, t.name as 対象,
+         coalesce((select c.relrowsecurity::text from pg_class c where c.oid = to_regclass('public.' || t.name)), 'テーブルなし') as 状態,
+         'true' as 期待
+  from tbl t
+  union all
+  -- 未ログインのテーブル権限
+  select 2, '未ログインの権限', t.name,
+         case when to_regclass('public.' || t.name) is null then 'テーブルなし'
+              when has_table_privilege('anon', to_regclass('public.' || t.name), 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')
+                or has_any_column_privilege('anon', to_regclass('public.' || t.name), 'SELECT,INSERT,UPDATE,REFERENCES') then 'あり'
+              else 'なし' end,
+         'なし'
+  from tbl t
+  union all
+  -- ポリシー
+  select 3, 'ポリシー', t.name,
+         coalesce((select string_agg(p.policyname || '(' || array_to_string(p.roles, ',') || ')', ', ' order by p.policyname)
+                   from pg_policies p where p.schemaname = 'public' and p.tablename = t.name), 'なし'),
+         case when t.name = 'boost_rate_counters' then 'なし' else t.name || '_admin(authenticated)' end
+  from tbl t
+  union all
+  -- 関数の実行権限（未ログイン）
+  select 4, '関数：未ログイン実行', f.sig,
+         case when to_regprocedure(f.sig) is null then '関数なし'
+              when has_function_privilege('anon', to_regprocedure(f.sig), 'EXECUTE') then '可' else '不可' end,
+         case when f.anon_ok then '可' else '不可' end
+  from fn f
+  union all
+  -- 関数の実行権限（ログイン会員）
+  select 5, '関数：ログイン会員実行', f.sig,
+         case when to_regprocedure(f.sig) is null then '関数なし'
+              when has_function_privilege('authenticated', to_regprocedure(f.sig), 'EXECUTE') then '可' else '不可' end,
+         case when f.auth_ok then '可' else '不可' end
+  from fn f
+  union all
+  -- 関数の実行権限（全員＝PUBLIC への付与がないこと）
+  select 6, '関数：PUBLICへの付与', f.sig,
+         case when to_regprocedure(f.sig) is null then '関数なし'
+              when exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                           where p.oid = to_regprocedure(f.sig) and a.grantee = 0 and a.privilege_type = 'EXECUTE') then 'あり'
+              else 'なし' end,
+         'なし'
+  from fn f
+  union all
+  -- SECURITY DEFINER 関数の search_path 固定
+  select 7, 'DEFINER関数の search_path', p.proname,
+         coalesce((select c from unnest(p.proconfig) c where c like 'search_path=%'), '未設定'),
+         'search_path=""'
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname like 'boost\_%' and p.prosecdef
+  union all
+  -- 想定外のBOOST関数がないこと
+  select 8, '想定外のBOOST関数', p.oid::regprocedure::text, 'あり', 'なし'
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname like 'boost\_%'
+    and p.oid not in (select to_regprocedure(sig) from fn where to_regprocedure(sig) is not null)
+),
+judged as (
+  select ord, 区分, 対象, 状態, 期待, case when 状態 = 期待 then 'OK' else 'NG' end as 判定 from checks
+)
+select 0 as ord, '総合判定' as 区分, '全' || count(*) || '項目' as 対象,
+       'NG ' || count(*) filter (where 判定 = 'NG') || '件' as 状態, 'NG 0件' as 期待,
+       case when count(*) filter (where 判定 = 'NG') = 0 then 'OK' else 'NG' end as 判定
+from judged
+union all
+select * from judged
+order by ord, 対象;

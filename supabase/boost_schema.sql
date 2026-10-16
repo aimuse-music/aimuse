@@ -1,5 +1,5 @@
 -- =====================================================================
--- AIMUSE BOOST 追加SQL（Ver.0.2 r7）
+-- AIMUSE BOOST 追加SQL（Ver.0.2 r8）
 -- AIMUSE と同じ Supabase プロジェクトの SQL Editor に全文を貼り付けて、1回実行してください。
 --
 -- ・AIMUSE の既存テーブル・データ・認証設定・関数は一切変更しません（読むだけ）
@@ -12,6 +12,8 @@
 --   NGが1件でもあれば全体を取り消します（NGのまま変更が残ることはありません）
 -- ・最後の表（読み取りのみ）は、確認結果を一覧で見るためのものです
 -- ・管理者の判定は AIMUSE と同じ public.is_admin()（profiles.is_admin = true）を使います
+-- ・宣伝の対象は「AIMUSEで現在公開中（tracks.status = 'public'）の楽曲」だけです。
+--   リンク・投稿の作成も、クリックの記録も、この同じ条件で判定します
 -- =====================================================================
 
 do $boost$
@@ -299,6 +301,13 @@ begin
       new.created_by := old.created_by;   -- 作成者は変更不可
       new.created_at := old.created_at;
     end if;
+    -- 宣伝の対象は公開中の楽曲だけ（新しく作るとき・楽曲を付け替えるときに確認。
+    -- 作成後に非公開になった曲の投稿も、編集・削除はできる）
+    if new.track_id is not null
+       and (tg_op = 'INSERT' or new.track_id is distinct from old.track_id)
+       and not exists (select 1 from public.tracks t where t.id = new.track_id and t.status = 'public') then
+      raise exception '公開中の楽曲だけ宣伝投稿を作成できます';
+    end if;
     if new.status = 'posted' and new.posted_at is null then new.posted_at := now(); end if;
     if new.status <> 'posted' then new.posted_at := null; end if;
     -- 自動投稿は未接続のため、auto には設定できない
@@ -313,6 +322,27 @@ begin
   drop trigger if exists boost_posts_touch on public.boost_posts;
   create trigger boost_posts_touch before insert or update on public.boost_posts
     for each row execute function public.boost_posts_touch();
+
+  -- 宣伝リンクの作成：公開中の楽曲だけ。曲名・アーティスト名はアプリから送られた値ではなく、
+  -- AIMUSEの楽曲データから自動で入れる（表示と実際の曲がずれないようにする）
+  -- ※ 作成者（管理者）の権限で動く。管理者は AIMUSE の全楽曲を読めるため、特別な権限は不要
+  create or replace function public.boost_links_guard()
+  returns trigger language plpgsql set search_path = '' as $fn$
+  declare v_title text; v_artist text;
+  begin
+    select t.title, t.artist into v_title, v_artist
+    from public.tracks t where t.id = new.track_id and t.status = 'public';
+    if not found then
+      raise exception '公開中の楽曲だけ宣伝リンクを作成できます';
+    end if;
+    new.track_title := left(v_title, 200);
+    new.artist := left(v_artist, 200);
+    return new;
+  end $fn$;
+
+  drop trigger if exists boost_links_guard on public.boost_links;
+  create trigger boost_links_guard before insert on public.boost_links
+    for each row execute function public.boost_links_guard();
 
   -- ===================================================================
   -- 9. アクセス権
@@ -363,6 +393,8 @@ begin
   --       最後にクリックを1件記録する。途中で上限に達したら、増やしたカウンターも含めて取り消す
   --     ・どの記録も必ず「全体1日」の行から順に確保するため、同時アクセスでも
   --       互いに待ち合って止まる（デッドロック）ことがなく、上限も超えない
+  --     ・記録するのは「AIMUSEで現在公開中の楽曲」のクリックだけ（リンク・「聴く」共通の条件。
+  --       非公開・削除された曲はカウンターも増やさず、何も記録しない）
   --     ・外部からは呼べない（下の2つの公開関数の中だけで使う）
   -- ===================================================================
   create or replace function public.boost_record_click(
@@ -376,6 +408,10 @@ begin
     v integer;
     minute_total integer;
   begin
+    -- 宣伝の対象は公開中の楽曲だけ（boost_resolve_link・boost_record_listen 共通の条件）
+    if p_track is null or not exists (select 1 from public.tracks t where t.id = p_track and t.status = 'public') then
+      return false;
+    end if;
     begin
       -- 全体：1日（日本時間）2万回
       insert into public.boost_rate_counters as c (scope, bucket, n) values ('all:day', d, 1)
@@ -410,6 +446,8 @@ begin
   -- ===================================================================
   -- 11. 短縮リンクのクリック記録（/go/<code> から呼ばれる。ログイン不要）
   --     返すのは BOOST の宣伝ページのパス（/s/<楽曲ID>?src=<SNS>）だけ。外部URLは返さない
+  --     リンク先の曲が非公開・削除済みなら記録しない（宣伝ページは「公開されていません」と表示し、
+  --     AIMUSE のトップへ案内する。曲名などの情報は表示しない）
   -- ===================================================================
   create or replace function public.boost_resolve_link(p_code text, p_record boolean default true)
   returns text
@@ -436,9 +474,8 @@ begin
   as $fn$
   declare plat text := case when p_platform in ('x', 'instagram', 'tiktok', 'youtube') then p_platform else 'other' end;
   begin
-    if p_track is null or not exists (select 1 from public.tracks t where t.id = p_track and t.status = 'public') then
-      return false;
-    end if;
+    if p_track is null then return false; end if;
+    -- 公開中かどうかは boost_record_click の中で、リンクのクリックと同じ条件で判定する
     return public.boost_record_click('listen:' || p_track::text, null, p_track, plat, 'listen');
   end $fn$;
 
@@ -498,6 +535,7 @@ begin
   --     ・未ログインで呼べるのは「クリック記録」の2つだけ
   -- ===================================================================
   revoke all on function public.boost_posts_touch() from public, anon, authenticated;
+  revoke all on function public.boost_links_guard() from public, anon, authenticated;
   revoke all on function public.boost_record_click(text, uuid, uuid, text, text) from public, anon, authenticated;
   revoke all on function public.boost_resolve_link(text, boolean) from public, anon, authenticated;
   revoke all on function public.boost_record_listen(uuid, text) from public, anon, authenticated;
@@ -520,7 +558,8 @@ begin
     ('public.boost_record_listen(uuid,text)',                  true,  true),
     ('public.boost_ai_take_quota()',                           false, true),
     ('public.boost_record_click(text,uuid,uuid,text,text)',    false, false),
-    ('public.boost_posts_touch()',                             false, false)),
+    ('public.boost_posts_touch()',                             false, false),
+    ('public.boost_links_guard()',                             false, false)),
   checks as (
     select 1 as ord, 'RLS（有効/強制）' as 区分, t.name as 対象,
            coalesce((select c.relrowsecurity::text || '/' || c.relforcerowsecurity::text from pg_class c
@@ -610,7 +649,7 @@ begin
     raise exception 'BOOSTの必須確認でNGが % 件あったため、すべての変更を取り消しました（データベースは実行前のままです）：%', v_ng, v_detail;
   end if;
 
-  raise notice 'AIMUSE BOOST r7：設定が完了し、必須確認 % 項目すべて OK でした。', v_total;
+  raise notice 'AIMUSE BOOST r8：設定が完了し、必須確認 % 項目すべて OK でした。', v_total;
 end
 $boost$;
 
@@ -635,7 +674,8 @@ fn(sig, anon_ok, auth_ok) as (values
   ('public.boost_record_listen(uuid,text)',                  true,  true),
   ('public.boost_ai_take_quota()',                           false, true),
   ('public.boost_record_click(text,uuid,uuid,text,text)',    false, false),
-  ('public.boost_posts_touch()',                             false, false)),
+  ('public.boost_posts_touch()',                             false, false),
+  ('public.boost_links_guard()',                             false, false)),
 checks as (
   select 1 as ord, 'RLS（有効/強制）' as 区分, t.name as 対象,
          coalesce((select c.relrowsecurity::text || '/' || c.relforcerowsecurity::text from pg_class c

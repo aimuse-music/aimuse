@@ -179,6 +179,31 @@ textarea.input{min-height:130px;resize:vertical;line-height:1.7}
 .tabs button.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--grad);border-radius:2px}
 .admin-entry{display:flex;align-items:center;gap:12px;margin-top:16px;padding:14px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(120deg,rgba(164,99,255,.14),rgba(90,114,255,.08));text-align:left;width:100%}
 
+/* profile edit（v1.6） */
+.pbanner{margin:6px 0 0;aspect-ratio:3/1;border-radius:16px;background:var(--surface2) center/cover no-repeat;border:1px solid var(--line)}
+.profile.with-banner,.ahead.with-banner{margin-top:-46px;position:relative}
+.ahead.with-banner .cover-wrap{width:120px}
+.profile .btn.sm{margin-top:2px}
+.a-ic{display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--surface2) center/cover no-repeat;vertical-align:-3px;margin-right:6px}
+.pe-preview{border:1px solid var(--line);border-radius:18px;background:var(--surface);padding:10px 10px 16px}
+.pe-preview .pbanner{margin:0}
+.pe-img{display:flex;align-items:center;gap:12px}
+.pe-thumb{width:64px;height:64px;border-radius:12px;background:var(--surface2) center/cover no-repeat;border:1px solid var(--line);display:grid;place-items:center;color:var(--faint);flex:none}
+.pe-thumb.round{border-radius:50%}
+.pe-thumb:not(.round){width:120px;height:40px}
+.pe-links{display:flex;gap:16px;flex-wrap:wrap}
+.pe-links .link{text-decoration:underline;text-underline-offset:3px}
+select.input{appearance:none;-webkit-appearance:none}
+.crop-scrim{align-items:flex-end;z-index:90}
+.crop-sheet{align-items:center;gap:14px}
+.crop-sheet h3{align-self:flex-start}
+.crop-stage{position:relative;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;background:#000;border-radius:14px;cursor:grab}
+.crop-stage img{position:absolute;left:0;top:0;max-width:none;transform-origin:0 0;pointer-events:none;-webkit-user-drag:none}
+.crop-mask{position:absolute;inset:0;pointer-events:none;border:2px solid rgba(255,255,255,.85);border-radius:14px}
+.crop-stage.round .crop-mask{border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.55)}
+.crop-zoom{width:min(100%,320px);accent-color:var(--violet)}
+.crop-sheet .btn-row{width:100%}
+
 /* legal pages（利用規約・プライバシーポリシー・投稿ガイドライン） */
 .legal-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 16px;margin-top:18px}
 .legal-links .link{text-decoration:underline;text-underline-offset:3px;padding:4px 0}
@@ -365,7 +390,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-16.1";
+const BUILD = "2026-10-17.1";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -475,7 +500,9 @@ const auth = {
   subscribe(f){ this.listeners.add(f); f({user:this.user,profile:this.profile,ready:this.ready,recovery:this.recovery}); return ()=>this.listeners.delete(f); },
   async loadProfile(){
     if(!sb||!this.user){ this.profile=null; return; }
-    const {data} = await sb.from("profiles").select("id,display_name,is_admin").eq("id",this.user.id).maybeSingle();
+    let r = await sb.from("profiles").select("id,display_name,is_admin,avatar_path,header_path").eq("id",this.user.id).maybeSingle();
+    if(r.error) r = await sb.from("profiles").select("id,display_name,is_admin").eq("id",this.user.id).maybeSingle();   // v1.6 SQL 未実行時
+    const data = r.data;
     this.profile = data||{id:this.user.id,display_name:(this.user.email||"").split("@")[0],is_admin:false};
   },
   async init(){
@@ -996,9 +1023,11 @@ function MyPage({ctx}){
   const statusTag = st => st==="pending"?html`<span className="tag demo">審査待ち</span>`:st==="public"?html`<span className="tag ok">公開中</span>`:st==="hidden"?html`<span className="tag">非公開</span>`:html`<span className="tag bad">却下</span>`;
   return html`<div className="screen">
     <header className="top"><h1>マイページ</h1></header>
-    <div className="profile">
-      <div className="avatar"><div>${[...myName][0]?.toUpperCase()||"A"}</div></div>
+    <${ProfileBanner} url=${avatarUrl(profile&&profile.header_path)}/>
+    <div className=${"profile"+(profile&&profile.header_path?" with-banner":"")}>
+      <${AvatarCircle} url=${avatarUrl(profile&&profile.avatar_path)} name=${myName}/>
       <div><div style=${{fontSize:20,fontWeight:900}}>${myName}</div><div style=${{fontSize:12.5,color:"var(--muted)"}}>${user.email}${isAdmin?" · 管理者":""}</div></div>
+      <button className="btn sm ghost" onClick=${()=>setTab("profile")}>プロフィールを編集</button>
     </div>
     <div className="stats">
       <div className="stat"><b>${mine.length}</b><span>投稿曲</span></div>
@@ -1020,21 +1049,28 @@ function MyPage({ctx}){
 
 /* ---------- ARTIST ---------- */
 function Artist({ctx}){
-  const {artistId,artists,songs,play,favs,toggleFav,follows,toggleFollow,goBack,current,playing,artistOf} = ctx;
+  const {artistId,artists,songs,play,favs,toggleFav,follows,toggleFollow,goBack,current,playing,artistOf,isAdmin,adminResetImage} = ctx;
+  const [confirmReset,setConfirmReset] = useState(null);
   const a = artists.find(x=>x.id===artistId); if(!a) return null;
   const list = songs.filter(s=>s.artistId===a.id).sort((x,y)=>y.plays-x.plays);
   const on = follows.has(a.id);
   return html`<div className="screen">
     <header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button></header>
-    <div className="ahead">
+    <${ProfileBanner} url=${a.headerUrl}/>
+    <div className=${"ahead"+(a.headerUrl?" with-banner":"")}>
       <${Cover} item=${a} radius="50%"/>
       <h2>${a.name}</h2>
       <div style=${{color:"var(--muted)",fontSize:13}}>${fmtNum(a.followers)} フォロワー · ${list.length}曲</div>
-      <p style=${{color:"var(--muted)",fontSize:13.5,maxWidth:320}}>${a.bio}</p>
+      ${a.bio && html`<p style=${{color:"var(--muted)",fontSize:13.5,maxWidth:320,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>${a.bio}</p>`}
       <div style=${{display:"flex",gap:10,alignItems:"center"}}>
         <button className=${"follow"+(on?" on":"")} onClick=${()=>toggleFollow(a.id)}>${on?"フォロー中":"フォローする"}</button>
         ${list.length>0&&html`<button className="play-fab" aria-label="すべて再生" onClick=${()=>play(list[0],list)}><${PlayIcon} size=${18}/></button>`}
       </div>
+      ${isAdmin && (a.imageUrl||a.headerUrl) && html`<div className="btn-row" style=${{marginTop:4}}>
+        ${[["avatar","アイコン",a.imageUrl],["header","背景画像",a.headerUrl]].filter(x=>x[2]).map(([k,l])=> confirmReset===k
+          ? html`<button key=${k} className="btn sm danger" onClick=${()=>{setConfirmReset(null);adminResetImage(a.id,k);}}>${l}を削除する</button>`
+          : html`<button key=${k} className="btn sm ghost" onClick=${()=>setConfirmReset(k)}>管理者：${l}を初期化</button>`)}
+      </div>`}
     </div>
     <section className="sec"><${SecHead} en="POPULAR" title="人気の曲"/>
       <div className="list">${list.map((s,i)=>html`<${SongRow} key=${s.id} song=${s} artist=${a} rank=${i+1} cur=${current?.id===s.id} playing=${playing} fav=${favs.has(s.id)} onPlay=${()=>play(s,list)} onFav=${()=>toggleFav(s.id)}/>`)}</div>
@@ -1065,6 +1101,7 @@ function Admin({ctx}){
       <button className=${tab==="review"?"on":""} onClick=${()=>setT("review")}>投稿審査${pending.length?html`<span className="badge-count">${pending.length}</span>`:""}</button>
       <button className=${tab==="reports"?"on":""} onClick=${()=>setT("reports")}>通報${openReports.length?html`<span className="badge-count">${openReports.length}</span>`:""}</button>
       <button className=${tab==="songs"?"on":""} onClick=${()=>setT("songs")}>楽曲管理</button>
+      <button className=${tab==="names"?"on":""} onClick=${()=>setT("names")}>名義変更</button>
     </div>
 
     ${tab==="review" && html`<div style=${{display:"flex",flexDirection:"column",gap:12,marginTop:14}}>
@@ -1092,6 +1129,7 @@ function Admin({ctx}){
       </div>`})}
     </div>`}
 
+    ${tab==="names" && html`<${AdminNameHistory} ctx=${ctx}/>`}
     ${tab==="songs" && html`<div className="list" style=${{marginTop:8}}>
       ${allSongs.map(s=>html`<div key=${s.id} className="row norank" style=${{opacity:s.status==="public"?1:.55}}>
         <${Cover} item=${s} radius=${10}/>
@@ -1143,7 +1181,7 @@ function FullPlayer({ctx}){
           : html`<${Cover} item=${song} title=${song.title} radius=${22} style=${{width:"min(100%,360px)"}}/>`}
       </div>
       <div className="pt">
-        <div style=${{flex:1,minWidth:0}}><div className="t">${song.title}</div><button className="a" onClick=${()=>{close();openArtist(artist.id)}}>${artist.name}</button>
+        <div style=${{flex:1,minWidth:0}}><div className="t">${song.title}</div><button className="a" onClick=${()=>{close();openArtist(artist.id)}}>${artist.imageUrl&&html`<span className="a-ic" style=${{backgroundImage:`url("${artist.imageUrl}")`}} aria-hidden="true"></span>`}${artist.name}</button>
           <div style=${{display:"flex",gap:6,marginTop:6}}><${ToolTag} tool=${song.tool}/><span className="tag" style=${{color:"#ddd"}}>${song.genre}</span></div></div>
         <button className="icon-btn" aria-label=${fav?"お気に入りから削除":"お気に入りに追加"} onClick=${()=>toggleFav(song.id)}><${Icon} n="heart" size=${28} fill=${fav} style=${{color:fav?"#ff6fae":"#fff"}}/></button>
       </div>
@@ -1248,6 +1286,328 @@ function NewPasswordPanel({ctx}){
   </div>`;
 }
 
+/* ---------- PROFILE（プロフィール編集：v1.6） ----------
+   ・アイコン／背景画像は端末内で切り抜き・縮小し、JPEGに変換してから保存（位置情報などの撮影情報は残らない）
+   ・保存の順番：新しい画像を保存 → プロフィールに設定（サーバー側で本人・保存済みを確認）→ 成功後に古い画像を削除
+     途中で失敗しても、それまでの画像はそのまま残る
+   ・表示名は本人と運営だけに表示。他の人に見えるのはアーティスト名・アイコン・背景・自己紹介
+   ・v1.6 のSQLが未実行でも、既存機能は従来どおり動く（プロフィールの画像が表示されないだけ） */
+const PROFILE_IMAGE = {
+  avatar:{label:"アイコン", w:512, h:512, round:true, quality:.9},
+  header:{label:"背景画像", w:1500, h:500, round:false, quality:.85}
+};
+const PROFILE_PHOTO_ACCEPT = "image/*";
+const PROFILE_FILE_ACCEPT = ".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif";
+const PROFILE_INPUT_MAX_MB = 20;      // 選べる元画像の大きさ（保存するのは縮小後の画像）
+const PROFILE_SAVE_MAX = 1900000;     // 保存する画像の上限（保存場所の上限 2MB より少し小さく）
+// ランダムなID（HTTPS以外の画面や古い端末では crypto.randomUUID が無いため、同じ形式で作る）
+const uuid4 = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+  : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+const avatarUrl = p => (p && sb) ? sb.storage.from("avatars").getPublicUrl(p).data.publicUrl : null;
+const profileErr = (e,fallback) => { const m=(e&&e.message)||""; return /[ぁ-んァ-ヶ一-龠]/.test(m) ? m.replace(/^.*?ERROR:\s*/,"") : fallback; };
+
+const profileApi = {
+  // 公開中のアーティストのアイコン・背景・自己紹介（未ログインでも取得可。SQL未実行でも失敗せず空で返す）
+  async artistCards(ids){
+    const out = new Map(); if(!sb||!ids.length) return out;
+    const [b,r] = await Promise.all([
+      sb.from("artists").select("id,bio").in("id",ids),
+      sb.rpc("public_artist_profiles",{p_artist_ids:ids})
+    ]);
+    if(!b.error) b.data.forEach(x=>out.set(x.id,{bio:x.bio||""}));
+    if(!r.error) r.data.forEach(x=>{ const o=out.get(x.artist_id)||{bio:""}; o.avatarUrl=avatarUrl(x.avatar_path); o.headerUrl=avatarUrl(x.header_path); out.set(x.artist_id,o); });
+    return out;
+  },
+  async myArtists(uid){
+    const {data,error} = await sb.from("artists").select("id,name,bio").eq("user_id",uid).order("created_at",{ascending:true});
+    if(error) throw error; return data||[];
+  },
+  // 本人のフォルダに残った「使われていない画像」を片付ける（前回の削除失敗などで残ったもの）
+  async cleanup(uid, keep){
+    try{
+      const {data,error} = await sb.storage.from("avatars").list(uid,{limit:100});
+      if(error||!data) return;
+      const stale = data.map(f=>uid+"/"+f.name).filter(p=>!keep.includes(p));
+      if(stale.length) await sb.storage.from("avatars").remove(stale);
+    }catch(e){}
+  },
+  async upload(uid, kind, blob){
+    const path = `${uid}/${kind}-${uuid4()}.jpg`;
+    const {error} = await sb.storage.from("avatars").upload(path, blob, {contentType:"image/jpeg", upsert:false, cacheControl:"31536000"});
+    if(error) throw error;
+    return path;
+  },
+  async setImage(kind, path){
+    const {data,error} = await sb.rpc("set_my_profile_image",{p_kind:kind, p_path:path});
+    if(error) throw error; return data||null;   // それまで使っていた画像の場所
+  },
+  async removeFile(path){ if(!path) return; try{ await sb.storage.from("avatars").remove([path]); }catch(e){} },
+  async setDisplayName(uid, name){
+    const {data,error} = await sb.from("profiles").update({display_name:name||null}).eq("id",uid).select("id");
+    if(error) throw error; if(!data||!data.length) throw deniedError();
+  },
+  async renameArtist(id, name){
+    const {data,error} = await sb.rpc("rename_my_artist",{p_artist:id, p_name:name});
+    if(error) throw error; return data;
+  },
+  async setBio(id, bio){
+    const {data,error} = await sb.from("artists").update({bio}).eq("id",id).select("id");
+    if(error) throw error; if(!data||!data.length) throw deniedError();
+  }
+};
+
+// 画像を読み込み、作業用に縮小（最大2048px）した canvas を返す。HEICなど読み込めない形式はエラー
+async function loadProfileImage(file){
+  const ext = (file.name||"").split(".").pop().toLowerCase();
+  const type = (file.type||"").toLowerCase();
+  if(!(type.startsWith("image/") || ["jpg","jpeg","png","webp","heic","heif"].includes(ext))) throw new Error("画像ファイル（JPEG・PNG・WebP・HEIC）を選んでください");
+  if(type==="image/svg+xml"||ext==="svg"||type==="image/gif"||ext==="gif") throw new Error("この形式の画像は使えません。JPEG・PNG・WebPの画像を選んでください");
+  if(!file.size) throw new Error("ファイルが空です。iCloudの写真はダウンロード完了後にもう一度選んでください");
+  if(file.size > PROFILE_INPUT_MAX_MB*1048576) throw new Error(`画像が大きすぎます（${PROFILE_INPUT_MAX_MB}MBまで）`);
+  const url = URL.createObjectURL(file);
+  let src;
+  try{
+    // <img> で読み込む（多くの端末で写真の向き情報が正しく反映される）
+    src = await new Promise((res,rej)=>{ const i=new Image(); i.decoding="async"; i.onload=()=>res(i); i.onerror=rej; i.src=url; });
+  }catch(e){
+    try{ src = await createImageBitmap(file); }catch(e2){ src=null; }
+  }finally{ URL.revokeObjectURL(url); }
+  const w = src && (src.naturalWidth||src.width), h = src && (src.naturalHeight||src.height);
+  if(!w||!h) throw new Error(/heic|heif/.test(type+ext)
+    ? "この端末ではHEIC画像を読み込めませんでした。写真をJPEGで保存し直すか、別の写真を選んでください"
+    : "画像を読み込めませんでした。別の画像を選んでください");
+  const k = Math.min(1, 2048/Math.max(w,h));
+  const c = document.createElement("canvas"); c.width=Math.max(1,Math.round(w*k)); c.height=Math.max(1,Math.round(h*k));
+  c.getContext("2d").drawImage(src,0,0,c.width,c.height);
+  if(src.close) src.close();
+  return c;
+}
+const canvasBlob = (c,q) => new Promise(res=>c.toBlob(b=>res(b),"image/jpeg",q));
+
+// 切り抜き画面：ドラッグで位置、2本指（またはスライダー・ホイール）で拡大・縮小
+function ProfileCropper({kind, source, onCancel, onDone}){
+  const spec = PROFILE_IMAGE[kind];
+  const vw = Math.min(window.innerWidth||390, 520);
+  const W = spec.round ? Math.min(280, vw-80) : Math.min(480, vw-40);
+  const H = Math.round(W*spec.h/spec.w);
+  const nw = source.width, nh = source.height;
+  const s0 = Math.max(W/nw, H/nh);
+  const [view,setView] = useState(()=>({z:1, x:(W-nw*s0)/2, y:(H-nh*s0)/2}));
+  const [busy,setBusy] = useState(false);
+  const [url,setUrl] = useState(null);
+  const ptrs = useRef(new Map()), gesture = useRef(null);
+  useEffect(()=>{ let u; source.toBlob(b=>{ if(b){ u=URL.createObjectURL(b); setUrl(u); } },"image/jpeg",.92); return ()=>{ if(u) URL.revokeObjectURL(u); }; },[source]);
+  const clamp = v => { const s=s0*v.z; return {z:v.z, x:Math.min(0,Math.max(W-nw*s,v.x)), y:Math.min(0,Math.max(H-nh*s,v.y))}; };
+  // (px,py) を中心に拡大率を z に変える
+  const zoomAt = (v,z,px,py) => { z=Math.min(4,Math.max(1,z)); const s=s0*v.z, s2=s0*z; return clamp({z, x:px-(px-v.x)*s2/s, y:py-(py-v.y)*s2/s}); };
+  const local = e => { const r=e.currentTarget.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; };
+  const down = e => { e.currentTarget.setPointerCapture&&e.currentTarget.setPointerCapture(e.pointerId); ptrs.current.set(e.pointerId,local(e)); gesture.current=null; };
+  const move = e => {
+    if(!ptrs.current.has(e.pointerId)) return;
+    const prev = ptrs.current.get(e.pointerId), p = local(e);
+    ptrs.current.set(e.pointerId,p);
+    const pts = [...ptrs.current.values()];
+    if(pts.length>=2){
+      const [a,b]=pts, d=Math.hypot(a.x-b.x,a.y-b.y), mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+      const g = gesture.current;
+      if(g&&g.d>0) setView(v=>{ const z=zoomAt(v, v.z*d/g.d, mx, my); return clamp({...z, x:z.x+mx-g.mx, y:z.y+my-g.my}); });
+      gesture.current={d,mx,my};
+    } else {
+      setView(v=>clamp({...v, x:v.x+p.x-prev.x, y:v.y+p.y-prev.y}));
+    }
+  };
+  const up = e => { ptrs.current.delete(e.pointerId); gesture.current=null; };
+  const wheel = e => { e.preventDefault(); const p=local(e); setView(v=>zoomAt(v, v.z*(e.deltaY<0?1.08:1/1.08), p.x, p.y)); };
+  const done = async () => {
+    setBusy(true);
+    const s=s0*view.z, out=document.createElement("canvas"); out.width=spec.w; out.height=spec.h;
+    const ctx2=out.getContext("2d"); ctx2.imageSmoothingQuality="high";
+    ctx2.fillStyle="#15121f"; ctx2.fillRect(0,0,spec.w,spec.h);   // 透明部分（PNG）は背景色で塗る
+    ctx2.drawImage(source, -view.x/s, -view.y/s, W/s, H/s, 0, 0, spec.w, spec.h);
+    let q=spec.quality, blob=await canvasBlob(out,q);
+    while(blob && blob.size>PROFILE_SAVE_MAX && q>.5){ q-=.1; blob=await canvasBlob(out,q); }
+    setBusy(false);
+    if(!blob){ onCancel("画像を作成できませんでした。別の画像でお試しください"); return; }
+    onDone({blob, url:URL.createObjectURL(blob)});
+  };
+  const s=s0*view.z;
+  return html`<div className="scrim crop-scrim" role="dialog" aria-modal="true" aria-label=${spec.label+"の範囲を調整"}>
+    <div className="sheet crop-sheet" onClick=${e=>e.stopPropagation()}>
+      <h3>${spec.label}の範囲を調整</h3>
+      <div className=${"crop-stage"+(spec.round?" round":"")} style=${{width:W,height:H}}
+        onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up} onWheel=${wheel}>
+        ${url && html`<img src=${url} alt="" draggable="false" style=${{width:nw,height:nh,transform:`translate(${view.x}px,${view.y}px) scale(${s})`}}/>`}
+        <div className="crop-mask"></div>
+      </div>
+      <input className="crop-zoom" type="range" min="1" max="4" step="0.01" value=${view.z} aria-label="拡大・縮小"
+        onInput=${e=>{ const z=+e.target.value; setView(v=>zoomAt(v,z,W/2,H/2)); }}/>
+      <p className="hint" style=${{textAlign:"center"}}>ドラッグで位置を調整・2本指またはスライダーで拡大／縮小</p>
+      <div className="btn-row"><button className="btn ghost" onClick=${()=>onCancel()} disabled=${busy}>キャンセル</button><button className="btn primary" onClick=${done} disabled=${busy||!url}>${busy?"処理中…":"この範囲を使う"}</button></div>
+    </div>
+  </div>`;
+}
+
+// アイコンの丸（画像がなければ従来どおり頭文字）
+function AvatarCircle({url, name, size}){
+  return html`<div className="avatar" style=${size?{width:size,height:size}:null}><div style=${url?{background:`center/cover no-repeat url("${url}")`}:null}>${url?"":([...(name||"")][0]?.toUpperCase()||"A")}</div></div>`;
+}
+// 背景画像（なければ何も表示しない＝従来のデザイン）
+const ProfileBanner = ({url}) => url ? html`<div className="pbanner" style=${{backgroundImage:`url("${url}")`}}></div>` : null;
+
+function ProfileImageField({kind, current, draft, onPick, onReset, onUndo}){
+  const spec = PROFILE_IMAGE[kind];
+  const photoRef=useRef(null), fileRef=useRef(null);
+  const change=e=>{const f=e.target.files&&e.target.files[0]; e.target.value=""; if(f) onPick(f);};
+  const shown = draft ? draft.url : (draft===null ? null : current);
+  const status = draft ? "新しい画像（未保存）" : draft===null ? "初期画像に戻します（未保存）" : current ? "設定中" : "初期画像";
+  return html`<div className="field">
+    <span className="fl">${spec.label}</span>
+    <input ref=${photoRef} type="file" accept=${PROFILE_PHOTO_ACCEPT} className="vh" onChange=${change} tabIndex="-1" aria-hidden="true"/>
+    <input ref=${fileRef} type="file" accept=${PROFILE_FILE_ACCEPT} className="vh" onChange=${change} tabIndex="-1" aria-hidden="true"/>
+    <div className="pe-img">
+      <div className=${"pe-thumb"+(spec.round?" round":"")} style=${shown?{backgroundImage:`url("${shown}")`}:null}>${shown?"":html`<${Icon} n="image" size=${20}/>`}</div>
+      <span className="hint">${status}</span>
+    </div>
+    <div className="pick-grid">
+      <button className="drop small" onClick=${()=>photoRef.current.click()}><span className="drop-ic"><${Icon} n="image" size=${22}/></span><b>写真から選ぶ</b><span>写真ライブラリ</span></button>
+      <button className="drop small" onClick=${()=>fileRef.current.click()}><span className="drop-ic"><${Icon} n="folder" size=${22}/></span><b>ファイルから選ぶ</b><span>「ファイル」アプリ</span></button>
+    </div>
+    <div className="pe-links">
+      ${draft!==undefined && html`<button className="link" onClick=${onUndo}>変更を取り消す</button>`}
+      ${(current||draft) && draft!==null && html`<button className="link" onClick=${onReset}>初期画像に戻す</button>`}
+    </div>
+    <span className="hint">JPEG・PNG・WebP・HEIC（${PROFILE_INPUT_MAX_MB}MBまで）。保存時に縮小し、撮影場所などの情報は取り除きます。</span>
+  </div>`;
+}
+
+function ProfileEdit({ctx}){
+  const {user,profile,goBack,say,afterProfileSave} = ctx;
+  const uid = user&&user.id;
+  const curAvatar = avatarUrl(profile&&profile.avatar_path), curHeader = avatarUrl(profile&&profile.header_path);
+  // draft：undefined＝変更なし / null＝初期画像に戻す / {blob,url}＝新しい画像
+  const [draft,setDraft] = useState({avatar:undefined, header:undefined});
+  const [crop,setCrop] = useState(null);           // {kind, source}
+  const [name,setName] = useState((profile&&profile.display_name)||"");
+  const [arts,setArts] = useState(null);           // 自分のアーティスト一覧
+  const [aid,setAid] = useState(null);
+  const [aname,setAname] = useState(""), [bio,setBio] = useState("");
+  const [busy,setBusy] = useState(false), [errs,setErrs] = useState([]), [loadErr,setLoadErr] = useState(null);
+  useEffect(()=>{ if(!uid) return; profileApi.myArtists(uid).then(a=>{ setArts(a); if(a[0]){ setAid(a[0].id); setAname(a[0].name); setBio(a[0].bio||""); } }).catch(()=>{ setArts([]); setLoadErr("アーティスト情報を読み込めませんでした"); }); },[uid]);
+  useEffect(()=>()=>{ ["avatar","header"].forEach(k=>{ const d=draft[k]; if(d&&d.url) URL.revokeObjectURL(d.url); }); },[]);
+  if(!user) return html`<div className="screen"><header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>プロフィールを編集</h1></header><div className="empty">ログインすると編集できます</div></div>`;
+  const art = arts && arts.find(a=>a.id===aid);
+  const selectArtist = id => { const a=arts.find(x=>x.id===id); setAid(id); setAname(a?a.name:""); setBio(a?(a.bio||""):""); };
+  const setD = (k,v) => setDraft(d=>{ const o=d[k]; if(o&&o.url&&o!==v) URL.revokeObjectURL(o.url); return {...d,[k]:v}; });
+  const pick = async (kind,file) => { try{ setCrop({kind, source:await loadProfileImage(file)}); }catch(e){ say(e.message); } };
+  const nameChanged = (name.trim()) !== ((profile&&profile.display_name)||"");
+  const aChanged = art && aname.trim() && aname.trim()!==art.name;
+  const bioChanged = art && bio!==(art.bio||"");
+  const dirty = draft.avatar!==undefined || draft.header!==undefined || nameChanged || aChanged || bioChanged;
+  const tooLong = [...name.trim()].length>40 || [...aname.trim()].length>40 || [...bio].length>500;
+  const save = async () => {
+    if(busy||!dirty) return;
+    if(tooLong){ setErrs(["文字数が上限を超えています"]); return; }
+    if(art && !aname.trim()){ setErrs(["アーティスト名を入力してください"]); return; }
+    setBusy(true); setErrs([]);
+    const fail=[], keep={avatar:profile&&profile.avatar_path, header:profile&&profile.header_path};
+    // 1) 画像：使われていない古いファイルを片付けてから、新しい画像を保存→設定→古い画像を削除
+    if(draft.avatar||draft.header) await profileApi.cleanup(uid,[keep.avatar,keep.header].filter(Boolean));
+    for(const kind of ["avatar","header"]){
+      const d = draft[kind]; if(d===undefined) continue;
+      const label = PROFILE_IMAGE[kind].label;
+      let newPath=null;
+      try{
+        if(d){ newPath = await profileApi.upload(uid,kind,d.blob); }
+        const old = await profileApi.setImage(kind,newPath);
+        keep[kind]=newPath;
+        if(old && old!==newPath) await profileApi.removeFile(old);   // 失敗しても次回の保存時に片付く
+        setD(kind,undefined);
+      }catch(e){
+        if(newPath) await profileApi.removeFile(newPath);           // 設定できなかった新しい画像は消す（既存の画像はそのまま）
+        fail.push(`${label}：${profileErr(e,"保存できませんでした")}`);
+      }
+    }
+    // 2) 表示名（本人と運営だけに表示）
+    if(nameChanged){ try{ await profileApi.setDisplayName(uid,name.trim()); }catch(e){ fail.push("表示名："+profileErr(e,"保存できませんでした")); } }
+    // 3) アーティスト名（禁止語・なりすまし・回数制限はサーバー側で確認）と自己紹介
+    if(aChanged){ try{ const n=await profileApi.renameArtist(art.id,aname.trim()); setArts(a=>a.map(x=>x.id===art.id?{...x,name:n}:x)); setAname(n); }catch(e){ fail.push("アーティスト名："+profileErr(e,"変更できませんでした")); } }
+    if(bioChanged){ try{ await profileApi.setBio(art.id,bio); setArts(a=>a.map(x=>x.id===art.id?{...x,bio}:x)); }catch(e){ fail.push("自己紹介："+profileErr(e,"保存できませんでした")); } }
+    await afterProfileSave();
+    setBusy(false); setErrs(fail);
+    say(fail.length ? "一部を保存できませんでした" : "プロフィールを保存しました");
+  };
+  // プレビュー（他の人のアーティストページでの見え方）
+  const pv = {avatar: draft.avatar ? draft.avatar.url : draft.avatar===null ? null : curAvatar,
+              header: draft.header ? draft.header.url : draft.header===null ? null : curHeader};
+  return html`<div className="screen">
+    <header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>プロフィールを編集</h1></header>
+    <div className="label" style=${{marginTop:4}}>プレビュー（アーティストページでの見え方）</div>
+    <div className="pe-preview">
+      <${ProfileBanner} url=${pv.header}/>
+      <div className=${"ahead"+(pv.header?" with-banner":"")}>
+        <${Cover} item=${{id:aid||uid, hues:[270,230], pattern:0, imageUrl:pv.avatar}} radius="50%"/>
+        <h2>${art ? (aname.trim()||art.name) : "アーティスト名"}</h2>
+        ${art && bio && html`<p style=${{color:"var(--muted)",fontSize:13.5,maxWidth:320,whiteSpace:"pre-wrap"}}>${bio}</p>`}
+      </div>
+    </div>
+    <div className="form" style=${{marginTop:18}}>
+      <${ProfileImageField} kind="avatar" current=${curAvatar} draft=${draft.avatar} onPick=${f=>pick("avatar",f)} onReset=${()=>setD("avatar",null)} onUndo=${()=>setD("avatar",undefined)}/>
+      <${ProfileImageField} kind="header" current=${curHeader} draft=${draft.header} onPick=${f=>pick("header",f)} onReset=${()=>setD("header",null)} onUndo=${()=>setD("header",undefined)}/>
+      <div className="field"><label htmlFor="pe-name">表示名<span className="opt-l">任意</span></label>
+        <input id="pe-name" className="input" value=${name} onInput=${e=>setName(e.target.value)} maxLength="40" autoComplete="nickname"/>
+        <span className="hint">マイページに表示されます。他の会員には表示されません（あなたと運営のみ）。</span></div>
+      ${arts===null ? html`<div className="hint">アーティスト情報を読み込み中…</div>`
+        : loadErr ? html`<span className="err">${loadErr}</span>`
+        : arts.length===0 ? html`<div className="demo-note"><${Icon} n="info" size=${18}/><span>楽曲を投稿すると、アーティスト名と自己紹介を設定できます。</span></div>`
+        : html`
+          ${arts.length>1 && html`<div className="field"><label htmlFor="pe-art">編集するアーティスト</label>
+            <select id="pe-art" className="input" value=${aid} onChange=${e=>selectArtist(e.target.value)}>${arts.map(a=>html`<option key=${a.id} value=${a.id}>${a.name}</option>`)}</select></div>`}
+          <div className="field"><label htmlFor="pe-aname">アーティスト名</label>
+            <input id="pe-aname" className="input" value=${aname} onInput=${e=>setAname(e.target.value)} maxLength="40"/>
+            <span className="hint">他の会員に表示される名前です。変更は24時間に3回まで。他の会員と同じ名前、運営と誤解される名前、実在のアーティストになりすます名前は使えません。変更内容は記録され、運営が確認します。</span></div>
+          <div className="field"><label htmlFor="pe-bio">自己紹介<span className="opt-l">任意</span></label>
+            <textarea id="pe-bio" className="input" value=${bio} onInput=${e=>setBio(e.target.value)} maxLength="500" rows="4"></textarea>
+            <span className="hint">アーティストページに表示されます（${[...bio].length}/500文字）</span></div>`}
+      ${errs.length>0 && html`<div className="err" role="alert">${errs.map((m,i)=>html`<div key=${i}>${m}</div>`)}</div>`}
+      <button className="btn primary" onClick=${save} disabled=${busy||!dirty||tooLong}>${busy?"保存中…":"保存する"}</button>
+      <button className="btn ghost" onClick=${goBack} disabled=${busy}>${dirty?"保存せずに戻る":"戻る"}</button>
+    </div>
+    ${crop && html`<${ProfileCropper} kind=${crop.kind} source=${crop.source}
+      onCancel=${m=>{ setCrop(null); if(m) say(m); }}
+      onDone=${r=>{ setD(crop.kind,r); setCrop(null); }}/>`}
+  </div>`;
+}
+
+// 管理者用：アーティスト名の変更履歴
+function AdminNameHistory({ctx}){
+  const {artists,openArtist,say} = ctx;
+  const [rows,setRows] = useState(null), [err,setErr] = useState(null), [confirm,setConfirm] = useState(null);
+  const load = () => sb.rpc("admin_artist_name_history",{p_limit:100}).then(r=>{ if(r.error){ setErr("履歴を読み込めませんでした（プロフィール編集のSQLが未実行の可能性があります）"); setRows([]); } else setRows(r.data||[]); });
+  useEffect(()=>{ load(); },[]);
+  const revert = async r => {
+    const {error} = await sb.rpc("admin_set_artist_name",{p_artist:r.artist_id, p_name:r.old_name});
+    setConfirm(null);
+    if(error){ say(profileErr(error,"変更できませんでした")); return; }
+    say(`「${r.old_name}」に戻しました`); repo.refresh(); load();
+  };
+  if(rows===null) return html`<div className="empty">読み込み中…</div>`;
+  return html`<div style=${{display:"flex",flexDirection:"column",gap:12,marginTop:14}}>
+    ${err && html`<span className="err">${err}</span>`}
+    ${rows.length===0 && !err && html`<div className="empty">アーティスト名の変更はまだありません</div>`}
+    ${rows.map((r,i)=>{ const a=artists.find(x=>x.id===r.artist_id); return html`<div key=${i} className="panel">
+      <div style=${{fontSize:12,color:"var(--muted)"}} className="mono">${new Date(r.changed_at).toLocaleString("ja-JP")}${r.by_admin?" · 運営が変更":""}</div>
+      <div style=${{fontSize:14.5,fontWeight:700,overflowWrap:"anywhere"}}>${r.old_name} → ${r.new_name}</div>
+      <div style=${{fontSize:12.5,color:"var(--muted)"}}>現在の名前：${r.current_name}</div>
+      <div className="btn-row">
+        ${a && html`<button className="btn sm ghost" onClick=${()=>openArtist(a.id)}>アーティストページ</button>`}
+        ${r.current_name!==r.old_name && (confirm===i
+          ? html`<button className="btn sm danger" onClick=${()=>revert(r)}>「${r.old_name}」に戻す</button>`
+          : html`<button className="btn sm ghost" onClick=${()=>setConfirm(i)}>変更前の名前に戻す</button>`)}
+      </div>
+    </div>`; })}
+  </div>`;
+}
+
 /* ---------- LEGAL（利用規約・プライバシーポリシー・投稿ガイドライン） ----------
    ・法律専門家による確認前の草案。【要確認：…】は公開前に確定させる項目（画面上で色付き表示）
    ・本文は blocks の配列：文字列＝段落、配列＝箇条書き
@@ -1280,6 +1640,8 @@ const LEGAL_DOCS = [
       "パスワードは利用者自身の責任で管理し、第三者に使わせたり教えたりしないでください。",
       "アカウントの不正利用に気づいた場合は、すぐにお問い合わせ窓口へご連絡ください。",
       "表示名・アーティスト名に「AIMUSE」「運営」「公式」「管理者」など、運営者や公式アカウントと誤解される名称は使用できません。",
+      "アーティスト名は、他の会員がすでに使用している名前には変更できません。また、アーティスト名の変更は24時間に3回までです。運営者は、なりすまし防止のため、アーティスト名の変更履歴（変更前後の名前・日時）を記録・確認します。",
+      "表示名は、本人と運営者だけに表示されます。他の利用者に表示されるのは、アーティスト名、アイコン、背景画像、自己紹介です。",
       "退会（アカウントの削除）を希望する場合は、お問い合わせ窓口から申請してください。現在、アプリ内に退会の機能はありません。【要確認：アプリ内に退会機能を追加した場合は記載を更新】",
       "退会すると、会員情報、投稿した楽曲、お気に入り、フォローなどの情報は削除され、元に戻すことはできません。保存期間の詳細はプライバシーポリシーに定めます。"
     ]]},
@@ -1292,7 +1654,7 @@ const LEGAL_DOCS = [
         "実在の歌手・アーティスト・人物の声や名前を無断で模倣し、本人の作品・本人の歌唱であると誤解させる行為",
         "運営者、他の利用者、実在の人物・団体になりすます行為",
         "投稿時の権利に関する申告に、事実と異なる内容を申告する行為",
-        "わいせつ、暴力的、差別的な内容、他人を誹謗中傷する内容、違法行為を助長する内容を、楽曲・歌詞・ジャケット画像などに含める行為",
+        "わいせつ、暴力的、差別的な内容、他人を誹謗中傷する内容、違法行為を助長する内容を、楽曲・歌詞・ジャケット画像・プロフィール画像・自己紹介などに含める行為",
         "再生数その他の数値を、不正な方法で増やしたり操作したりする行為",
         "不正アクセス、サーバーやネットワークへの過度な負荷、不具合の悪用など、本サービスの運営を妨げる行為",
         "他の利用者の個人情報を収集する行為",
@@ -1316,6 +1678,7 @@ const LEGAL_DOCS = [
     {h:"第7条（審査・投稿の削除・利用停止）", blocks:[[
       "運営者は、投稿された楽曲を審査し、承認または却下します。却下の理由を個別にお知らせしない場合があります。",
       "運営者は、公開後の楽曲であっても、本規約やガイドラインへの違反、権利侵害の申し立て、その他必要と判断した場合には、事前に通知することなく非公開にし、または削除することがあります。",
+      "プロフィール画像（アイコン・背景画像）と自己紹介は、審査を経ずにすぐ公開されます。運営者は、本規約・ガイドラインに違反する画像を事前に通知することなく初期画像に戻し、違反するアーティスト名・自己紹介を変更することがあります。",
       "運営者は、本規約に違反した利用者、または違反のおそれがある利用者のアカウントを利用停止にすることがあります。利用停止中は、楽曲の投稿、お気に入り、フォロー、通報などの機能を利用できません。運営者は、必要に応じてその利用者の投稿を非公開または削除します。",
       "投稿者が自分の投稿の非公開・削除を希望する場合は、お問い合わせ窓口から依頼してください。【要確認：アプリ内に投稿の削除機能を追加した場合は記載を更新】",
       "運営者は、この条に基づく対応によって利用者に生じた損害について、運営者に故意または重大な過失がある場合を除き、責任を負いません。"
@@ -1354,6 +1717,7 @@ const LEGAL_DOCS = [
       "本サービスでは、次の情報を取得します。",
       [
         "会員登録のとき：メールアドレス、パスワード、表示名（任意）。表示名を入力しなかった場合は、メールアドレスの「@」より前の部分が表示名として自動で設定されます。パスワードは認証サービス（Supabase Auth）が管理しており、運営者がパスワードそのものを閲覧する機能はありません。",
+        "プロフィールを編集するとき：アイコン画像、背景画像、表示名、アーティスト名、自己紹介。アイコン・背景画像は、端末の中で切り抜き・縮小してから保存するため、撮影場所などの撮影情報（Exif）は保存されません。アーティスト名を変更した場合は、変更前と変更後の名前、日時、変更した人の記録を保存します。",
         "楽曲を投稿するとき：楽曲名、アーティスト名、ジャンル、使用したAIツール名、音源ファイル、ジャケット画像（任意）、歌詞（任意）、それぞれのファイルの元のファイル名・サイズ・形式、再生時間、権利に関する申告の内容、投稿日時。",
         "サービスを利用するとき：お気に入り・フォローの登録内容、通報の内容（対象の楽曲、理由、通報した会員のIDと表示名、日時）。",
         "再生数を数えるとき：ログイン中の方は会員ID、ログインしていない方はIPアドレスを元に戻せない形に変換（ハッシュ化）した値を、再生した楽曲と時間帯とともに記録します。IPアドレスそのものは、この記録には保存しません。",
@@ -1387,8 +1751,9 @@ const LEGAL_DOCS = [
     {h:"5. 他の利用者に公開される情報", blocks:[
       [
         "公開中の楽曲の情報（楽曲名、アーティスト名、ジャンル、使用したAIツール名、ジャケット画像、歌詞、音源、再生数）と、アーティストのフォロワー数（人数のみ）は、会員でない方を含め誰でも見ることができます。",
+        "公開中の楽曲があるアーティストのアイコン、背景画像、自己紹介は、会員でない方を含め誰でも見ることができます。アイコン・背景画像は、表示のために公開の保存領域に保存しており、画像のURLを知っている人は誰でも表示できます（ファイル名は推測できないランダムな名前です）。",
         "公開中の楽曲については、投稿時の元のファイル名を技術的な方法で取得できる場合があります。",
-        "メールアドレス、表示名、お気に入り・フォローの内容、通報の内容、審査中・非公開の楽曲は、他の利用者には公開されません。",
+        "メールアドレス、表示名、お気に入り・フォローの内容、通報の内容、審査中・非公開の楽曲、アーティスト名の変更履歴は、他の利用者には公開されません。",
         "運営者（管理者）は、審査や問い合わせ対応などのため、会員のメールアドレス・表示名、審査中・非公開の楽曲、通報の内容を閲覧できます。"
       ]
     ]},
@@ -1406,6 +1771,8 @@ const LEGAL_DOCS = [
         "退会すると、会員情報、投稿した楽曲の情報、お気に入り、フォロー、通報の記録はデータベースから削除されます。音源・画像ファイルは自動では削除されないため、運営者が別途削除します。【要確認：ファイルを削除するまでの期間】",
         "削除された楽曲の情報は、誤って削除した場合に復元できるよう、削除時点の内容を約30日間保存し、その後順次削除します。音源・画像ファイルも少なくともこの期間は保存されます。",
         "再生数を数えるための記録は、約2日を過ぎたものから順次削除します。",
+        "アイコン・背景画像を変更した場合、それまでの画像は新しい画像の設定が完了した後に削除します（削除に失敗した画像は、次にプロフィールを保存したときに削除します）。",
+        "アーティスト名の変更履歴は、そのアーティストが削除されるまで保存します。【要確認：変更履歴の保存期間】",
         "外部サービスの記録やバックアップに、一定期間情報が残る場合があります。"
       ]
     ]},
@@ -1485,7 +1852,17 @@ const LEGAL_DOCS = [
       "不適切な内容：わいせつ、暴力的、差別的な内容、他人を誹謗中傷する内容、違法行為を助長する内容",
       "虚偽の申告：投稿時の権利に関する申告に、事実と異なる内容を申告すること"
     ]]},
-    {h:"6. 審査について", blocks:[
+    {h:"6. プロフィール（アイコン・背景画像・アーティスト名・自己紹介）", blocks:[
+      "アイコン、背景画像、アーティスト名、自己紹介にも、このガイドラインの4.と5.が同じように適用されます。特に、次のことはしないでください。",
+      [
+        "実在の人物の写真、他人が描いたイラスト、他社のロゴ・キャラクターを、許可なくアイコンや背景画像に使うこと",
+        "実在の歌手・アーティスト、ほかのAIMUSEの会員、運営者と誤解されるアーティスト名・画像・自己紹介にすること",
+        "見えない文字や紛らわしい文字を使って、ほかの名前に似せること"
+      ],
+      "アイコン・背景画像・自己紹介は、審査を経ずにすぐ公開されます。運営者は、不適切な画像を初期画像に戻し、不適切なアーティスト名を変更することがあります。",
+      "アーティスト名は、他の会員がすでに使っている名前（全角・半角、大文字・小文字の違いを含む）や、運営と誤解される名前には変更できません。変更は24時間に3回までで、変更前後の名前は記録され、運営者が確認します。"
+    ]},
+    {h:"7. 審査について", blocks:[
       "楽曲を投稿するときは、次の4項目を確認して申告していただきます。",
       [
         "この楽曲は自分がAIサービスで生成したものです",
@@ -1497,7 +1874,7 @@ const LEGAL_DOCS = [
       "審査の結果はマイページの投稿曲の一覧に表示されます。現在、却下の理由はアプリ上には表示されません。理由を確認したい場合はお問い合わせ窓口へご連絡ください。",
       "審査は、楽曲が第三者の権利を侵害していないことを保証するものではありません。投稿した楽曲についての責任は投稿者にあります。"
     ]},
-    {h:"7. 権利侵害の通報と削除の手続き", blocks:[
+    {h:"8. 権利侵害の通報と削除の手続き", blocks:[
       "会員の方は、楽曲の再生画面にある通報の機能から、問題のある楽曲を運営者に知らせることができます（理由：既存曲に酷似している／不適切なジャケット画像／不適切な歌詞／なりすまし・名義の問題）。",
       "権利者の方（会員でない方を含みます）は、お問い合わせ窓口から、次の内容をお知らせください。",
       [
@@ -1514,7 +1891,7 @@ const LEGAL_DOCS = [
       "権利侵害を繰り返す利用者は、アカウントを利用停止にすることがあります。また、事実と異なる申し立てはしないでください。",
       "お問い合わせ窓口："+LEGAL_CONTACT
     ]},
-    {h:"8. 投稿者の権利と、本サービスへの利用許諾", blocks:[
+    {h:"9. 投稿者の権利と、本サービスへの利用許諾", blocks:[
       "投稿した楽曲、歌詞、ジャケット画像などについて投稿者が持つ権利は、投稿者に残ります。投稿によって運営者に移ることはありません。",
       "なお、日本では、AIが自律的に生成したものは著作物と認められず、人がどの程度創作的に関わったかによって判断されるとの考え方が示されています（文化審議会著作権分科会法制度小委員会「AIと著作権に関する考え方について」）。運営者は、投稿された楽曲に著作権が発生するかどうかを判断・保証しません。",
       "投稿者は、運営者に対し、本サービスを提供するために必要な範囲で、投稿した楽曲などを無償で利用することを許諾するものとします。この許諾は独占的なものではなく、投稿者は同じ楽曲をほかのサービスでも自由に公開できます（使用したAIツールの規約が認める範囲に限ります）。運営者が行う利用は、次のとおりです。",
@@ -1529,7 +1906,7 @@ const LEGAL_DOCS = [
       "この許諾は、楽曲が本サービス上に存在する間に限ります。楽曲の削除や退会のあとは新たに利用しません。ただし、復元に備えた保存（約30日間）や外部サービスのバックアップにより、一定期間データが残る場合があります。",
       "本サービスは、楽曲のダウンロードの機能を提供していません。公開楽曲を無断で録音・保存して、本サービスの外で配布・公開することは禁止です。"
     ]},
-    {h:"9. このガイドラインの変更", blocks:[
+    {h:"10. このガイドラインの変更", blocks:[
       "運営者は、必要に応じてこのガイドラインを変更することがあります。重要な変更をする場合は、本サービス上でお知らせします。"
     ]}
   ]
@@ -1576,6 +1953,8 @@ function App(){
   const [favs,setFavs] = useState(()=>new Set());
   const [follows,setFollows] = useState(()=>new Set());
   const [followerCounts,setFollowerCounts] = useState(()=>new Map());
+  const [artistCards,setArtistCards] = useState(()=>new Map());   // アーティストのアイコン・背景・自己紹介
+  const [cardsVer,setCardsVer] = useState(0);
   const uidRef = useRef(null);
   const socialBusy = useRef(new Set());
   const [queue,setQueue] = useState([]);
@@ -1638,7 +2017,7 @@ function App(){
 
   const allSongs = useMemo(()=>tracks.filter(t=>t.status==="public"||t.status==="hidden").sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(toSong),[tracks,user]);
   const songs = useMemo(()=>allSongs.filter(s=>s.status==="public").sort((a,b)=>b.date.localeCompare(a.date)),[allSongs]);
-  const artists = useMemo(()=>{ const m=new Map(); songs.forEach(s=>{ if(!m.has(s.artistId)) m.set(s.artistId,{id:s.artistId,name:s.artistName,hues:s.hues,pattern:s.pattern,followers:0,bio:""}); }); return [...m.values()].map(a=>({...a,followers:followerCounts.get(a.id)||0})); },[songs,followerCounts]);
+  const artists = useMemo(()=>{ const m=new Map(); songs.forEach(s=>{ if(!m.has(s.artistId)) m.set(s.artistId,{id:s.artistId,name:s.artistName,hues:s.hues,pattern:s.pattern,followers:0,bio:""}); }); return [...m.values()].map(a=>{ const c=artistCards.get(a.id)||{}; return {...a,followers:followerCounts.get(a.id)||0,imageUrl:c.avatarUrl||null,headerUrl:c.headerUrl||null,bio:c.bio||""}; }); },[songs,followerCounts,artistCards]);
   // 自分の投稿曲に紐づくアーティスト（マイページのフォロワー数に使う）
   const myArtistIds = useMemo(()=>[...new Set(tracks.filter(t=>user&&t.userId===user.id).map(t=>t.artistId))].filter(isUuid),[tracks,user]);
   // 公開中アーティストと自分のアーティストのフォロワー数（全会員の合計人数）を取得
@@ -1651,6 +2030,22 @@ function App(){
     return ()=>{ alive=false; };
   },[artistIdsKey,uid,repoLoadedAt]);
   const myFollowers = myArtistIds.reduce((n,id)=>n+(followerCounts.get(id)||0),0);
+  // 公開中アーティストのアイコン・背景・自己紹介（ログイン切替・データ再読み込み・プロフィール保存のたびに取り直す）
+  useEffect(()=>{
+    if(!sb||!artistIdsKey) return;
+    let alive = true;
+    profileApi.artistCards(artistIdsKey.split(",")).then(m=>{ if(alive) setArtistCards(m); }).catch(()=>{});
+    return ()=>{ alive=false; };
+  },[artistIdsKey,uid,repoLoadedAt,cardsVer]);
+  const afterProfileSave = async () => { await auth.loadProfile(); auth.emit(); await repo.refresh(); setCardsVer(v=>v+1); };
+  // 管理者：不適切なアイコン・背景を初期画像に戻す（設定を外してから、その画像ファイルを削除）
+  const adminResetImage = async (artistId,kind) => {
+    const {data,error} = await sb.rpc("admin_reset_profile_image",{p_artist:artistId,p_kind:kind});
+    if(error){ say(profileErr(error,"初期画像に戻せませんでした")); return; }
+    if(data) await profileApi.removeFile(data);
+    setCardsVer(v=>v+1);
+    say((kind==="avatar"?"アイコン":"背景画像")+"を初期画像に戻しました");
+  };
   const submissions = useMemo(()=>tracks.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(t=>({...t,tool:t.toolName||t.tool,mine:!!(user&&t.userId===user.id),lyrics:t.lyrics||null,checks:t.checks||[]})),[tracks,user]);
   const reports = useMemo(()=>reportsRaw.filter(r=>tracks.some(t=>t.id===r.songId)).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)),[reportsRaw,tracks]);
   const current = allSongs.find(s=>s.id===currentId)||null;
@@ -1801,14 +2196,14 @@ function App(){
   };
 
   const signOut = () => auth.signOut().then(()=>{ say("ログアウトしました"); navTo("home"); });
-  const ctx = {legalDoc,openLegal,user,profile,isAdmin,myFollowers,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
+  const ctx = {legalDoc,openLegal,afterProfileSave,adminResetImage,user,profile,isAdmin,myFollowers,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
     current,playing,toggle,pos,seek,next,prev,repeat,cycleRepeat,shuffle,setShuffle,close:()=>setPlayerOpen(false),showLyrics,setShowLyrics,queueLabel};
 
   useEffect(()=>{ document.body.style.overflow = playerOpen?"hidden":""; },[playerOpen]);
 
   const navItems = [["home","ホーム","home"],["search","検索","search"],["upload","投稿","plus"],["me","マイページ","user"]];
-  const navActive = tab==="artist"?(history[0]||"home"):(tab==="admin"||tab==="legal")?"me":tab;
-  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin,legal:LegalPage}[tab];
+  const navActive = tab==="artist"?(history[0]||"home"):(tab==="admin"||tab==="legal"||tab==="profile")?"me":tab;
+  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin,legal:LegalPage,profile:ProfileEdit}[tab];
 
   return html`<div className="app">
     <${Screen} key=${tab+(tab==="artist"?artistId:"")} ctx=${ctx}/>

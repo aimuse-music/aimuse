@@ -1,7 +1,8 @@
 -- =====================================================================
--- AIMUSE 本番環境チェック r3（読み取り専用。何も変更しません）
--- 構築SQLを実行した後に、SQL Editor で実行してください。
--- 結果は19行。「結果」列がすべて OK なら正常です。
+-- AIMUSE 本番環境チェック r4（読み取り専用。何も変更しません）
+-- 構築SQL（v1.5）と プロフィール編集SQL（v1.6）を実行した後に、SQL Editor で実行してください。
+-- 結果は22行。「結果」列がすべて OK なら正常です。
+-- r4：v1.6（プロフィール編集）の関数10個・avatars のルール4件・確認3項目（20〜22）を追加
 -- r3：チェック7・8は AIMUSE の28関数だけを対象にしました
 --     （Supabase標準の rls_auto_enable などは対象外。19番に参考表示します）
 -- =====================================================================
@@ -14,7 +15,11 @@ with aimuse_fn(name) as (
          ('admin_stats'),('admin_list_members'),('admin_set_member_ban'),
          ('admin_orphan_files'),('admin_list_deleted_tracks'),('admin_restore_track'),
          ('admin_check_request_headers'),('can_read_media'),('media_path_in_use'),
-         ('media_track_id_taken'),('storage_can_upload'),('storage_can_delete')
+         ('media_track_id_taken'),('storage_can_upload'),('storage_can_delete'),
+         -- v1.6 プロフィール編集
+         ('artist_name_key'),('artist_name_clean'),('set_my_profile_image'),('rename_my_artist'),
+         ('public_artist_profiles'),('admin_reset_profile_image'),('admin_set_artist_name'),
+         ('admin_artist_name_history'),('avatar_can_upload'),('avatar_can_delete')
 ),
 pubfn as (
   select p.oid, p.proname::text as name, p.prosecdef, p.proconfig
@@ -44,9 +49,11 @@ checks(no, item, ok, detail) as (
     (select count(*)::text from pg_policies where schemaname = 'public'
        and tablename in ('profiles','artists','tracks','favorites','follows','reviews','reports'))
   union all
-  select 5, 'Storageのアクセスルール（4件）',
+  select 5, 'Storageのアクセスルール（8件）',
     (select count(*) from pg_policies where schemaname = 'storage' and tablename = 'objects'
-       and policyname in ('aimuse upload own folder','aimuse read media','aimuse delete own or admin','aimuse internal read')) = 4,
+       and policyname in ('aimuse upload own folder','aimuse read media','aimuse delete own or admin','aimuse internal read',
+                          'aimuse avatars upload own','aimuse avatars select own','aimuse avatars delete own',
+                          'aimuse avatars internal read')) = 8,
     (select string_agg(policyname, ', ') from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname like 'aimuse%')
   union all
   select 6, 'Storageに上書き用・旧ルールが残っていない',
@@ -54,27 +61,29 @@ checks(no, item, ok, detail) as (
                 and policyname in ('aimuse select own or admin','aimuse update own')),
     null
   union all
-  select 7, 'AIMUSEの関数28個がそろい、権限の強い関数は search_path 固定',
-    (select count(*) from pubfn where name in (select name from aimuse_fn)) = 28
+  select 7, 'AIMUSEの関数38個がそろい、権限の強い関数は search_path 固定',
+    (select count(*) from pubfn where name in (select name from aimuse_fn)) = 38
     and not exists (select 1 from pubfn
                     where name in (select name from aimuse_fn) and prosecdef
                       and not coalesce(proconfig @> array['search_path=""'], false)),
-    (select count(*)::text || '/28個' from pubfn where name in (select name from aimuse_fn))
+    (select count(*)::text || '/38個' from pubfn where name in (select name from aimuse_fn))
       || coalesce(' 要確認:' || (select string_agg(name, ', ') from pubfn
                                  where name in (select name from aimuse_fn) and prosecdef
                                    and not coalesce(proconfig @> array['search_path=""'], false)), '')
   union all
-  select 8, 'AIMUSEの関数のうち未ログインで実行できるのは7個だけ',
+  select 8, 'AIMUSEの関数のうち未ログインで実行できるのは8個だけ',
     (select array_agg(name order by name) from pubfn
      where name in (select name from aimuse_fn) and has_function_privilege('anon', oid, 'execute'))
     = array['artist_follower_count','can_read_media','increment_plays','is_active_member','is_admin',
-            'track_rating_summary','track_reviews'],
+            'public_artist_profiles','track_rating_summary','track_reviews'],
     (select count(*)::text || '個' from pubfn
      where name in (select name from aimuse_fn) and has_function_privilege('anon', oid, 'execute'))
   union all
-  select 9, '会員が管理者・利用停止フラグを書き換えられない',
+  select 9, '会員が管理者・利用停止フラグ・画像の保存場所を直接書き換えられない',
     not has_column_privilege('authenticated', 'public.profiles', 'is_admin', 'UPDATE')
     and not has_column_privilege('authenticated', 'public.profiles', 'is_banned', 'UPDATE')
+    and not has_column_privilege('authenticated', 'public.profiles', 'avatar_path', 'UPDATE')
+    and not has_column_privilege('authenticated', 'public.profiles', 'header_path', 'UPDATE')
     and not has_table_privilege('authenticated', 'public.profiles', 'INSERT'),
     null
   union all
@@ -125,6 +134,24 @@ checks(no, item, ok, detail) as (
     coalesce((select string_agg(name || case when pg_get_function_result(oid) = 'event_trigger'
                                              then '（イベントトリガー用）' else '' end, ', ' order by name)
               from pubfn where name not in (select name from aimuse_fn)), 'なし')
+  union all
+  select 20, 'v1.6：アイコン用の保存場所 avatars（公開・2MB・JPEG/PNG/WebPのみ）',
+    exists (select 1 from storage.buckets where id = 'avatars' and public = true and file_size_limit = 2097152
+            and allowed_mime_types @> array['image/jpeg','image/png','image/webp']
+            and array_length(allowed_mime_types, 1) = 3),
+    (select case when public then '公開' else '非公開' end || ' / ' || coalesce(file_size_limit::text, '上限なし') || 'バイト'
+     from storage.buckets where id = 'avatars')
+  union all
+  select 21, 'v1.6：画像の保存場所は本人のフォルダのみ（形式チェックが有効）',
+    (select count(*) from pg_constraint where conrelid = 'public.profiles'::regclass
+       and conname in ('profiles_avatar_path_chk','profiles_header_path_chk')) = 2,
+    null
+  union all
+  select 22, 'v1.6：アーティスト名の変更履歴がアプリから直接見えない場所にある',
+    to_regclass('aimuse_private.artist_name_history') is not null
+    and not has_schema_privilege('anon', 'aimuse_private', 'USAGE')
+    and not has_schema_privilege('authenticated', 'aimuse_private', 'USAGE'),
+    (select count(*)::text || '件' from aimuse_private.artist_name_history)
   union all
   select 15, '（参考）現在のデータ件数',
     true,

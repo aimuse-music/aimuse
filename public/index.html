@@ -141,7 +141,7 @@ ul.plain{margin:6px 0 0;padding-left:18px} ul.plain li{margin:3px 0}
 <script src="config.js"></script>
 <script>
 "use strict";
-const BUILD = "boost-0.2.1";
+const BUILD = "boost-0.2.2";
 const { useState, useEffect, useMemo, useCallback, useRef } = React;
 const html = htm.bind(React.createElement);
 const CFG = window.BOOST_CONFIG || {};
@@ -793,6 +793,8 @@ function App() {
     CURRENT_UID = session.user.id;
     // BOOST用テーブルがあるか確認（読み取りのみ）。なければ読み取り専用モード
     try { const r = await sb.from("boost_settings").select("key").limit(1); DB_READY = !r.error; setDbReady(!r.error); } catch (e) { DB_READY = false; setDbReady(false); }
+    // 2日より古い回数カウンターを片付ける（管理者のみ・クリック処理とは別。失敗しても画面には影響しない）
+    if (DB_READY) (async () => { try { for (let i = 0; i < 5; i++) { const r = await sb.rpc("boost_cleanup_counters", { p_limit: 5000 }); if (r.error || !(r.data >= 5000)) break; } } catch (e) {} })();
     setUser(session.user); setLoginErr(""); setPhase("app");
   }, []);
   useEffect(() => { check(); const { data } = sb ? sb.auth.onAuthStateChange((ev) => { if (ev === "SIGNED_OUT") { CURRENT_UID = null; setUser(null); setPhase("login"); } }) : { data: null }; return () => data && data.subscription && data.subscription.unsubscribe(); }, [check]);

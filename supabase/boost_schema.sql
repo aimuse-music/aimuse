@@ -1,5 +1,5 @@
 -- =====================================================================
--- AIMUSE BOOST 追加SQL（Ver.0.2 r8）
+-- AIMUSE BOOST 追加SQL（Ver.0.2 r9）
 -- AIMUSE と同じ Supabase プロジェクトの SQL Editor に全文を貼り付けて、1回実行してください。
 --
 -- ・AIMUSE の既存テーブル・データ・認証設定・関数は一切変更しません（読むだけ）
@@ -24,6 +24,10 @@ declare
   v_ng integer;
   v_total integer;
   v_detail text;
+  v_ids uuid[];
+  v_flags boolean[];
+  v_i integer;
+  v_got boolean;
   -- BOOSTテーブルの想定構造（列名 → 型）。既存テーブルがあれば、これと照合する
   v_expected jsonb := '{
     "boost_links": {"id":"uuid","code":"text","track_id":"uuid","track_title":"text","artist":"text","platform":"text","utm_campaign":"text","created_by":"uuid","created_at":"timestamp with time zone"},
@@ -48,25 +52,77 @@ begin
   if to_regclass('public.tracks') is null or to_regclass('public.profiles') is null then
     raise exception 'AIMUSE の構築SQLが未実行です（public.tracks / public.profiles がありません）。中止しました。';
   end if;
-  -- (2) 管理者判定 public.is_admin() が想定どおりか（変更されていたら中止）
+  -- (2) 管理者判定 public.is_admin() が想定どおりか（定義そのものを照合。違えば中止）
+  --     ・本体：AIMUSE構築SQLの定義と完全一致（空白の違いだけは許容）
+  --       select coalesce((select p.is_admin from public.profiles p where p.id = auth.uid()), false);
+  --     ・戻り値 boolean／言語 sql／SECURITY DEFINER／search_path 固定
   if to_regprocedure('public.is_admin()') is null then
     raise exception 'public.is_admin() がありません。中止しました。';
   end if;
-  select pg_get_functiondef('public.is_admin()'::regprocedure) into v_def;
-  if v_def !~* 'from public\.profiles' or v_def !~* '\.is_admin' or v_def !~* 'auth\.uid\(\)' or v_def !~* 'returns boolean' then
-    raise exception 'public.is_admin() の内容が想定と異なります（profiles.is_admin と auth.uid() で判定していない）。安全のため中止しました。';
+  select p.prosrc into v_def from pg_proc p where p.oid = 'public.is_admin()'::regprocedure;
+  if md5(btrim(regexp_replace(v_def, '\s+', ' ', 'g'))) <> '065dbcd2c17f6a4da4ba7cc6b24dad9e'
+     or not exists (select 1 from pg_proc p join pg_language l on l.oid = p.prolang
+                    where p.oid = 'public.is_admin()'::regprocedure and p.prorettype = 'boolean'::regtype
+                      and l.lanname = 'sql' and p.prosecdef and 'search_path=""' = any(p.proconfig)) then
+    raise exception 'public.is_admin() の定義がAIMUSE構築SQLと一致しません（現在の本体：%）。安全のため中止しました。', btrim(regexp_replace(v_def, '\s+', ' ', 'g'));
   end if;
   if not exists (select 1 from information_schema.columns
                  where table_schema = 'public' and table_name = 'profiles' and column_name = 'is_admin' and data_type = 'boolean') then
     raise exception 'profiles.is_admin（boolean）がありません。中止しました。';
   end if;
-  -- (3) 会員が自分を管理者にできないこと（AIMUSE側の保護）を確認
+  -- (3) 会員・未ログイン・全員（PUBLIC）が profiles.is_admin を変更・追加できないこと
+  --     （データベースの権限情報で判定。権限がなければ、どんな方法でも書き換えられない）
   if has_column_privilege('authenticated', 'public.profiles', 'is_admin', 'UPDATE')
      or has_column_privilege('anon', 'public.profiles', 'is_admin', 'UPDATE')
-     or has_table_privilege('authenticated', 'public.profiles', 'INSERT')
-     or has_table_privilege('anon', 'public.profiles', 'INSERT') then
-    raise exception '会員が profiles.is_admin を変更できる状態です。AIMUSE側の権限を確認してください。中止しました。';
+     or has_column_privilege('public', 'public.profiles', 'is_admin', 'UPDATE')
+     or has_column_privilege('authenticated', 'public.profiles', 'is_admin', 'INSERT')
+     or has_column_privilege('anon', 'public.profiles', 'is_admin', 'INSERT')
+     or has_column_privilege('public', 'public.profiles', 'is_admin', 'INSERT') then
+    raise exception '会員などが profiles.is_admin を変更できる権限を持っています。AIMUSE側の権限を確認してください。中止しました。';
   end if;
+  -- AIMUSE側の二重の保護（管理者フラグの変更を拒否するトリガー）が有効であること
+  if not exists (select 1 from pg_trigger g
+                 where g.tgrelid = 'public.profiles'::regclass and not g.tgisinternal
+                   and g.tgfoid = 'public.protect_profile_flags'::regproc and g.tgenabled <> 'D'
+                   and (g.tgtype & 1) = 1 and (g.tgtype & 2) = 2 and (g.tgtype & 16) = 16) then
+    raise exception 'profiles の保護トリガー（protect_profile_flags）が見つからないか無効です。中止しました。';
+  end if;
+  -- (3-2) 実際の動作で確認（読み取りのみ）：AIMUSE の通常の会員として is_admin() を呼び、結果を確かめる
+  --     ・未ログイン → false ／ 存在しない会員 → false
+  --     ・登録済みの全会員（最大5000人）→ profiles.is_admin と同じ値（管理者だけ true）
+  --     ・管理者が1人以上いる
+  select coalesce(array_agg(p.id order by p.id), '{}'), coalesce(array_agg(p.is_admin order by p.id), '{}')
+    into v_ids, v_flags
+  from (select id, is_admin from public.profiles order by id limit 5000) p;
+  if not (true = any(v_flags)) then
+    raise exception '管理者（profiles.is_admin = true）が1人もいません。中止しました。';
+  end if;
+  begin
+    execute 'set local role anon';
+    perform set_config('request.jwt.claims', '{"role":"anon"}', true);
+    perform set_config('request.jwt.claim.sub', '', true);
+    if public.is_admin() then raise exception using errcode = 'BST02', message = '未ログインで is_admin() が true'; end if;
+    execute 'set local role authenticated';
+    perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'sub', gen_random_uuid())::text, true);
+    perform set_config('request.jwt.claim.sub', current_setting('request.jwt.claims')::json ->> 'sub', true);
+    if public.is_admin() then raise exception using errcode = 'BST02', message = '存在しない会員で is_admin() が true'; end if;
+    for v_i in 1 .. coalesce(array_length(v_ids, 1), 0) loop
+      perform set_config('request.jwt.claims', json_build_object('role', 'authenticated', 'sub', v_ids[v_i])::text, true);
+      perform set_config('request.jwt.claim.sub', v_ids[v_i]::text, true);
+      v_got := public.is_admin();
+      if v_got is distinct from v_flags[v_i] then
+        raise exception using errcode = 'BST02', message = '会員 ' || v_ids[v_i] || ' の is_admin() が ' || coalesce(v_got::text, 'null') || '（profiles では ' || v_flags[v_i] || '）';
+      end if;
+    end loop;
+    execute 'reset role';
+    perform set_config('request.jwt.claims', '', true);
+    perform set_config('request.jwt.claim.sub', '', true);
+  exception
+    when sqlstate 'BST02' then
+      raise exception 'is_admin() の動作確認で問題が見つかりました（%）。中止しました。', sqlerrm;
+    when insufficient_privilege then
+      raise exception 'is_admin() の動作確認ができませんでした（実行者 % が会員の立場に切り替えられません：%）。中止しました。', current_user, sqlerrm;
+  end;
   if not exists (select 1 from information_schema.columns
                  where table_schema = 'public' and table_name = 'tracks' and column_name = 'status') then
     raise exception 'tracks.status がありません。中止しました。';
@@ -297,8 +353,11 @@ begin
   returns trigger language plpgsql set search_path = '' as $fn$
   begin
     new.updated_at := now();
-    if tg_op = 'UPDATE' then
-      new.created_by := old.created_by;   -- 作成者は変更不可
+    if tg_op = 'INSERT' then
+      new.created_by := auth.uid();       -- 作成者は保存した本人（送られてきた値は使わない）
+      new.created_at := now();
+    else
+      new.created_by := old.created_by;   -- 作成者・作成日時は変更不可
       new.created_at := old.created_at;
     end if;
     -- 宣伝の対象は公開中の楽曲だけ（新しく作るとき・楽曲を付け替えるときに確認。
@@ -323,8 +382,8 @@ begin
   create trigger boost_posts_touch before insert or update on public.boost_posts
     for each row execute function public.boost_posts_touch();
 
-  -- 宣伝リンクの作成：公開中の楽曲だけ。曲名・アーティスト名はアプリから送られた値ではなく、
-  -- AIMUSEの楽曲データから自動で入れる（表示と実際の曲がずれないようにする）
+  -- 宣伝リンクの作成：公開中の楽曲だけ。曲名・アーティスト名・作成者・作成日時はアプリから送られた値ではなく、
+  -- AIMUSEの楽曲データとログイン情報から自動で入れる（表示と実際の曲がずれない・他人になりすませない）
   -- ※ 作成者（管理者）の権限で動く。管理者は AIMUSE の全楽曲を読めるため、特別な権限は不要
   create or replace function public.boost_links_guard()
   returns trigger language plpgsql set search_path = '' as $fn$
@@ -337,6 +396,8 @@ begin
     end if;
     new.track_title := left(v_title, 200);
     new.artist := left(v_artist, 200);
+    new.created_by := auth.uid();         -- 作成者は作成した本人（送られてきた値は使わない）
+    new.created_at := now();
     return new;
   end $fn$;
 
@@ -436,10 +497,7 @@ begin
     exception when sqlstate 'BST01' then
       return false;   -- 上限到達：このブロックの変更はすべて取り消し済み
     end;
-    -- 1分に1回だけ（その分の最初の記録のとき）、2日より古いカウンターを片付ける
-    if minute_total = 1 then
-      delete from public.boost_rate_counters where bucket < now() - interval '2 days';
-    end if;
+    -- 古いカウンターの片付けはここでは行わない（クリック処理を常に軽く保つため。15. の関数で別に行う）
     return true;
   end $fn$;
 
@@ -506,6 +564,33 @@ begin
   end $fn$;
 
   -- ===================================================================
+  -- 13-2. 古いカウンターの片付け（クリック処理とは別。管理者のみ）
+  --     ・2日より前の行だけを、古い順に最大 p_limit 件（初期5000件・上限20000件）ずつ削除する
+  --     ・削除するのは過去の行だけなので、いま記録中の行（今日・この1分）とぶつからない。
+  --       他の処理が使用中の行は飛ばす（待たない）
+  --     ・BOOSTアプリを管理者が開いたときに自動で呼ばれる。カウンターの行は記録の上限により
+  --       1日あたり最大約2.2万行なので、しばらく開かなくても大きくはならない
+  -- ===================================================================
+  create or replace function public.boost_cleanup_counters(p_limit integer default 5000)
+  returns integer
+  language plpgsql security definer set search_path = ''
+  as $fn$
+  declare v_count integer;
+  begin
+    if not public.is_admin() then raise exception '管理者のみ利用できます'; end if;
+    with old as (
+      select c.ctid from public.boost_rate_counters c
+      where c.bucket < now() - interval '2 days'
+      order by c.bucket
+      limit greatest(1, least(coalesce(p_limit, 5000), 20000))
+      for update skip locked
+    )
+    delete from public.boost_rate_counters r using old where r.ctid = old.ctid;
+    get diagnostics v_count = row_count;
+    return v_count;
+  end $fn$;
+
+  -- ===================================================================
   -- 14. 以前の版（r3・r4）の内部関数の扱い
   --     ・本番に存在しなければ何もしない（初めて実行する場合はこちら）
   --     ・存在する場合は削除せず、「何もしない（常に false）」関数に置き換えて誰も実行できなくする
@@ -540,6 +625,8 @@ begin
   revoke all on function public.boost_resolve_link(text, boolean) from public, anon, authenticated;
   revoke all on function public.boost_record_listen(uuid, text) from public, anon, authenticated;
   revoke all on function public.boost_ai_take_quota() from public, anon, authenticated;
+  revoke all on function public.boost_cleanup_counters(integer) from public, anon, authenticated;
+  grant execute on function public.boost_cleanup_counters(integer) to authenticated;
   grant execute on function public.boost_resolve_link(text, boolean) to anon, authenticated;
   grant execute on function public.boost_record_listen(uuid, text) to anon, authenticated;
   grant execute on function public.boost_ai_take_quota() to authenticated;
@@ -559,7 +646,8 @@ begin
     ('public.boost_ai_take_quota()',                           false, true),
     ('public.boost_record_click(text,uuid,uuid,text,text)',    false, false),
     ('public.boost_posts_touch()',                             false, false),
-    ('public.boost_links_guard()',                             false, false)),
+    ('public.boost_links_guard()',                             false, false),
+    ('public.boost_cleanup_counters(integer)',                false, true)),
   checks as (
     select 1 as ord, 'RLS（有効/強制）' as 区分, t.name as 対象,
            coalesce((select c.relrowsecurity::text || '/' || c.relforcerowsecurity::text from pg_class c
@@ -636,6 +724,37 @@ begin
     where n.nspname = 'public' and p.proname like 'boost\_%'
       and p.proname not in ('boost_click_allowed', 'boost_click_gate', 'boost_take_slot')
       and p.oid not in (select to_regprocedure(sig) from fn where to_regprocedure(sig) is not null)
+    union all
+    -- トリガーが正しいテーブルで有効になっていること（公開曲のみ・作成者の自動設定を担う）
+    select 11, 'トリガーが有効', tg.name,
+           case when exists (select 1 from pg_trigger g where g.tgname = tg.name and g.tgrelid = to_regclass(tg.rel)
+                               and g.tgfoid = to_regproc(tg.func) and g.tgenabled = 'O' and not g.tgisinternal) then '有効' else '無効または無し' end,
+           '有効'
+    from (values ('boost_links_guard', 'public.boost_links', 'public.boost_links_guard'),
+                 ('boost_posts_touch', 'public.boost_posts', 'public.boost_posts_touch')) tg(name, rel, func)
+    union all
+    -- AIMUSE本体の保護（読み取りのみ。BOOSTの管理者判定がこれに依存する）
+    select 12, 'AIMUSE：is_admin() の定義', 'public.is_admin()',
+           case when (select md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) = '065dbcd2c17f6a4da4ba7cc6b24dad9e'
+                             and p.prosecdef and 'search_path=""' = any(p.proconfig)
+                      from pg_proc p where p.oid = to_regprocedure('public.is_admin()')) then '構築SQLと一致' else '不一致' end,
+           '構築SQLと一致'
+    union all
+    select 12, 'AIMUSE：is_admin の変更権限', r.role,
+           case when has_column_privilege(r.role, 'public.profiles', 'is_admin', 'UPDATE')
+                  or has_column_privilege(r.role, 'public.profiles', 'is_admin', 'INSERT') then 'あり' else 'なし' end,
+           'なし'
+    from (values ('anon'), ('authenticated'), ('public')) r(role)
+    union all
+    select 12, 'AIMUSE：管理者フラグ保護トリガー', 'profiles_protect_flags',
+           case when exists (select 1 from pg_trigger g where g.tgrelid = 'public.profiles'::regclass and not g.tgisinternal
+                               and g.tgfoid = to_regproc('public.protect_profile_flags') and g.tgenabled <> 'D'
+                               and (g.tgtype & 19) = 19) then '有効' else '無効または無し' end,
+           '有効'
+    union all
+    select 12, 'AIMUSE：管理者の人数', 'profiles.is_admin = true',
+           case when (select count(*) from public.profiles where is_admin) >= 1 then '1人以上' else '0人' end,
+           '1人以上'
   ),
   judged as (
     select ord, 区分, 対象, 状態, 期待, case when 状態 = 期待 then 'OK' else 'NG' end as 判定 from checks
@@ -649,7 +768,7 @@ begin
     raise exception 'BOOSTの必須確認でNGが % 件あったため、すべての変更を取り消しました（データベースは実行前のままです）：%', v_ng, v_detail;
   end if;
 
-  raise notice 'AIMUSE BOOST r8：設定が完了し、必須確認 % 項目すべて OK でした。', v_total;
+  raise notice 'AIMUSE BOOST r9：設定が完了し、必須確認 % 項目すべて OK でした。', v_total;
 end
 $boost$;
 
@@ -664,6 +783,7 @@ $boost$;
 --   ・関数ごとに、未ログイン・ログイン会員・全員（PUBLIC）が実行できるかが想定どおりか
 --   ・SECURITY DEFINER 関数の search_path が固定されているか
 --   ・関数とテーブルの所有者が同じか／旧版の関数が残っていれば無効化済みか／想定外のBOOST関数がないか
+--   ・BOOSTのトリガーが有効か／AIMUSE本体の管理者判定と管理者フラグの保護が想定どおりか
 -- =====================================================================
 -- [CHECK-BEGIN]
 with
@@ -675,7 +795,8 @@ fn(sig, anon_ok, auth_ok) as (values
   ('public.boost_ai_take_quota()',                           false, true),
   ('public.boost_record_click(text,uuid,uuid,text,text)',    false, false),
   ('public.boost_posts_touch()',                             false, false),
-  ('public.boost_links_guard()',                             false, false)),
+  ('public.boost_links_guard()',                             false, false),
+  ('public.boost_cleanup_counters(integer)',                false, true)),
 checks as (
   select 1 as ord, 'RLS（有効/強制）' as 区分, t.name as 対象,
          coalesce((select c.relrowsecurity::text || '/' || c.relforcerowsecurity::text from pg_class c
@@ -752,6 +873,37 @@ checks as (
   where n.nspname = 'public' and p.proname like 'boost\_%'
     and p.proname not in ('boost_click_allowed', 'boost_click_gate', 'boost_take_slot')
     and p.oid not in (select to_regprocedure(sig) from fn where to_regprocedure(sig) is not null)
+  union all
+  -- トリガーが正しいテーブルで有効になっていること（公開曲のみ・作成者の自動設定を担う）
+  select 11, 'トリガーが有効', tg.name,
+         case when exists (select 1 from pg_trigger g where g.tgname = tg.name and g.tgrelid = to_regclass(tg.rel)
+                             and g.tgfoid = to_regproc(tg.func) and g.tgenabled = 'O' and not g.tgisinternal) then '有効' else '無効または無し' end,
+         '有効'
+  from (values ('boost_links_guard', 'public.boost_links', 'public.boost_links_guard'),
+               ('boost_posts_touch', 'public.boost_posts', 'public.boost_posts_touch')) tg(name, rel, func)
+  union all
+  -- AIMUSE本体の保護（読み取りのみ。BOOSTの管理者判定がこれに依存する）
+  select 12, 'AIMUSE：is_admin() の定義', 'public.is_admin()',
+         case when (select md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) = '065dbcd2c17f6a4da4ba7cc6b24dad9e'
+                           and p.prosecdef and 'search_path=""' = any(p.proconfig)
+                    from pg_proc p where p.oid = to_regprocedure('public.is_admin()')) then '構築SQLと一致' else '不一致' end,
+         '構築SQLと一致'
+  union all
+  select 12, 'AIMUSE：is_admin の変更権限', r.role,
+         case when has_column_privilege(r.role, 'public.profiles', 'is_admin', 'UPDATE')
+                or has_column_privilege(r.role, 'public.profiles', 'is_admin', 'INSERT') then 'あり' else 'なし' end,
+         'なし'
+  from (values ('anon'), ('authenticated'), ('public')) r(role)
+  union all
+  select 12, 'AIMUSE：管理者フラグ保護トリガー', 'profiles_protect_flags',
+         case when exists (select 1 from pg_trigger g where g.tgrelid = 'public.profiles'::regclass and not g.tgisinternal
+                             and g.tgfoid = to_regproc('public.protect_profile_flags') and g.tgenabled <> 'D'
+                             and (g.tgtype & 19) = 19) then '有効' else '無効または無し' end,
+         '有効'
+  union all
+  select 12, 'AIMUSE：管理者の人数', 'profiles.is_admin = true',
+         case when (select count(*) from public.profiles where is_admin) >= 1 then '1人以上' else '0人' end,
+         '1人以上'
 ),
 judged as (
   select ord, 区分, 対象, 状態, 期待, case when 状態 = 期待 then 'OK' else 'NG' end as 判定 from checks

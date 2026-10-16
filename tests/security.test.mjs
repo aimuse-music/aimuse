@@ -290,3 +290,16 @@ test("追加SQL：既存テーブルの変更・削除をしない／全BOOSTテ
   assert.equal(blocks[0], blocks[1], "DO内の必須確認と一覧表示の確認内容が一致しません");
   assert.ok(raw.split("$boost$")[1].includes("[CHECK-BEGIN]") && /if v_ng > 0 then\s+raise exception/.test(raw.split("$boost$")[1]), "必須確認がDOブロック内にありません");
 });
+test("AIMUSE本番の読み取り専用チェック：最初に読み取り専用へ切り替え、変更命令を含まない", () => {
+  const s = readFileSync(join(root, "supabase/boost_precheck_readonly.sql"), "utf8").replace(/--.*$/gm, "");
+  const body = s.split("$chk$")[1];
+  assert.ok(/^\s*declare[\s\S]*?begin\s+set transaction read only;/.test(body), "冒頭で読み取り専用にしていません");
+  assert.ok(!/\b(insert\s+into|update\s+public|delete\s+from|create\s+(table|function|policy|trigger|index)|alter\s+(table|function|role)|grant\s|revoke\s|drop\s|truncate)\b/i.test(s), "変更命令が含まれています");
+});
+test("アプリは管理者として開いたときだけ古いカウンターを片付ける（クリック処理では行わない）", () => {
+  const html = readFileSync(join(root, "public/index.html"), "utf8");
+  assert.ok(/if \(DB_READY\)[^\n]*boost_cleanup_counters/.test(html));
+  const sql = readFileSync(join(root, "supabase/boost_schema.sql"), "utf8");
+  const click = sql.slice(sql.indexOf("function public.boost_record_click("), sql.indexOf("function public.boost_resolve_link("));
+  assert.ok(!/delete\s+from/i.test(click), "クリック処理の中に削除があります");
+});

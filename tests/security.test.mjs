@@ -290,24 +290,21 @@ test("追加SQL：既存テーブルの変更・削除をしない／全BOOSTテ
   assert.equal(blocks[0], blocks[1], "DO内の必須確認と一覧表示の確認内容が一致しません");
   assert.ok(raw.split("$boost$")[1].includes("[CHECK-BEGIN]") && /if v_ng > 0 then\s+raise exception/.test(raw.split("$boost$")[1]), "必須確認がDOブロック内にありません");
 });
-test("AIMUSE本番の読み取り専用チェック：1つの文で完結・最初に読み取り専用・必ずエラーで終わる・変更命令なし", () => {
+test("AIMUSE本番の読み取り専用チェック：SELECT文1つだけ・変更命令なし・定義が一致した場合だけ is_admin() を呼ぶ", () => {
   const raw = readFileSync(join(root, "supabase/boost_precheck_readonly.sql"), "utf8");
-  const s = raw.replace(/--.*$/gm, "");
-  const parts = s.split("$chk$");
-  assert.equal(parts.length, 3, "DOブロックが1つではありません");
-  assert.ok(/^\s*do\s*$/i.test(parts[0]), "DOブロックの前に別の命令があります");
-  assert.ok(/^;\s*$/.test(parts[2]), "DOブロックの後に別の命令があります（1つの文で完結していません）");
-  assert.ok(/^\s*declare[\s\S]*?\bbegin\s+set transaction read only;/.test(parts[1]), "最初の処理が読み取り専用への切り替えではありません");
-  assert.ok(/raise exception using\s+errcode = 'BST99'[\s\S]*\$?\s*end\s*$/.test(parts[1].trim()), "最後が結果付きのエラー終了になっていません");
-  assert.ok(!/\b(insert\s+into|update\s+public|delete\s+from|create\s+(table|function|policy|trigger|index)|alter\s+(table|function|role)|grant\s|revoke\s|drop\s|truncate|commit|rollback)\b/i.test(s), "変更命令や取引の確定・取消が含まれています");
-  // 役割の切り替えは1回ごとに元へ戻す
-  const sets = (parts[1].match(/set local role/g) || []).length, resets = (parts[1].match(/reset role/g) || []).length;
-  assert.equal(sets, resets, "切り替えと戻す回数が一致しません");
-  // 必須項目の一覧と、実際に作る必須項目のキーが一致する
-  const req = parts[1].match(/v_required text\[\] := array\[([^\]]+)\]/)[1].match(/'([a-z_]+)'/g).map((x) => x.slice(1, -1));
-  const made = new Set([...parts[1].matchAll(/'k', '([a-z_]+)'[^;]*?'必須', true/g)].map((m) => m[1]));
-  for (const r of ["priv_anon", "priv_authenticated", "priv_public"]) made.add(r);
-  for (const k of req) assert.ok(made.has(k), "必須項目が作られていません: " + k);
+  const s = raw.replace(/--.*$/gm, "").trim();
+  assert.ok(/^with\b/i.test(s), "WITH ... SELECT の1文で始まっていません");
+  assert.equal((s.match(/;/g) || []).length, 1, "文が1つではありません");
+  assert.ok(s.endsWith(";"));
+  assert.ok(!/\b(do\s+\$|insert\s+into|update\s+public|delete\s+from|create\s|alter\s|grant\s|revoke\s|drop\s|truncate|set\s+(local\s+)?role|set\s+transaction|begin|commit|rollback)\b/i.test(s), "変更命令・取引操作・ロール切り替えが含まれています");
+  const calls = [...s.matchAll(/case when d\.is_admin_ok and s\.ready then public\.is_admin\(\) end/g)].length;
+  const all = [...s.matchAll(/public\.is_admin\(\)(?!'|\))/g)].length;
+  assert.equal(calls, 3, "is_admin() の呼び出しが定義確認で守られていません");
+  assert.equal((s.match(/then public\.is_admin\(\)/g) || []).length, 3, "定義確認なしの is_admin() 呼び出しがあります");
+  // 必須項目の数と総合判定の基準が一致
+  const required = (s.match(/^\s*select \d+, true,/gm) || []).length + 2; // 権限（3ロール分）の行は1つの select で3行になる
+  assert.ok(/count\(\*\) filter \(where 判定 = 'OK'\) = 13/.test(s));
+  assert.equal(required, 13, "必須項目の数が13ではありません");
 });
 test("アプリは管理者として開いたときだけ古いカウンターを片付ける（クリック処理では行わない）", () => {
   const html = readFileSync(join(root, "public/index.html"), "utf8");

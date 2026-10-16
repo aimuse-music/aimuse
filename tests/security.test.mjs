@@ -336,5 +336,13 @@ test("会員ごとの動作確認SQL：読み取り専用で始まり、変更�
   assert.ok(/array\[1,2,3,4,5,6,7,8,9,10,11,12\]/.test(s), "必須項目の番号の照合がありません");
   assert.ok(/'expect', 'postgres'/.test(s), "実行者の立場の確認がありません");
   assert.ok(/会員0人（確認できず）/.test(s), "会員0人のときの扱いがありません");
+  // 読み取り専用が確立できなければ、立場の切り替え・is_admin() の呼び出しより前に必ず中止する
+  const guard = s.search(/if v_start_ro is distinct from 'on' or current_setting\('transaction_read_only'\) is distinct from 'on' then\s+raise exception/);
+  assert.ok(guard > 0, "読み取り専用の確認と中止の処理がありません");
+  assert.ok(guard > s.indexOf("perform set_config('transaction_read_only', 'on', true);"), "中止の確認が読み取り専用の設定より前にあります");
+  for (const w of ["set local role", "public.is_admin()", "auth.uid()"]) {
+    const first = s.indexOf(w, s.indexOf("begin\n"));
+    assert.ok(first > guard, `中止の確認より前に「${w}」があります`);
+  }
   assert.equal((s.match(/'expect', '[^']+'\)/g) || []).length >= 6, true);
 });

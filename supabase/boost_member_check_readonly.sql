@@ -1,5 +1,5 @@
 -- =====================================================================
--- AIMUSE 本番の会員ごとの動作確認（読み取り専用）v3
+-- AIMUSE 本番の会員ごとの動作確認（読み取り専用）v4
 -- 読み取り専用チェック v5 の「次の手順」です。v5 で OK になってから使います。
 -- SQL Editor の「Role」は postgres のまま、全文を貼り付けて Run を1回押してください（一部だけ選んで実行しない）。
 --
@@ -10,7 +10,10 @@
 --
 -- 安全のための仕組み（読み取り専用を二重にかけます）
 -- ・1行目の SET TRANSACTION READ ONLY で、この取引を最初から読み取り専用にします
--- ・DO ブロックの最初でも、もう一度読み取り専用にします（1行目が効かない送り方でも、ここで必ずかかる）
+-- ・DO ブロックの最初でも、もう一度読み取り専用にします
+-- ・そのうえで「1行目が効いていること」と「DOブロック内でも読み取り専用であること」の両方を確かめ、
+--   どちらかでも確かめられなければ、立場の切り替えや is_admin() の呼び出しを一切行わずに、エラーで中止します
+--   （1行目と DO ブロックが別々の取引で実行された場合も、ここで中止になります）
 -- ・一度読み取り専用になった取引は、データベースの仕様で途中から書き込み可能に戻せません。
 --   データの追加・変更・削除、テーブル・関数・権限の変更は、データベース自身が拒否します
 -- ・立場の切り替え（SET LOCAL ROLE）とログイン情報の設定（set_config）は、この取引の中だけで有効です。
@@ -41,7 +44,18 @@ declare
   v_txt text;
 begin
   -- 0. 二重目の読み取り専用（これ以降、この取引では書き込みが一切できない）
+  --    set_config が失敗した場合はここでエラーになり、以降の処理には進まない
   perform set_config('transaction_read_only', 'on', true);
+
+  -- 0-2. 読み取り専用が確立できていなければ、ここで中止する（立場の切り替え・is_admin() の呼び出しより前）
+  --      ・1行目（SET TRANSACTION READ ONLY）がこの取引に効いていない（＝1行目と別の取引で実行されている）
+  --      ・DO ブロック内の読み取り専用が有効になっていない
+  if v_start_ro is distinct from 'on' or current_setting('transaction_read_only') is distinct from 'on' then
+    raise exception using errcode = 'BST03',
+      message = 'NG：読み取り専用が確立できないため中止しました（会員の確認は行っていません。何も変更していません）',
+      detail = '1行目の時点：' || coalesce(v_start_ro, 'null') || ' ／ DOブロック内：' || coalesce(current_setting('transaction_read_only'), 'null'),
+      hint = '全文を貼り付けて、Run を1回だけ押してください（一部だけ選んで実行しないでください）。';
+  end if;
 
   v_res := v_res || jsonb_build_object('ord', 1, 'item', '取引の最初から読み取り専用（1行目が有効）',
              'result', case when v_start_ro = 'on' then 'はい' else 'いいえ' end, 'expect', 'はい');

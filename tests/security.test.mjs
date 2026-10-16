@@ -272,8 +272,15 @@ test("追加SQL：既存テーブルの変更・削除をしない／全BOOSTテ
   assert.ok(!/(alter|drop)\s+(table|policy)[^;]*\b(public\.)?(profiles|tracks|plays|favorites|follows|reviews|reports)\b/i.test(s), "既存テーブルを変更している");
   assert.ok(!/\b(update|delete\s+from|insert\s+into)\s+(public\.)?(profiles|tracks)\b/i.test(s), "既存データを変更している");
   const tables = [...s.matchAll(/create table if not exists public\.(\w+)/g)].map((m) => m[1]);
+  const rlsLoop = s.match(/foreach v_tbl in array array\[([^\]]+)\] loop\s+execute format\('alter table public\.%I enable row level security'/);
+  assert.ok(rlsLoop, "RLS有効化の処理が見つかりません");
+  const rlsTables = rlsLoop[1].match(/boost_\w+/g);
   for (const t of tables) {
     assert.ok(t.startsWith("boost_"), t);
-    assert.ok(new RegExp(`alter table public\\.${t}\\s+enable row level security`).test(s), "RLSなし: " + t);
+    assert.ok(rlsTables.includes(t), "RLSなし: " + t);
   }
+  // 変更は1つのDOブロックの中で行う（途中で失敗すれば全体が取り消される）
+  const body = s.split("$boost$");
+  assert.equal(body.length, 3, "DOブロックが1つではありません");
+  assert.ok(!/create table|alter table|grant |revoke |create policy|drop /i.test(body[2]), "DOブロックの外に変更処理があります");
 });

@@ -30,7 +30,7 @@ AIMUSE 本体とは別のサイトとして公開し、データは AIMUSE と�
 - `lib/shared.js` … サーバー処理の共通部品
 - `supabase/boost_schema.sql` … BOOST 用の追加SQL（AIMUSE の既存テーブルは変更しない）
 - `supabase/boost_precheck_readonly.sql` … 追加SQLの前に本番で実行する読み取り専用チェック（AIMUSEの管理者判定と、会員が自分を管理者にできないことを定義・権限・動作で確認。純粋なSELECT文1つだけ。ログイン情報の変更もAIMUSEの関数の実行もしない。結果は通常の表）
-- `supabase/boost_member_check_readonly.sql` … v5 の次に本番で実行する「会員ごとの動作確認」（読み取り専用）。最初に取引を読み取り専用に切り替え、会員・未ログインの立場で is_admin() を実際に呼んで profiles.is_admin と一致するかを確かめる。立場の切り替え・ログイン情報の設定はその取引の中だけ。確認結果が得られなければ必ず NG と表示
+- `supabase/boost_member_check_readonly.sql` … v5 の次に本番で実行する「会員ごとの動作確認」（読み取り専用・v2）。最初に取引を読み取り専用に切り替え、会員・未ログインの立場で is_admin() を実際に呼んで profiles.is_admin と一致するかを確かめる。立場の切り替え・ログイン情報の設定はその取引の中だけ。DOブロックと表示が同じ取引・同じ接続で実行されたこと、実行前の立場とログイン情報に戻ったことも表示側で確認し、確かめられなければ必ず NG と表示
 - `tests/security.test.mjs` … 自動セキュリティテスト（本番データには触れない。`node --test tests/security.test.mjs`）
 
 ## 読み取り専用モード（追加SQLを実行する前の状態）

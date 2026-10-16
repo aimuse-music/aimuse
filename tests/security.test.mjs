@@ -331,6 +331,6 @@ test("会員ごとの動作確認SQL：読み取り専用で始まり、変更�
   assert.ok(!/set_config\([^)]*,\s*false\)/.test(s), "取引の外まで残る設定があります");
   assert.ok(!/\bset\s+role\b/i.test(s.replace(/set local role/gi, "")), "取引の外まで残る立場の切り替えがあります");
   assert.ok(/when \(select j from raw\) is null then 'NG'/.test(s), "確認結果がないときにNGになりません");
-  assert.ok(/count\(\*\) filter \(where 判定 = 'OK'\) = 6/.test(s));
+  assert.ok(/count\(\*\) filter \(where 判定 = 'OK'\) = 10/.test(s));
   assert.equal((s.match(/'expect', '[^']+'\)/g) || []).length >= 6, true);
 });

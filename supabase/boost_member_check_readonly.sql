@@ -1,5 +1,5 @@
 -- =====================================================================
--- AIMUSE 本番の会員ごとの動作確認（読み取り専用）v1
+-- AIMUSE 本番の会員ごとの動作確認（読み取り専用）v2
 -- 読み取り専用チェック v5 の「次の手順」です。v5 で OK になってから使います。
 --
 -- 何をするか
@@ -12,9 +12,12 @@
 --   データベース自身が拒否します（AIMUSE の関数がもし書き込もうとしてもエラーになり、何も変わりません）
 -- ・立場の切り替え（SET LOCAL ROLE）とログイン情報の設定（set_config）は、すべてこの取引の中だけで有効です。
 --   取引が終わると自動で元に戻ります
+--   例外が起きた場合も、その部分の切り替えはデータベースが自動で取り消します。さらに各確認の後で、
+--   実行前と同じ立場・同じログイン情報に明示的に戻し、戻ったことを最後の表で確認します
 -- ・確認は DO ブロックの中で1つずつ順番に行います（1つの SELECT の中で評価順に頼ることはしません）
--- ・結果は最後の SELECT で通常の表として表示します。DO ブロックが同じ取引で実行されなかった場合や、
---   途中で想定外のエラーが起きた場合は、必ず「NG」と表示します（OK と誤表示しません）
+-- ・結果は最後の SELECT で通常の表として表示します。最後の SELECT は「DO ブロックと同じ取引・同じ接続で
+--   実行されたこと」を自分で確かめ、確かめられなければ NG にします。途中で想定外のエラーが起きた場合も
+--   必ず「NG」と表示します（OK と誤表示しません）
 -- ・会員の個人情報は表示しません（不一致があった場合だけ、その会員IDを表示します）
 -- =====================================================================
 
@@ -29,14 +32,23 @@ declare
   v_bad text[] := '{}';
   v_uid uuid;
   v_txt text;
+  v_role text := current_user;                                              -- 実行前の立場（最後にここへ戻す）
+  v_claims text := coalesce(current_setting('request.jwt.claims', true), '');  -- 実行前のログイン情報（同上）
+  v_sub text := coalesce(current_setting('request.jwt.claim.sub', true), '');
 begin
   -- 0. ここから先は読み取り専用（この取引の中で書き込みは一切できない）
   perform set_config('transaction_read_only', 'on', true);
   v_res := v_res || jsonb_build_object('ord', 1, 'item', 'この確認が読み取り専用で実行されている',
              'result', case when current_setting('transaction_read_only') = 'on' then 'はい' else 'いいえ' end, 'expect', 'はい');
 
+  v_res := v_res || jsonb_build_object('ord', 2, 'item', 'is_admin() の本体が v5 で確認したもの（AIMUSE構築SQL）と同じ',
+             'result', coalesce((select case when md5(btrim(regexp_replace(p.prosrc, '\s+', ' ', 'g'))) = '065dbcd2c17f6a4da4ba7cc6b24dad9e'
+                                            then '同じ' else '異なる' end
+                                 from pg_proc p where p.oid = to_regprocedure('public.is_admin()')), '関数なし'),
+             'expect', '同じ');
+
   if to_regclass('public.profiles') is null or to_regprocedure('public.is_admin()') is null then
-    v_res := v_res || jsonb_build_object('ord', 2, 'item', 'AIMUSE の profiles と is_admin() がある', 'result', 'ない', 'expect', 'ある');
+    v_res := v_res || jsonb_build_object('ord', 2.5, 'item', 'AIMUSE の profiles と is_admin() がある', 'result', 'ない', 'expect', 'ある');
   else
     select count(*) into v_total from public.profiles;
     select coalesce(array_agg(p.id order by p.id), '{}'), coalesce(array_agg(p.is_admin order by p.id), '{}')
@@ -51,7 +63,7 @@ begin
       v_got := public.is_admin();
       v_res := v_res || jsonb_build_object('ord', 3, 'item', '未ログインで is_admin()',
                  'result', coalesce(v_got::text, 'null'), 'expect', 'false');
-      execute 'reset role';
+      execute format('set local role %I', v_role);
     exception when others then
       v_res := v_res || jsonb_build_object('ord', 3, 'item', '未ログインで is_admin()', 'result', 'エラー：' || sqlerrm, 'expect', 'false');
     end;
@@ -65,7 +77,7 @@ begin
       v_got := public.is_admin();
       v_res := v_res || jsonb_build_object('ord', 4, 'item', '存在しない会員で is_admin()',
                  'result', coalesce(v_got::text, 'null'), 'expect', 'false');
-      execute 'reset role';
+      execute format('set local role %I', v_role);
     exception when others then
       v_res := v_res || jsonb_build_object('ord', 4, 'item', '存在しない会員で is_admin()', 'result', 'エラー：' || sqlerrm, 'expect', 'false');
     end;
@@ -81,7 +93,7 @@ begin
           v_bad := v_bad || (v_ids[v_i]::text || '=' || coalesce(v_got::text, 'null'));
         end if;
       end loop;
-      execute 'reset role';
+      execute format('set local role %I', v_role);
       v_res := v_res || jsonb_build_object('ord', 5, 'item', '登録会員 ' || coalesce(array_length(v_ids, 1), 0) || '人の is_admin() が profiles と一致',
                  'result', case when cardinality(v_bad) = 0 then '全員一致'
                                 else '不一致 ' || cardinality(v_bad) || '人：' || array_to_string(v_bad[1:10], ', ') end,
@@ -98,7 +110,7 @@ begin
       execute 'set local role authenticated';
       v_res := v_res || jsonb_build_object('ord', 7, 'item', '追加SQL r9 と同じ立場の切り替え（anon → authenticated）',
                  'result', case when current_user = 'authenticated' then 'できる' else 'できない' end, 'expect', 'できる');
-      execute 'reset role';
+      execute format('set local role %I', v_role);
     exception when others then
       v_res := v_res || jsonb_build_object('ord', 7, 'item', '追加SQL r9 と同じ立場の切り替え（anon → authenticated）', 'result', 'エラー：' || sqlerrm, 'expect', 'できる');
     end;
@@ -117,16 +129,25 @@ begin
     exception when others then
       v_res := v_res || jsonb_build_object('ord', 90, 'item', 'auth.uid() の読み取り元', 'result', 'エラー：' || sqlerrm, 'expect', null);
     end;
-    perform set_config('request.jwt.claims', '', true);
-    perform set_config('request.jwt.claim.sub', '', true);
+    perform set_config('request.jwt.claims', v_claims, true);
+    perform set_config('request.jwt.claim.sub', v_sub, true);
     v_res := v_res || jsonb_build_object('ord', 91, 'item', '会員数（確認したのは最大5000人）', 'result', v_total || '人', 'expect', null);
   end if;
 
   v_res := v_res || jsonb_build_object('ord', 92, 'item', '実行日時・実行者・PostgreSQL',
              'result', to_char(now() at time zone 'Asia/Tokyo', 'YYYY-MM-DD HH24:MI:SS') || ' ／ ' || session_user || ' ／ ' || current_setting('server_version'),
              'expect', null);
-  -- 結果は、この取引の中だけで有効な設定に入れて、下の SELECT で表示する
-  perform set_config('boost.member_check', v_res::text, true);
+  -- 念のため、実行前の立場・ログイン情報に戻す（例外で途中終了した部分は、データベースが自動で戻している）
+  execute format('set local role %I', v_role);
+  perform set_config('request.jwt.claims', v_claims, true);
+  perform set_config('request.jwt.claim.sub', v_sub, true);
+  -- 結果は、この取引の中だけで有効な設定に入れて、下の SELECT で表示する。
+  -- 同じ取引・同じ接続で表示されたかを確かめるため、取引の開始時刻・接続番号・実行前の状態も一緒に入れる
+  perform set_config('boost.member_check', jsonb_build_object(
+    'items', v_res,
+    'xact', extract(epoch from transaction_timestamp())::text,
+    'pid', pg_backend_pid(),
+    'role', v_role, 'claims', v_claims, 'sub', v_sub)::text, true);
 end
 $chk$;
 
@@ -134,8 +155,25 @@ $chk$;
 with
 raw as (select nullif(current_setting('boost.member_check', true), '')::jsonb as j),
 items as (
-  select (e ->> 'ord')::int as ord, e ->> 'item' as 項目, e ->> 'result' as 結果, e ->> 'expect' as 期待
-  from raw, jsonb_array_elements(coalesce(raw.j, '[]'::jsonb)) e
+  select (e ->> 'ord')::numeric as ord, e ->> 'item' as 項目, e ->> 'result' as 結果, e ->> 'expect' as 期待
+  from raw, jsonb_array_elements(coalesce(raw.j -> 'items', '[]'::jsonb)) e
+  union all
+  -- 表示する側（この SELECT）での確認
+  select 8, 'DOブロックと表示が同じ取引・同じ接続で実行された',
+         case when j is null then '確認結果なし'
+              when j ->> 'xact' = extract(epoch from transaction_timestamp())::text and (j ->> 'pid')::int = pg_backend_pid() then 'はい'
+              else 'いいえ' end, 'はい'
+  from raw
+  union all
+  select 9, '確認の後、実行者の立場とログイン情報が実行前と同じに戻っている',
+         case when j is null then '確認結果なし'
+              when current_user = j ->> 'role'
+               and coalesce(current_setting('request.jwt.claims', true), '') = j ->> 'claims'
+               and coalesce(current_setting('request.jwt.claim.sub', true), '') = j ->> 'sub' then 'はい'
+              else 'いいえ（現在：' || current_user || '）' end, 'はい'
+  from raw
+  union all
+  select 10, '表示の時点でも読み取り専用のまま', case when current_setting('transaction_read_only') = 'on' then 'はい' else 'いいえ' end, 'はい'
 ),
 judged as (
   select ord, 項目, 結果, 期待,
@@ -146,10 +184,10 @@ select 判定, 項目, 結果, 期待
 from (
   select 0 as grp, 0 as ord,
          case when (select j from raw) is null then 'NG'
-              when count(*) filter (where 判定 = 'NG') = 0 and count(*) filter (where 判定 = 'OK') = 6 then 'OK'
+              when count(*) filter (where 判定 = 'NG') = 0 and count(*) filter (where 判定 = 'OK') = 10 then 'OK'
               else 'NG' end as 判定,
          case when (select j from raw) is null then '総合判定：確認結果が見つかりません（全文を1回で実行してください）'
-              else '総合判定：必須6項目中 OK ' || count(*) filter (where 判定 = 'OK') || '・NG ' || count(*) filter (where 判定 = 'NG') end as 項目,
+              else '総合判定：必須10項目中 OK ' || count(*) filter (where 判定 = 'OK') || '・NG ' || count(*) filter (where 判定 = 'NG') end as 項目,
          null as 結果, null as 期待
   from judged
   union all

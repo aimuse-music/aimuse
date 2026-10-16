@@ -1,5 +1,5 @@
 -- =====================================================================
--- AIMUSE BOOST 追加SQL（Ver.0.1 r2）
+-- AIMUSE BOOST 追加SQL（Ver.0.2 r3）
 -- AIMUSE と同じ Supabase プロジェクトの SQL Editor に全文を貼り付けて、1回実行してください。
 --
 -- ・AIMUSE の既存テーブル（profiles / tracks など）は一切変更・削除しません
@@ -224,6 +224,21 @@ create policy boost_logs_admin on public.boost_logs for all to authenticated
 
 
 -- =====================================================================
+-- 8-2. いたずら・大量アクセス対策（記録してよいかの判定。外部からは直接呼べない）
+--     ・全体で1分間に300件、1日（日本時間）に2万件を超えた分は記録しない
+--       （データベースの無料容量を使い切られないようにするため。移動そのものは止めない）
+-- =====================================================================
+create or replace function public.boost_click_allowed()
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select (select count(*) from public.boost_clicks c where c.clicked_at > now() - interval '1 minute') < 300
+     and (select count(*) from public.boost_clicks c
+          where c.clicked_at >= ((now() at time zone 'Asia/Tokyo')::date::timestamp at time zone 'Asia/Tokyo')) < 20000;
+$$;
+
+
+-- =====================================================================
 -- 9. 短縮リンクのクリック記録（/go/<code> から呼ばれる。ログイン不要）
 --    ・存在するリンクのクリックだけ記録し、移動先URLを返す
 --    ・いたずら対策：1リンクあたり1分間に60回を超えた分は記録しない
@@ -237,7 +252,7 @@ begin
   if p_code is null or p_code !~ '^[A-Za-z0-9]{6,12}$' then return null; end if;
   select * into l from public.boost_links where code = p_code;
   if not found then return null; end if;
-  if p_record and (select count(*) from public.boost_clicks c
+  if p_record and public.boost_click_allowed() and (select count(*) from public.boost_clicks c
                    where c.link_id = l.id and c.clicked_at > now() - interval '1 minute') < 60 then
     insert into public.boost_clicks (link_id, track_id, platform, kind) values (l.id, l.track_id, l.platform, 'link');
   end if;
@@ -260,7 +275,8 @@ begin
     return false;
   end if;
   if (select count(*) from public.boost_clicks c
-      where c.track_id = p_track and c.kind = 'listen' and c.clicked_at > now() - interval '1 minute') >= 60 then
+      where c.track_id = p_track and c.kind = 'listen' and c.clicked_at > now() - interval '1 minute') >= 60
+     or not public.boost_click_allowed() then
     return false;
   end if;
   insert into public.boost_clicks (link_id, track_id, platform, kind) values (null, p_track, plat, 'listen');
@@ -291,6 +307,7 @@ begin
 end $$;
 
 revoke all on function public.boost_posts_touch() from public, anon, authenticated;
+revoke all on function public.boost_click_allowed() from public, anon, authenticated;
 revoke all on function public.boost_resolve_link(text, boolean) from public, anon, authenticated;
 revoke all on function public.boost_ai_take_quota() from public, anon, authenticated;
 revoke all on function public.boost_record_listen(uuid, text) from public, anon, authenticated;

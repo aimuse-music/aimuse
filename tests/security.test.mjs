@@ -330,7 +330,11 @@ test("会員ごとの動作確認SQL：読み取り専用で始まり、変更�
   assert.ok(!/\b(insert\s+into|update\s+public|delete\s+from|create\s+(table|function|policy|role|or)|alter\s|grant\s|revoke\s|drop\s|truncate|commit|rollback)\b/i.test(s), "変更命令・取引操作が含まれています");
   assert.ok(!/set_config\([^)]*,\s*false\)/.test(s), "取引の外まで残る設定があります");
   assert.ok(!/\bset\s+role\b/i.test(s.replace(/set local role/gi, "")), "取引の外まで残る立場の切り替えがあります");
-  assert.ok(/when \(select j from raw\) is null then 'NG'/.test(s), "確認結果がないときにNGになりません");
-  assert.ok(/count\(\*\) filter \(where 判定 = 'OK'\) = 10/.test(s));
+  assert.ok(/select \(select j from raw\) is not null\s+and count/.test(s) && /case when t.ok then 'OK' else 'NG' end/.test(s), "確認結果がないときにNGになりません");
+  assert.ok(/^\s*set transaction read only;\s*do \$chk\$/.test(s), "1行目が SET TRANSACTION READ ONLY ではありません");
+  assert.ok(/count\(\*\) filter \(where 判定 = 'OK'\) = 12/.test(s));
+  assert.ok(/array\[1,2,3,4,5,6,7,8,9,10,11,12\]/.test(s), "必須項目の番号の照合がありません");
+  assert.ok(/'expect', 'postgres'/.test(s), "実行者の立場の確認がありません");
+  assert.ok(/会員0人（確認できず）/.test(s), "会員0人のときの扱いがありません");
   assert.equal((s.match(/'expect', '[^']+'\)/g) || []).length >= 6, true);
 });

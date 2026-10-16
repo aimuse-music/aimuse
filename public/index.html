@@ -220,6 +220,21 @@ button.stat{font:inherit;color:inherit;background:none;border:0;cursor:pointer;w
 .fl-listeners .link{text-decoration:underline;text-underline-offset:3px;color:var(--fg);font-size:12.5px;margin-left:4px}
 .fl-breakdown{margin:0 0 10px}
 
+/* onboarding（第3段階） */
+.welcome{position:relative;margin-top:14px;padding:18px 16px 16px;border-radius:18px;border:1px solid var(--line);background:linear-gradient(135deg,rgba(164,99,255,.16),rgba(90,114,255,.08)),var(--surface);display:flex;flex-direction:column;gap:8px}
+.welcome h2{font-size:19px;font-weight:900;padding-right:34px}
+.welcome .welcome-lead{font-size:15px;font-weight:700;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;width:fit-content}
+.welcome p{font-size:13.5px;line-height:1.7;color:var(--fg)}
+.welcome .welcome-sub{color:var(--muted);font-size:12.5px}
+.welcome .btn-row{margin-top:6px}
+.welcome-x{position:absolute;top:8px;right:8px}
+.guide-lead{font-size:14px;line-height:1.8;color:var(--muted);margin-top:4px}
+.guide{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:12px}
+.guide-step{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.guide-ic{width:40px;height:40px;border-radius:12px;margin:0;flex:none}
+.guide-step h2{font-size:15.5px;font-weight:900;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.guide-step p{font-size:13.5px;line-height:1.75;color:var(--muted);margin-top:4px}
+
 /* legal pages（利用規約・プライバシーポリシー・投稿ガイドライン） */
 .legal-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 16px;margin-top:18px}
 .legal-links .link{text-decoration:underline;text-underline-offset:3px;padding:4px 0}
@@ -406,7 +421,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-17.2";
+const BUILD = "2026-10-17.3";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -693,7 +708,7 @@ function SecHead({en,title,action,onAction}){
 
 /* ---------- HOME ---------- */
 function Home({ctx}){
-  const {songs,artistOf,play,favs,toggleFav,openArtist,artists,current,playing,setTab,repoMode,isAdmin} = ctx;
+  const {songs,artistOf,play,favs,toggleFav,openArtist,artists,current,playing,setTab,repoMode,isAdmin,showWelcome} = ctx;
   const [genre,setGenre] = useState(CONFIG.genres[0]);
   const featured = songs.slice(0,6);
   const fresh = [...songs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
@@ -709,6 +724,7 @@ function Home({ctx}){
       <button className="icon-btn" aria-label="検索" onClick=${()=>setTab("search")}><${Icon} n="search"/></button>
     </header>
     <div className="demo-note"><${Icon} n="info" size=${18}/><span>${repoMode==="unconfigured"?html`<b>接続設定が未完了です</b>　サーバーとの接続設定（config.js）が完了するまで、楽曲を表示できません。`:repoMode==="error"?html`<b>読み込みに失敗しました</b>　通信状態を確認して、ページを再読み込みしてください。`:html`<b>AIMUSE</b>　AIで制作された楽曲だけを集めた音楽配信サービスです。表示されるのは審査で承認された楽曲だけです。`}</span></div>
+    ${showWelcome && html`<${WelcomeCard} ctx=${ctx}/>`}
     ${songs.length===0&&html`<div className="home-empty">
       <span className="drop-ic"><${Icon} n="music" size=${26}/></span>
       <h2>${repoMode==="pending"?"読み込み中…":"公開中の楽曲はまだありません"}</h2>
@@ -1061,7 +1077,7 @@ function MyPage({ctx}){
       ${tab==="follow" && hiddenFollows>0 && html`<div className="fl-listeners"><${Icon} n="info" size=${18}/><span>ほか ${hiddenFollows}件は、現在公開中の曲がないアーティストです（フォローは残っています）。<button className="link" onClick=${()=>openFollowList({mine:true,mode:"following"})}>一覧で確認・解除する</button></span></div>`}
     </div>
     <button className="btn ghost" style=${{marginTop:28}} onClick=${signOut}>ログアウト</button>
-    <${LegalLinks} openLegal=${ctx.openLegal}/>
+    <${LegalLinks} openLegal=${ctx.openLegal} openGuide=${ctx.openGuide}/>
   </div>`;
 }
 
@@ -1284,7 +1300,7 @@ function AuthPanel({ctx}){
     <button className="btn primary" onClick=${go} disabled=${busy}>${busy?"処理中…":mode==="login"?"ログイン":mode==="signup"?"会員登録（無料）":"再設定メールを送る"}</button>
     ${mode==="login" && html`<button className="link" onClick=${()=>{setMode("reset");setErr(null)}}>パスワードを忘れた場合</button>`}
     ${mode==="reset" && html`<button className="link" onClick=${()=>{setMode("login");setErr(null)}}>ログインに戻る</button>`}
-    <${LegalLinks} openLegal=${ctx.openLegal}/>
+    <${LegalLinks} openLegal=${ctx.openLegal} openGuide=${ctx.openGuide}/>
   </div>`;
 }
 function NewPasswordPanel({ctx}){
@@ -1712,6 +1728,77 @@ function FollowList({ctx}){
   </div>`;
 }
 
+/* ---------- ONBOARDING（初めての方への案内・使い方：第3段階） ----------
+   ・ホームの案内は「ログインしていない」かつ「閉じていない」人だけに表示
+   ・閉じた／一度ログインした端末では、次から表示しない（端末内に記録。記録できない端末ではその間だけ非表示）
+   ・使い方ページはログイン不要。URL末尾 #guide で直接開ける */
+const WELCOME_KEY = "aimuse.welcome.dismissed";
+const welcomeStore = {
+  get(){ try{ return localStorage.getItem(WELCOME_KEY)==="1"; }catch(e){ return false; } },
+  set(){ try{ localStorage.setItem(WELCOME_KEY,"1"); }catch(e){} }
+};
+
+function WelcomeCard({ctx}){
+  const {openGuide,openSignup,dismissWelcome} = ctx;
+  return html`<section className="welcome" aria-labelledby="welcome-h">
+    <button className="icon-btn welcome-x" aria-label="案内を閉じる" onClick=${dismissWelcome}><${Icon} n="x" size=${18}/></button>
+    <h2 id="welcome-h">AIMUSEへようこそ！</h2>
+    <p className="welcome-lead">AI音楽を、もっと自由に。</p>
+    <p>音楽を聴くだけなら会員登録は不要。気になる曲をタップして、すぐに楽しめます。</p>
+    <p className="welcome-sub">楽曲を投稿するには無料会員登録が必要です。</p>
+    <div className="btn-row">
+      <button className="btn ghost sm" onClick=${openGuide}>使い方を見る</button>
+      <button className="btn primary sm" onClick=${openSignup}>無料で会員登録</button>
+    </div>
+  </section>`;
+}
+
+const GUIDE_STEPS = [
+  {ic:"music", h:"聴く", tag:"登録不要", body:[
+    "曲をタップすると、すぐに再生が始まります。",
+    "画面下のプレーヤーをタップすると、大きな再生画面が開きます。歌詞の表示、次の曲・前の曲、リピートができます。"]},
+  {ic:"search", h:"探す", tag:"登録不要", body:[
+    "「検索」から、曲名・アーティスト名で探せます。AI制作ツールやジャンルでも絞り込めます。",
+    "アーティスト名をタップすると、そのアーティストの曲やフォロワーを見られます。"]},
+  {ic:"heart", h:"お気に入り・フォロー", tag:"無料会員", body:[
+    "ハートを押すとお気に入りに、アーティストページの「フォローする」でフォローできます。",
+    "お気に入りとフォローは、マイページにまとまります。"]},
+  {ic:"plus", h:"投稿する", tag:"無料会員", body:[
+    "下の「投稿」から、AIで制作した楽曲を投稿できます。音源（MP3・WAV・M4A）とジャケット画像を選び、権利についての確認にチェックして申請します。",
+    "運営が内容を確認し、承認された曲だけが公開されます。審査の結果はマイページで確認できます。",
+    "投稿の前に「楽曲投稿・著作権ガイドライン」をお読みください。"]},
+  {ic:"user", h:"プロフィール", tag:"無料会員", body:[
+    "マイページの「プロフィールを編集」で、アイコン・背景画像・アーティスト名・自己紹介を設定できます。",
+    "他の人に表示されるのはアーティスト名などの公開情報だけです。メールアドレスや表示名は表示されません。"]},
+  {ic:"home", h:"ホーム画面に追加（おすすめ）", tag:null, body:[
+    "iPhone（Safari）：画面下の共有ボタン →「ホーム画面に追加」",
+    "Android（Chrome）：右上のメニュー →「ホーム画面に追加」",
+    "アプリのようにすぐ開けるようになります。"]}
+];
+
+function GuidePage({ctx}){
+  const {goBack,user,openSignup,openLegal} = ctx;
+  return html`<div className="screen">
+    <header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>使い方</h1></header>
+    <p className="guide-lead">AIMUSEは、AIで制作された楽曲を聴いて、投稿できる音楽サービスです。聴くだけなら会員登録はいりません。</p>
+    <ol className="guide">
+      ${GUIDE_STEPS.map((s,i)=>html`<li key=${i} className="guide-step">
+        <span className="drop-ic guide-ic" aria-hidden="true"><${Icon} n=${s.ic} size=${20}/></span>
+        <div style=${{minWidth:0}}>
+          <h2>${s.h}${s.tag && html`<span className=${"tag "+(s.tag==="登録不要"?"ok":"")}>${s.tag}</span>`}</h2>
+          ${s.body.map((b,j)=>html`<p key=${j}>${b}</p>`)}
+        </div>
+      </li>`)}
+    </ol>
+    ${!user && html`<div className="welcome" style=${{marginTop:20}}>
+      <h2>無料で会員登録</h2>
+      <p>投稿・お気に入り・フォローを使うには、メールアドレスで会員登録してください（無料）。</p>
+      <button className="btn primary" onClick=${openSignup}>会員登録へ進む</button>
+    </div>`}
+    <${LegalLinks} openLegal=${openLegal}/>
+  </div>`;
+}
+
 /* ---------- LEGAL（利用規約・プライバシーポリシー・投稿ガイドライン） ----------
    ・法律専門家による確認前の草案。【要確認：…】は公開前に確定させる項目（画面上で色付き表示）
    ・本文は blocks の配列：文字列＝段落、配列＝箇条書き
@@ -2019,8 +2106,10 @@ const LEGAL_DOCS = [
 ];
 const legalText = s => String(s).split(/(【要確認[^】]*】)/).map((part,i)=> i%2 ? html`<mark key=${i} className="todo">${part}</mark>` : part);
 // 規約などへのリンク（ログイン画面・マイページで使用）
-function LegalLinks({openLegal}){
-  return html`<div className="legal-links" aria-label="規約とポリシー">${LEGAL_DOCS.map(d=>html`<button key=${d.id} className="link" onClick=${()=>openLegal(d.id)}>${d.title}</button>`)}</div>`;
+function LegalLinks({openLegal, openGuide}){
+  return html`<div className="legal-links" aria-label="使い方・規約とポリシー">
+    ${openGuide && html`<button className="link" onClick=${openGuide}>使い方</button>`}
+    ${LEGAL_DOCS.map(d=>html`<button key=${d.id} className="link" onClick=${()=>openLegal(d.id)}>${d.title}</button>`)}</div>`;
 }
 function LegalPage({ctx}){
   const {legalDoc,openLegal,goBack} = ctx;
@@ -2049,6 +2138,7 @@ function App(){
   const [history,setHistory] = useState([]);
   const [artistId,setArtistId] = useState(null);
   const [legalDoc,setLegalDoc] = useState("terms");
+  const [welcomeHidden,setWelcomeHidden] = useState(()=>welcomeStore.get());
   const [tracks,setTracks] = useState([]);
   const [reportsRaw,setReports] = useState([]);
   const [repoMode,setRepoMode] = useState("pending");
@@ -2092,6 +2182,8 @@ function App(){
 
   // ログイン・ログアウト・アカウント切り替えのたびに、まず空にしてから本人の分だけ読み込み直す
   const uid = user ? user.id : null;
+  // 一度ログインした端末では、ログアウト後も「はじめての方」向けの案内を出さない
+  useEffect(()=>{ if(uid && !welcomeHidden){ welcomeStore.set(); setWelcomeHidden(true); } },[uid]);
   useEffect(()=>{
     uidRef.current = uid;
     socialBusy.current.clear();
@@ -2163,15 +2255,19 @@ function App(){
   const navTo = t => { setHistory([]); setTab(t); window.scrollTo(0,0); };
   // 規約・ポリシー：inPage=true はページ内のタブ切り替え（履歴を増やさない）
   const openLegal = (id,inPage) => { setLegalDoc(id); if(!inPage) go("legal"); };
-  // URL末尾が #terms / #privacy / #guidelines なら、その文書を直接開く
-  useEffect(()=>{ const m=location.hash.match(/^#(terms|privacy|guidelines)$/); if(m){ setLegalDoc(m[1]); setTab("legal"); } },[]);
+  // URL末尾が #terms / #privacy / #guidelines なら、その文書を直接開く（#guide は使い方）
+  useEffect(()=>{ const m=location.hash.match(/^#(terms|privacy|guidelines)$/); if(m){ setLegalDoc(m[1]); setTab("legal"); } else if(location.hash==="#guide") setTab("guide"); },[]);
   const openArtist = id => { setArtistId(id); go("artist"); };
   const openFollowList = view => { setFollowView(view); go("follows"); };
+  // 初めての方への案内：ログインしたことがある端末・閉じた端末では表示しない
+  const dismissWelcome = () => { welcomeStore.set(); setWelcomeHidden(true); };
+  const openGuide = () => go("guide");
+  const openSignup = () => { authDraft.mode = "signup"; go("me"); };
 
   // お気に入り・フォロー：ログイン中の会員IDでSupabaseに保存（失敗したら画面を元に戻す）
   const setIn = (setter,id,on) => setter(p=>{ const n=new Set(p); on?n.add(id):n.delete(id); return n; });
   const toggleFav = id => {
-    if(!uid||!sb){ say("お気に入りにはログインが必要です"); return; }
+    if(!uid||!sb){ say("お気に入りにはログインが必要です（会員登録は無料）"); return; }
     const key="fav:"+id; if(socialBusy.current.has(key)) return; socialBusy.current.add(key);
     const on = !favs.has(id), me = uid;
     setIn(setFavs,id,on);
@@ -2182,7 +2278,7 @@ function App(){
     }).finally(()=>socialBusy.current.delete(key));
   };
   const toggleFollow = id => {
-    if(!uid||!sb){ say("フォローにはログインが必要です"); return; }
+    if(!uid||!sb){ say("フォローにはログインが必要です（会員登録は無料）"); return; }
     if(!isUuid(id)){ say("このアーティストは現在フォローできません"); return; }
     const key="follow:"+id; if(socialBusy.current.has(key)) return; socialBusy.current.add(key);
     const on = !follows.has(id), me = uid;
@@ -2305,14 +2401,14 @@ function App(){
   };
 
   const signOut = () => auth.signOut().then(()=>{ say("ログアウトしました"); navTo("home"); });
-  const ctx = {followView,openFollowList,followVer,myArtistIds,legalDoc,openLegal,afterProfileSave,adminResetImage,user,profile,isAdmin,myFollowers,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
+  const ctx = {showWelcome:!user&&!welcomeHidden&&authState.ready,dismissWelcome,openGuide,openSignup,followView,openFollowList,followVer,myArtistIds,legalDoc,openLegal,afterProfileSave,adminResetImage,user,profile,isAdmin,myFollowers,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
     current,playing,toggle,pos,seek,next,prev,repeat,cycleRepeat,shuffle,setShuffle,close:()=>setPlayerOpen(false),showLyrics,setShowLyrics,queueLabel};
 
   useEffect(()=>{ document.body.style.overflow = playerOpen?"hidden":""; },[playerOpen]);
 
   const navItems = [["home","ホーム","home"],["search","検索","search"],["upload","投稿","plus"],["me","マイページ","user"]];
-  const navActive = (tab==="artist"||tab==="follows")?(history[0]||"home"):(tab==="admin"||tab==="legal"||tab==="profile")?"me":tab;
-  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin,legal:LegalPage,profile:ProfileEdit,follows:FollowList}[tab];
+  const navActive = (tab==="artist"||tab==="follows")?(history[0]||"home"):(tab==="admin"||tab==="legal"||tab==="profile")?"me":tab==="guide"?(history[0]||"home"):tab;
+  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin,legal:LegalPage,profile:ProfileEdit,follows:FollowList,guide:GuidePage}[tab];
 
   return html`<div className="app">
     <${Screen} key=${tab+(tab==="artist"?artistId:tab==="follows"?JSON.stringify(followView):"")} ctx=${ctx}/>

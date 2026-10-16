@@ -29,7 +29,7 @@ AIMUSE 本体とは別のサイトとして公開し、データは AIMUSE と�
   - `api/generate.js` … AI宣伝文の生成（管理者のみ・1日の上限あり）
 - `lib/shared.js` … サーバー処理の共通部品
 - `supabase/boost_schema.sql` … BOOST 用の追加SQL（AIMUSE の既存テーブルは変更しない）
-- `supabase/boost_precheck_readonly.sql` … 追加SQLの前に本番で実行する読み取り専用チェック（AIMUSEの管理者判定と、会員が自分を管理者にできないことを定義・権限・動作で確認。何も変更しない）
+- `supabase/boost_precheck_readonly.sql` … 追加SQLの前に本番で実行する読み取り専用チェック（AIMUSEの管理者判定と、会員が自分を管理者にできないことを定義・権限・動作で確認。1つの文で完結し、結果を載せたエラーで終わるため何も残らない）
 - `tests/security.test.mjs` … 自動セキュリティテスト（本番データには触れない。`node --test tests/security.test.mjs`）
 
 ## 読み取り専用モード（追加SQLを実行する前の状態）

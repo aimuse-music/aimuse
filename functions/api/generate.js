@@ -27,6 +27,14 @@ function extractJson(text) {
   try { return JSON.parse(t.slice(start, end + 1)); } catch { return null; }
 }
 
+// 絵文字の候補：絵文字以外（文字・記号・URLなど）は除外して最大10個
+const EMOJI_RE = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator})(?:\p{Emoji_Modifier}|\uFE0F|\u200D(?:\p{Extended_Pictographic})\uFE0F?|\p{Regional_Indicator})*$/u;
+export function emojiList(v) {
+  const list = Array.isArray(v) ? v : [];
+  const seen = new Set();
+  return list.map((x) => String(x || "").trim()).filter((x) => x.length <= 16 && EMOJI_RE.test(x) && !seen.has(x) && seen.add(x)).slice(0, 10);
+}
+
 function tags(v) {
   const list = Array.isArray(v) ? v : String(v || "").split(/[\s,、]+/);
   return list.map((x) => String(x).trim()).filter(Boolean)
@@ -65,12 +73,14 @@ export const onRequestPost = async ({ request, env }) => {
     "事実として与えられていない情報（再生数、受賞歴、ランキング、歌詞の内容、アーティストの経歴）は書かないでください。",
     "誇大表現や「今だけ」「限定」などの煽りは使わないでください。URLは書かないでください（後で自動で付けます）。",
     "出力は次の形のJSONだけにしてください。説明文やコードブロックは不要です。",
-    '{"x":{"body":"","hashtags":[]},"instagram":{"body":"","hashtags":[]},"tiktok":{"body":"","hashtags":[]},"youtube":{"title":"","body":"","hashtags":[]}}',
+    '{"x":{"body":"","hashtags":[]},"instagram":{"body":"","hashtags":[]},"tiktok":{"body":"","hashtags":[]},"youtube":{"title":"","body":"","hashtags":[]},"emojis":[]}',
     "x.body は全角100文字以内で短く印象的に、ハッシュタグは2〜3個。",
     "instagram.body は3〜5行の紹介文、ハッシュタグは8〜12個。",
     "tiktok.body は動画の説明文として1〜2行、ハッシュタグは4〜6個。",
     "youtube.title は全角40文字以内、youtube.body は2〜3行、ハッシュタグは3〜5個。",
     "ハッシュタグには必ず #AIMUSE と #AI音楽 を含めてください。",
+    "本文には雰囲気に合う絵文字を自然に1〜3個使ってください（使いすぎない）。",
+    "emojis には、この曲の雰囲気に合う絵文字を6〜8個、1個ずつ配列で入れてください（文字は入れない）。",
   ].join("\n");
   const user = `曲名：${title}\nアーティスト：${artist}\nジャンル：${genre || "未設定"}\n文章の雰囲気：${TONES[tone]}\n/no_think`;
 
@@ -101,5 +111,5 @@ export const onRequestPost = async ({ request, env }) => {
     // clean() で改行が消えるため、本文は改行を保ったまま再整形
     if (typeof d.body === "string") out[p].body = d.body.replace(/\r/g, "").replace(/[\u0000-\u0009\u000b-\u001f]/g, " ").trim().slice(0, 2000);
   }
-  return json({ ok: true, model: AI_MODEL, tone, usage: q.body, result: out });
+  return json({ ok: true, model: AI_MODEL, tone, usage: q.body, result: out, emojis: emojiList(data.emojis) });
 };

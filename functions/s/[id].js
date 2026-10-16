@@ -2,7 +2,7 @@
 // ・誰でも見られる公開ページ（ログイン不要）。AIMUSEで公開中の曲だけ表示する
 // ・SNSに貼ったとき、ジャケット画像つきのプレビュー（OGP）が出るようにする
 // ・「AIMUSEで聴く」は /out/<楽曲ID> を通して記録してから AIMUSE へ移動する
-import { cfg, esc, getPublicTrack, PLATFORM_IDS } from "../../lib/shared.js";
+import { cfg, esc, getPublicTrack, PLATFORM_IDS, trackPageUrl } from "../../lib/shared.js";
 
 const HEADERS = {
   "content-type": "text/html; charset=utf-8",
@@ -64,7 +64,7 @@ ${coverPath ? `<img class="art" src="${esc(coverPath)}" alt="${esc(t.title)} の
 <h1>${esc(t.title)}</h1><p class="artist">${esc(t.artist)}</p>
 <div class="chips">${t.genre ? `<span class="chip">${esc(t.genre)}</span>` : ""}<span class="chip">AI音楽</span></div>
 <a class="cta" href="${esc(out)}">▶ AIMUSEで聴く</a>
-<p class="note">無料・会員登録なしで再生できます。AIMUSEを開いたら、下の「検索」で曲名を入力してください。</p>
+<p class="note">無料・会員登録なしで再生できます。${trackPageUrl(env, t.id) ? "" : "AIMUSEを開いたら、下の「検索」で曲名を入力してください。"}</p>
 <div class="about"><b>AIMUSEとは</b><br>AIを使って制作された楽曲だけを集めた音楽配信サービスです。</div>`;
   return new Response(page({ title, desc, ogImage, url: `${url.origin}/s/${t.id}`, body }), { headers: HEADERS });
 };

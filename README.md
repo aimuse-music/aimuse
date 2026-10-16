@@ -1,4 +1,4 @@
-# AIMUSE BOOST（Ver.0.1）
+# AIMUSE BOOST（Ver.0.2）
 
 流れ：SNSの投稿 → 計測リンク `/go/…`（クリック記録）→ 宣伝ページ `/s/…` →「AIMUSEで聴く」`/out/…`（記録）→ aimusemusic.com
 
@@ -29,6 +29,7 @@ AIMUSE 本体とは別のサイトとして公開し、データは AIMUSE と�
   - `api/generate.js` … AI宣伝文の生成（管理者のみ・1日の上限あり）
 - `lib/shared.js` … サーバー処理の共通部品
 - `supabase/boost_schema.sql` … BOOST 用の追加SQL（AIMUSE の既存テーブルは変更しない）
+- `tests/security.test.mjs` … 自動セキュリティテスト（本番データには触れない。`node --test tests/security.test.mjs`）
 
 ## 読み取り専用モード（追加SQLを実行する前の状態）
 
@@ -42,7 +43,8 @@ AIMUSE 本体とは別のサイトとして公開し、データは AIMUSE と�
 - ログインは AIMUSE の管理者（`profiles.is_admin = true`）のみ。BOOST 用テーブルはすべて RLS で管理者以外は読み書き不可
 - AIMUSE の楽曲は **読み取りのみ**（公開済み = `status = 'public'` の曲だけ）
 - APIキーなどの秘密情報はブラウザに出さない。AI は Cloudflare のバインディングで呼ぶため、APIキー自体が不要
-- クリック記録に個人情報は保存しない（IPアドレス・端末情報・Cookieなし）。SNSのプレビュー取得やロボットのアクセスは数えない
+- クリック記録に個人情報は保存しない（IPアドレス・端末情報なし）。SNSのプレビュー取得やロボットのアクセスは数えない
+- 重複クリック対策：同じ端末から30分以内の再クリックは数えない。そのために中身が「1」だけのクッキーを、そのリンクのパスに限って30分だけ置く（個人・端末を識別する値は入れない）
 - 操作履歴・エラーは `boost_logs` に記録（設定画面で確認）
 - 自動投稿は未実装。SNS接続状況はすべて「未接続（手動投稿のみ）」と表示し、データベース側でも自動投稿を設定できないようにしている
 
@@ -52,18 +54,19 @@ AIMUSE 本体とは別のサイトとして公開し、データは AIMUSE と�
 - Build command：（空欄）
 - Build output directory：`public`
 - AIを使う場合：Settings → Bindings → Workers AI を追加（変数名 `AI`）
+- 曲ページへ誘導する場合（AIMUSE に曲ページができてから）：Settings → Variables に `AIMUSE_TRACK_URL` を追加（例：`https://aimusemusic.com/#track={id}`）。AIMUSE と同じサイトの https URL 以外は無視される
 
 ## 計測できること・できないこと
 
 | できる | 追加実装が必要 |
 |---|---|
 | 計測リンクのクリック数・「AIMUSEで聴く」の回数（SNS別・楽曲別・日/週/月別） | SNS経由の再生数・会員登録数（AIMUSE側でUTMを記録する機能が必要） |
-| 投稿実績（「投稿済み」にした件数） | AIMUSEの曲ページへの直接移動（AIMUSE側に曲ページURLが必要） |
+| 投稿実績（「投稿済み」にした件数） | AIMUSEの曲ページへの直接移動（AIMUSE側に曲ページURLができたら `AIMUSE_TRACK_URL` を設定するだけ） |
 | AIMUSE全体の会員数・新規登録数・公開曲数・再生数（実数） | SNS上のいいね・表示回数（各SNS公式APIが必要） |
 
 架空の数値は表示しません。データがない場合は「まだありません」と表示します。
 
 ## 今後（Ver.0.2 以降の候補）
 
-- AIMUSE に曲ページURL（例：`/#track=<id>`）と UTM 記録を追加（AIMUSE 本体の変更のため、事前に確認してから）
+- AIMUSE に曲ページURL（例：`/#track=<id>`）と UTM 記録を追加（AIMUSE 本体の変更のため、事前に確認してから）。BOOST側は `AIMUSE_TRACK_URL` で受け入れ済み
 - SNS公式APIでの自動投稿（`boost_post_attempts` と `idempotency_key` で重複防止・失敗記録・再試行に対応できる設計にしてある）

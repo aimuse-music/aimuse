@@ -141,7 +141,7 @@ ul.plain{margin:6px 0 0;padding-left:18px} ul.plain li{margin:3px 0}
 <script src="config.js"></script>
 <script>
 "use strict";
-const BUILD = "boost-0.1.0";
+const BUILD = "boost-0.2.0";
 const { useState, useEffect, useMemo, useCallback, useRef } = React;
 const html = htm.bind(React.createElement);
 const CFG = window.BOOST_CONFIG || {};
@@ -233,6 +233,7 @@ const HOOKS = {
   simple: ["新曲を紹介します。", "AIMUSEで配信中です。", "ぜひ聴いてみてください。", "今週の一曲。"],
 };
 const TONE_TAGS = { emotional: ["#エモい曲", "#心に響く"], cool: ["#かっこいい曲", "#NewMusic"], love: ["#ラブソング", "#恋愛ソング"], friendly: ["#おすすめ曲", "#今日のBGM"], simple: ["#新曲", "#NewMusic"] };
+const TONE_EMOJIS = { emotional: ["🎧", "🌙", "✨", "🌌", "💫", "🕊️", "🌧️", "🎹"], cool: ["🔥", "⚡", "🎧", "🖤", "🌃", "🚀", "🎸", "💥"], love: ["💗", "💌", "🌸", "🥀", "💫", "🌙", "🎧", "💞"], friendly: ["🎶", "😊", "☕", "🌈", "👋", "🎧", "🌻", "✨"], simple: ["🎵", "🎧", "📢", "🆕", "✨", "▶️"] };
 const YT_SUFFIX = { emotional: "心に響くAI音楽", cool: "クールなAI音楽", love: "切ない恋のAI音楽", friendly: "気軽に聴けるAI音楽", simple: "AI音楽" };
 function templateFor(track, tone) {
   const t = track.title, a = track.artist, g = track.genre || "";
@@ -343,11 +344,13 @@ function Compose({ track, ai, dbReady, toast, goTracks, onSaved }) {
   const [aiErr, setAiErr] = useState("");
   const [links, setLinks] = useState({}); // platform -> {id, code}
   const [saveOpen, setSaveOpen] = useState(false);
-  useEffect(() => { setDrafts(null); setLinks({}); setAiErr(""); }, [track && track.id]);
+  const [emojis, setEmojis] = useState([]);
+  const bodyRef = useRef(null);
+  useEffect(() => { setDrafts(null); setLinks({}); setAiErr(""); setEmojis([]); }, [track && track.id]);
 
   if (!track) return html`<div class="page"><div class="card stack"><div class="muted">宣伝する曲を選んでください。</div><button class="btn primary" onClick=${goTracks}>楽曲一覧から選ぶ</button></div></div>`;
 
-  function genTemplate() { setDrafts(templateFor(track, tone)); setSource("template"); setAiErr(""); logEvent("action", "generate_template", { track_id: track.id, tone }); }
+  function genTemplate() { setDrafts(templateFor(track, tone)); setEmojis(TONE_EMOJIS[tone] || TONE_EMOJIS.simple); setSource("template"); setAiErr(""); logEvent("action", "generate_template", { track_id: track.id, tone }); }
   async function genAI() {
     setBusy(true); setAiErr("");
     try {
@@ -356,6 +359,7 @@ function Compose({ track, ai, dbReady, toast, goTracks, onSaved }) {
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.message || `エラー（${res.status}）`);
       setDrafts(j.result); setSource("ai");
+      setEmojis(Array.isArray(j.emojis) && j.emojis.length ? j.emojis : (TONE_EMOJIS[tone] || TONE_EMOJIS.simple));
       logEvent("action", "generate_ai", { track_id: track.id, tone, used: j.usage && j.usage.used });
       toast(`AIで作成しました（本日 ${j.usage ? j.usage.used + "/" + j.usage.limit : "?"} 回）`);
     } catch (e) { setAiErr(errMsg(e)); logEvent("error", "generate_ai", { message: errMsg(e) }); }
@@ -363,6 +367,12 @@ function Compose({ track, ai, dbReady, toast, goTracks, onSaved }) {
   }
   function edit(field, v) { setDrafts(d => ({ ...d, [plat]: { ...d[plat], [field]: v } })); if (source !== "manual") setSource(s => s === "ai" ? "ai" : "template"); }
 
+  // 絵文字をカーソル位置（なければ本文の最後）に挿入
+  function insertEmoji(e) {
+    const el = bodyRef.current; const cur = (drafts[plat] && drafts[plat].body) || "";
+    const at = el && typeof el.selectionStart === "number" && document.activeElement === el ? el.selectionStart : cur.length;
+    edit("body", cur.slice(0, at) + e + cur.slice(at));
+  }
   async function ensureLink(p) {
     if (links[p]) return links[p];
     if (!AIMUSE_URL || !dbReady) return null;
@@ -425,7 +435,9 @@ function Compose({ track, ai, dbReady, toast, goTracks, onSaved }) {
       <div class="row between"><span class="badge ${source === "ai" ? "vio" : ""}">${source === "ai" ? "AIが作成" : "テンプレート"}</span>
         ${plat === "x" && html`<span class=${"small mono " + (xw > 280 ? "" : "muted")} style=${xw > 280 ? { color: "var(--bad)" } : null}>約 ${xw}/280</span>`}</div>
       ${plat === "youtube" && html`<div><label class="lb" for="yt">タイトル</label><input id="yt" class="in" value=${d.title} onInput=${e => edit("title", e.target.value)} maxlength="100" /></div>`}
-      <div><label class="lb" for="bd">${plat === "tiktok" ? "動画説明文" : plat === "youtube" ? "説明文" : "本文"}</label><textarea id="bd" class="in" value=${d.body} onInput=${e => edit("body", e.target.value)}></textarea></div>
+      <div><label class="lb" for="bd">${plat === "tiktok" ? "動画説明文" : plat === "youtube" ? "説明文" : "本文"}</label><textarea id="bd" ref=${bodyRef} class="in" value=${d.body} onInput=${e => edit("body", e.target.value)}></textarea></div>
+      ${emojis.length > 0 && html`<div><label class="lb">おすすめの絵文字（タップで本文に追加）</label>
+        <div class="chips">${emojis.map(e => html`<button key=${e} class="chip" style=${{ fontSize: 18, padding: "4px 10px" }} onMouseDown=${ev => ev.preventDefault()} onClick=${() => insertEmoji(e)} aria-label=${"絵文字 " + e + " を追加"}>${e}</button>`)}</div></div>`}
       <div><label class="lb" for="ht">ハッシュタグ</label><textarea id="ht" class="in" style=${{ minHeight: 70 }} value=${d.hashtags} onInput=${e => edit("hashtags", e.target.value)}></textarea></div>
       <div><label class="lb">プレビュー</label><div class="preview">${preview}</div></div>
       <div class="grid3">
@@ -686,9 +698,9 @@ function Analytics({ tracks, dbReady }) {
       <div class="faint tiny">会員登録はAIMUSE全体の人数です。SNS経由かどうかは区別できません。</div>
       <div class="card small">
         <b>計測できる項目</b>
-        <ul class="plain muted"><li>計測リンク（/go/…）のクリック数（SNSのプレビュー取得・ロボットは除外）</li><li>宣伝ページの「AIMUSEで聴く」の回数</li><li>SNS別・楽曲別・日別/週別/月別の推移</li><li>投稿実績（BOOSTで「投稿済み」にした件数）</li><li>AIMUSE全体の会員数・新規登録数・公開曲数・再生数（実数）</li></ul>
+        <ul class="plain muted"><li>計測リンク（/go/…）のクリック数（SNSのプレビュー取得・ロボットは除外）</li><li>宣伝ページの「AIMUSEで聴く」の回数</li><li>SNS別・楽曲別・日別/週別/月別の推移</li><li>同じ端末から30分以内の再クリックは1回として数えます（クッキーに個人を識別する情報は入れません）</li><li>投稿実績（BOOSTで「投稿済み」にした件数）</li><li>AIMUSE全体の会員数・新規登録数・公開曲数・再生数（実数）</li></ul>
         <b style=${{ display: "block", marginTop: 10 }}>追加実装が必要な項目</b>
-        <ul class="plain muted"><li>SNS経由の再生数・会員登録数（AIMUSE側でUTMを記録する機能の追加が必要）</li><li>AIMUSEの曲ページへの直接移動（AIMUSE側に曲ごとのURLが必要。現在はトップページへ移動）</li><li>SNS上のいいね・表示回数（各SNS公式APIの接続が必要）</li><li>同じ人の重複クリックの除外（個人を識別しないため、すべて延べ回数）</li></ul>
+        <ul class="plain muted"><li>SNS経由の再生数・会員登録数（AIMUSE側でUTMを記録する機能の追加が必要）</li><li>AIMUSEの曲ページへの直接移動（AIMUSE側に曲ごとのURLができたら、Cloudflareの設定 AIMUSE_TRACK_URL を入れるだけで切り替わります。現在はトップページへ移動）</li><li>SNS上のいいね・表示回数（各SNS公式APIの接続が必要）</li><li>別の端末・別のブラウザからの同じ人のクリック（個人を識別しないため、別々に数えます）</li></ul>
       </div>`}
   </div>`;
 }

@@ -1,5 +1,5 @@
 -- =====================================================================
--- AIMUSE BOOST 追加SQL（Ver.0.1 r1）
+-- AIMUSE BOOST 追加SQL（Ver.0.1 r2）
 -- AIMUSE と同じ Supabase プロジェクトの SQL Editor に全文を貼り付けて、1回実行してください。
 --
 -- ・AIMUSE の既存テーブル（profiles / tracks など）は一切変更・削除しません
@@ -48,15 +48,22 @@ create index if not exists boost_links_track_idx on public.boost_links(track_id)
 --    個人情報は保存しません（IPアドレス・端末情報・Cookieなし）。
 --    記録するのは「どのリンクが・いつ」クリックされたかだけです。
 -- =====================================================================
+--    kind：link=SNSに載せた計測リンク（/go/…）が開かれた
+--          listen=宣伝ページの「AIMUSEで聴く」が押された
 create table if not exists public.boost_clicks (
   id bigint generated always as identity primary key,
-  link_id uuid not null references public.boost_links(id) on delete cascade,
+  link_id uuid references public.boost_links(id) on delete cascade,
   track_id uuid,
   platform text not null,
+  kind text not null default 'link' check (kind in ('link', 'listen')),
   clicked_at timestamptz not null default now()
 );
+-- 以前の版（r1）を実行済みの場合の追加（データは消えません）
+alter table public.boost_clicks add column if not exists kind text not null default 'link' check (kind in ('link', 'listen'));
+alter table public.boost_clicks alter column link_id drop not null;
 create index if not exists boost_clicks_clicked_idx on public.boost_clicks(clicked_at);
 create index if not exists boost_clicks_link_idx on public.boost_clicks(link_id, clicked_at);
+create index if not exists boost_clicks_track_idx on public.boost_clicks(track_id, clicked_at);
 
 
 -- =====================================================================
@@ -232,9 +239,32 @@ begin
   if not found then return null; end if;
   if p_record and (select count(*) from public.boost_clicks c
                    where c.link_id = l.id and c.clicked_at > now() - interval '1 minute') < 60 then
-    insert into public.boost_clicks (link_id, track_id, platform) values (l.id, l.track_id, l.platform);
+    insert into public.boost_clicks (link_id, track_id, platform, kind) values (l.id, l.track_id, l.platform, 'link');
   end if;
   return l.destination;
+end $$;
+
+
+-- =====================================================================
+-- 9-2. 宣伝ページの「AIMUSEで聴く」の記録（/out/<楽曲ID> から呼ばれる。ログイン不要）
+--     ・AIMUSEで公開中の曲だけ記録する
+--     ・いたずら対策：1曲あたり1分間に60回を超えた分は記録しない
+-- =====================================================================
+create or replace function public.boost_record_listen(p_track uuid, p_platform text)
+returns boolean
+language plpgsql security definer set search_path = ''
+as $$
+declare plat text := case when p_platform in ('x', 'instagram', 'tiktok', 'youtube') then p_platform else 'other' end;
+begin
+  if p_track is null or not exists (select 1 from public.tracks t where t.id = p_track and t.status = 'public') then
+    return false;
+  end if;
+  if (select count(*) from public.boost_clicks c
+      where c.track_id = p_track and c.kind = 'listen' and c.clicked_at > now() - interval '1 minute') >= 60 then
+    return false;
+  end if;
+  insert into public.boost_clicks (link_id, track_id, platform, kind) values (null, p_track, plat, 'listen');
+  return true;
 end $$;
 
 
@@ -263,6 +293,8 @@ end $$;
 revoke all on function public.boost_posts_touch() from public, anon, authenticated;
 revoke all on function public.boost_resolve_link(text, boolean) from public, anon, authenticated;
 revoke all on function public.boost_ai_take_quota() from public, anon, authenticated;
+revoke all on function public.boost_record_listen(uuid, text) from public, anon, authenticated;
+grant execute on function public.boost_record_listen(uuid, text) to anon, authenticated;
 grant execute on function public.boost_resolve_link(text, boolean) to anon, authenticated;
 grant execute on function public.boost_ai_take_quota() to authenticated;
 

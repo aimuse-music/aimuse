@@ -6,5 +6,5 @@
 window.BOOST_CONFIG = {
   supabaseUrl: "https://tqtrvjmjfthlrwwligmu.supabase.co",
   supabaseAnonKey: "sb_publishable_p1C-sr805QLLx4LARKcFcw_NFzm3r1H",
-  aimuseUrl: ""
+  aimuseUrl: "https://aimusemusic.com"
 };

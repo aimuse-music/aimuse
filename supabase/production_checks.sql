@@ -1,7 +1,8 @@
 -- =====================================================================
--- AIMUSE 本番環境チェック r4（読み取り専用。何も変更しません）
--- 構築SQL（v1.5）と プロフィール編集SQL（v1.6）を実行した後に、SQL Editor で実行してください。
--- 結果は22行。「結果」列がすべて OK なら正常です。
+-- AIMUSE 本番環境チェック r5（読み取り専用。何も変更しません）
+-- 構築SQL（v1.5）・プロフィール編集SQL（v1.6）・フォロー一覧SQL（v1.7）を実行した後に、SQL Editor で実行してください。
+-- 結果は23行。「結果」列がすべて OK なら正常です。
+-- r5：v1.7（フォロワー・フォロー中一覧）の関数7個・索引2個（確認23）を追加
 -- r4：v1.6（プロフィール編集）の関数10個・avatars のルール4件・確認3項目（20〜22）を追加
 -- r3：チェック7・8は AIMUSE の28関数だけを対象にしました
 --     （Supabase標準の rls_auto_enable などは対象外。19番に参考表示します）
@@ -19,7 +20,10 @@ with aimuse_fn(name) as (
          -- v1.6 プロフィール編集
          ('artist_name_key'),('artist_name_clean'),('set_my_profile_image'),('rename_my_artist'),
          ('public_artist_profiles'),('admin_reset_profile_image'),('admin_set_artist_name'),
-         ('admin_artist_name_history'),('avatar_can_upload'),('avatar_can_delete')
+         ('admin_artist_name_history'),('avatar_can_upload'),('avatar_can_delete'),
+         -- v1.7 フォロワー・フォロー中一覧
+         ('is_visible_member'),('is_public_artist'),('public_artist_of_user'),('public_artist_follow_summary'),
+         ('public_artist_followers'),('public_artist_following'),('my_following')
 ),
 pubfn as (
   select p.oid, p.proname::text as name, p.prosecdef, p.proconfig
@@ -61,20 +65,21 @@ checks(no, item, ok, detail) as (
                 and policyname in ('aimuse select own or admin','aimuse update own')),
     null
   union all
-  select 7, 'AIMUSEの関数38個がそろい、権限の強い関数は search_path 固定',
-    (select count(*) from pubfn where name in (select name from aimuse_fn)) = 38
+  select 7, 'AIMUSEの関数45個がそろい、権限の強い関数は search_path 固定',
+    (select count(*) from pubfn where name in (select name from aimuse_fn)) = 45
     and not exists (select 1 from pubfn
                     where name in (select name from aimuse_fn) and prosecdef
                       and not coalesce(proconfig @> array['search_path=""'], false)),
-    (select count(*)::text || '/38個' from pubfn where name in (select name from aimuse_fn))
+    (select count(*)::text || '/45個' from pubfn where name in (select name from aimuse_fn))
       || coalesce(' 要確認:' || (select string_agg(name, ', ') from pubfn
                                  where name in (select name from aimuse_fn) and prosecdef
                                    and not coalesce(proconfig @> array['search_path=""'], false)), '')
   union all
-  select 8, 'AIMUSEの関数のうち未ログインで実行できるのは8個だけ',
+  select 8, 'AIMUSEの関数のうち未ログインで実行できるのは11個だけ',
     (select array_agg(name order by name) from pubfn
      where name in (select name from aimuse_fn) and has_function_privilege('anon', oid, 'execute'))
     = array['artist_follower_count','can_read_media','increment_plays','is_active_member','is_admin',
+            'public_artist_follow_summary','public_artist_followers','public_artist_following',
             'public_artist_profiles','track_rating_summary','track_reviews'],
     (select count(*)::text || '個' from pubfn
      where name in (select name from aimuse_fn) and has_function_privilege('anon', oid, 'execute'))
@@ -152,6 +157,10 @@ checks(no, item, ok, detail) as (
     and not has_schema_privilege('anon', 'aimuse_private', 'USAGE')
     and not has_schema_privilege('authenticated', 'aimuse_private', 'USAGE'),
     (select count(*)::text || '件' from aimuse_private.artist_name_history)
+  union all
+  select 23, 'v1.7：フォロー一覧用の索引（大人数のページ分割用）',
+    to_regclass('public.follows_artist_created_idx') is not null and to_regclass('public.follows_user_created_idx') is not null,
+    null
   union all
   select 15, '（参考）現在のデータ件数',
     true,

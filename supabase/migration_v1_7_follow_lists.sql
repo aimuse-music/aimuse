@@ -10,6 +10,7 @@
 -- 公開の方針
 --   ・一覧に名前・アイコンを出すのは「公開中の曲があるアーティスト」だけ
 --   ・聴くだけの会員（リスナー）は人数だけを返し、会員ID・表示名・アイコンは一切返しません
+--   ・公開アーティストについても会員IDは返しません（アーティストID・名前・アイコンの場所だけ）
 --   ・利用停止中の会員は、一覧にも人数にも含めません（退会した会員は既存の仕組みでフォローごと削除されます）
 --   ・公開されていないアーティストの一覧は返しません（中身を探られないように）
 -- =====================================================================
@@ -100,22 +101,22 @@ as $$
 $$;
 
 -- フォロワー一覧（公開アーティストだけ。新しい順・30件ずつ）
---   次のページは、前のページの最後の行の followed_at と cursor を渡します
---   cursor はフォローした会員のID（公開アーティストの持ち主のIDのみ。リスナーの行は返しません）
+--   次のページは、前のページの最後の行の followed_at と cursor（＝その行のアーティストID）を渡します
+--   会員IDは返しません（ページ分割も公開用のアーティストIDだけで行います）
 create or replace function public.public_artist_followers(
   p_artist uuid, p_before_at timestamptz default null, p_before uuid default null, p_limit integer default 30)
 returns table (artist_id uuid, name text, avatar_path text, followed_at timestamptz, cursor uuid)
 language sql stable security definer set search_path = ''
 as $$
-  select pa.id, pa.name, p.avatar_path, f.created_at, f.user_id
+  select pa.id, pa.name, p.avatar_path, f.created_at, pa.id
   from public.follows f
   cross join lateral (select public.public_artist_of_user(f.user_id) as aid) x
   join public.artists pa on pa.id = x.aid
   join public.profiles p on p.id = f.user_id
   where f.artist_id = p_artist
     and public.is_public_artist(p_artist)
-    and (p_before_at is null or p_before is null or (f.created_at, f.user_id) < (p_before_at, p_before))
-  order by f.created_at desc, f.user_id desc
+    and (p_before_at is null or p_before is null or (f.created_at, pa.id) < (p_before_at, p_before))
+  order by f.created_at desc, pa.id desc
   limit least(greatest(coalesce(p_limit, 30), 1), 100);
 $$;
 

@@ -147,7 +147,7 @@ checks(no, item, ok, detail) as (
     (select case when public then '公開' else '非公開' end || ' / ' || coalesce(file_size_limit::text, '上限なし') || 'バイト'
      from storage.buckets where id = 'avatars')
   union all
-  select 21, 'v1.6：画像の保存場所は本人のフォルダのみ（形式チェックが有効）',
+  select 21, 'v1.6：画像の保存場所の形式チェックが有効（会員IDを含まない名前）',
     (select count(*) from pg_constraint where conrelid = 'public.profiles'::regclass
        and conname in ('profiles_avatar_path_chk','profiles_header_path_chk')) = 2,
     null

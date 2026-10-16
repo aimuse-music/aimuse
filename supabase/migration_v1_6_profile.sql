@@ -16,6 +16,8 @@
 --      public_artist_profiles… 公開中の曲があるアーティストのアイコン・背景だけを返す（未ログイン可）
 --      admin_reset_profile_image / admin_set_artist_name / admin_artist_name_history … 管理者用
 --   4. 画像の保存場所「avatars」（JPEG・PNG・WebP、1ファイル2MBまで、1人4ファイルまで）とアクセスルール
+--      ファイル名は「avatar-ランダムID.jpg」「header-ランダムID.jpg」で、会員IDを含めません（公開URLから会員IDが分からない）
+--      持ち主の確認は、Storage が保存時に自動で記録する owner_id（ログイン中の会員ID）で行います
 -- =====================================================================
 
 -- ---------- 0. 前提の確認（満たさなければ中止） ----------
@@ -40,20 +42,19 @@ alter table public.profiles add column if not exists avatar_path text;
 alter table public.profiles add column if not exists header_path text;
 alter table public.profiles add column if not exists media_updated_at timestamptz;
 
--- 保存場所の形式チェック：「本人の会員ID/avatar-ランダムID.拡張子」「本人の会員ID/header-ランダムID.拡張子」のみ
+-- 保存場所の形式チェック：「avatar-ランダムID.拡張子」「header-ランダムID.拡張子」のみ（会員IDは含めない）
+-- 本人の画像であることは、設定時に set_my_profile_image が owner_id で確認します
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'profiles_avatar_path_chk' and conrelid = 'public.profiles'::regclass) then
     alter table public.profiles add constraint profiles_avatar_path_chk check (
       avatar_path is null or (
-        avatar_path ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/avatar-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$'
-        and split_part(avatar_path, '/', 1) = id::text));
+        avatar_path ~ '^avatar-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$'));
   end if;
   if not exists (select 1 from pg_constraint where conname = 'profiles_header_path_chk' and conrelid = 'public.profiles'::regclass) then
     alter table public.profiles add constraint profiles_header_path_chk check (
       header_path is null or (
-        header_path ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/header-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$'
-        and split_part(header_path, '/', 1) = id::text));
+        header_path ~ '^header-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$'));
   end if;
 end $$;
 
@@ -104,8 +105,8 @@ as $$
 $$;
 
 -- アイコン・背景の設定（本人のみ。p_path = null で初期画像に戻す）
---   ・保存場所が「本人の会員ID/種類-ランダムID.拡張子」であること
---   ・その画像が avatars に実際に保存されていること
+--   ・保存場所が「種類-ランダムID.拡張子」であること
+--   ・その画像が avatars に実際に保存されていて、持ち主（owner_id）が本人であること
 --   を確認してから設定し、それまで使っていた画像の場所を返します（アプリはその後で古い画像を削除）
 create or replace function public.set_my_profile_image(p_kind text, p_path text)
 returns text
@@ -122,12 +123,12 @@ begin
     raise exception '画像の種類が正しくありません';
   end if;
   if p_path is not null then
-    if p_path !~ ('^' || v_uid::text || '/' || p_kind
-                  || '-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$') then
+    if p_path !~ ('^' || p_kind || '-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$') then
       raise exception '画像の保存場所が正しくありません';
     end if;
-    if not exists (select 1 from storage.objects o where o.bucket_id = 'avatars' and o.name = p_path) then
-      raise exception '画像が保存されていません';
+    if not exists (select 1 from storage.objects o
+                   where o.bucket_id = 'avatars' and o.name = p_path and o.owner_id = v_uid::text) then
+      raise exception '画像が保存されていないか、あなたの画像ではありません';
     end if;
   end if;
 
@@ -313,26 +314,25 @@ begin
 end;
 $$;
 
--- avatars に保存できるか：書き込みできる会員・本人のフォルダ・1人4ファイル未満
-create or replace function public.avatar_can_upload(object_name text)
+-- avatars に保存できるか：書き込みできる会員・本人の画像が4ファイル未満
+create or replace function public.avatar_can_upload()
 returns boolean
 language sql stable security definer set search_path = ''
 as $$
   select public.is_active_member()
-     and split_part(object_name, '/', 1) = auth.uid()::text
      and (select count(*) from storage.objects o
-          where o.bucket_id = 'avatars' and split_part(o.name, '/', 1) = auth.uid()::text) < 4;
+          where o.bucket_id = 'avatars' and o.owner_id = auth.uid()::text) < 4;
 $$;
 
--- avatars から削除できるか：管理者、または本人のフォルダのうち「プロフィールで使用中でない」画像
+-- avatars から削除できるか：管理者、または本人の画像のうち「プロフィールで使用中でない」もの
 -- （使用中の画像を先に消してプロフィールが壊れる事故を防ぐ）
-create or replace function public.avatar_can_delete(object_name text)
+create or replace function public.avatar_can_delete(object_name text, object_owner text)
 returns boolean
 language sql stable security definer set search_path = ''
 as $$
   select public.is_admin()
       or (auth.uid() is not null
-          and split_part(object_name, '/', 1) = auth.uid()::text
+          and object_owner = auth.uid()::text
           and not exists (select 1 from public.profiles p
                           where p.avatar_path = object_name or p.header_path = object_name));
 $$;
@@ -346,16 +346,16 @@ revoke all on function public.public_artist_profiles(uuid[]) from public, anon, 
 revoke all on function public.admin_reset_profile_image(uuid, text) from public, anon, authenticated;
 revoke all on function public.admin_set_artist_name(uuid, text) from public, anon, authenticated;
 revoke all on function public.admin_artist_name_history(integer) from public, anon, authenticated;
-revoke all on function public.avatar_can_upload(text) from public, anon, authenticated;
-revoke all on function public.avatar_can_delete(text) from public, anon, authenticated;
+revoke all on function public.avatar_can_upload() from public, anon, authenticated;
+revoke all on function public.avatar_can_delete(text, text) from public, anon, authenticated;
 grant execute on function public.public_artist_profiles(uuid[]) to anon, authenticated;
 grant execute on function public.set_my_profile_image(text, text) to authenticated;
 grant execute on function public.rename_my_artist(uuid, text) to authenticated;
 grant execute on function public.admin_reset_profile_image(uuid, text) to authenticated;
 grant execute on function public.admin_set_artist_name(uuid, text) to authenticated;
 grant execute on function public.admin_artist_name_history(integer) to authenticated;
-grant execute on function public.avatar_can_upload(text) to authenticated;
-grant execute on function public.avatar_can_delete(text) to authenticated;
+grant execute on function public.avatar_can_upload() to authenticated;
+grant execute on function public.avatar_can_delete(text, text) to authenticated;
 
 
 -- ---------- 4. 画像の保存場所「avatars」とアクセスルール ----------
@@ -368,24 +368,25 @@ on conflict (id) do update
       file_size_limit = excluded.file_size_limit,
       allowed_mime_types = excluded.allowed_mime_types;
 
--- 保存：本人のフォルダに「avatar-ランダムID」「header-ランダムID」の名前で新規保存のみ（上書き不可）
+-- 保存：「avatar-ランダムID」「header-ランダムID」の名前で新規保存のみ（上書き不可）。持ち主は本人
 drop policy if exists "aimuse avatars upload own" on storage.objects;
 create policy "aimuse avatars upload own" on storage.objects
   for insert to authenticated
   with check (
     bucket_id = 'avatars'
-    and name ~ ('^' || auth.uid()::text || '/(avatar|header)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$')
-    and public.avatar_can_upload(name)
+    and name ~ '^(avatar|header)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$'
+    and owner_id = auth.uid()::text
+    and public.avatar_can_upload()
   );
 
--- 一覧・削除の対象にできる範囲：本人のフォルダ、または管理者
+-- 一覧・削除の対象にできる範囲：本人の画像、または管理者
 --（画像の表示は公開URLで行うため、この範囲は表示には影響しません）
 drop policy if exists "aimuse avatars select own" on storage.objects;
 create policy "aimuse avatars select own" on storage.objects
   for select to authenticated
   using (
     bucket_id = 'avatars'
-    and (split_part(name, '/', 1) = auth.uid()::text or public.is_admin())
+    and (owner_id = auth.uid()::text or public.is_admin())
   );
 
 -- 削除：管理者、または本人の「使用中でない」画像のみ
@@ -394,7 +395,7 @@ create policy "aimuse avatars delete own" on storage.objects
   for delete to authenticated
   using (
     bucket_id = 'avatars'
-    and public.avatar_can_delete(name)
+    and public.avatar_can_delete(name, owner_id)
   );
 
 -- データベース内部の関数（ファイル数の上限・保存済みの確認）が avatars のファイルを数えられるようにする

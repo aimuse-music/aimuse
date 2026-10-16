@@ -217,6 +217,8 @@ button.stat{font:inherit;color:inherit;background:none;border:0;cursor:pointer;w
 .follow.sm{padding:6px 14px;font-size:12.5px;flex:none;white-space:nowrap}
 .fl-listeners{display:flex;gap:8px;align-items:flex-start;color:var(--muted);font-size:12.5px;line-height:1.55;margin-top:14px;padding:12px;border:1px dashed var(--line);border-radius:12px}
 .fl-listeners svg{flex:none;margin-top:1px}
+.fl-listeners .link{text-decoration:underline;text-underline-offset:3px;color:var(--fg);font-size:12.5px;margin-left:4px}
+.fl-breakdown{margin:0 0 10px}
 
 /* legal pages（利用規約・プライバシーポリシー・投稿ガイドライン） */
 .legal-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 16px;margin-top:18px}
@@ -1034,6 +1036,7 @@ function MyPage({ctx}){
   const mine = submissions.filter(s=>s.mine);
   const myPublic = mine.filter(s=>s.status==="public"||s.status==="hidden");
   const followed = artists.filter(a=>follows.has(a.id));
+  const hiddenFollows = Math.max(0, follows.size - followed.length);   // 公開中の曲がなくなったアーティスト（フォローは保持）
   const statusTag = st => st==="pending"?html`<span className="tag demo">審査待ち</span>`:st==="public"?html`<span className="tag ok">公開中</span>`:st==="hidden"?html`<span className="tag">非公開</span>`:html`<span className="tag bad">却下</span>`;
   return html`<div className="screen">
     <header className="top"><h1>マイページ</h1></header>
@@ -1050,11 +1053,12 @@ function MyPage({ctx}){
       <div className="stat"><b>${fmtNum(myPublic.reduce((a,s)=>a+s.plays,0))}</b><span>再生数</span></div>
     </div>
     ${isAdmin&&html`<button className="admin-entry" onClick=${()=>setTab("admin")}><${Icon} n="shield"/><div style=${{flex:1}}><b style=${{display:"block",fontSize:14}}>管理者画面</b><span style=${{fontSize:12,color:"var(--muted)"}}>投稿審査・通報対応・楽曲管理</span></div><${Icon} n="chev" size=${18}/></button>`}
-    <div className="tabs">${[["fav",`お気に入り ${favSongs.length}`],["mine",`投稿曲 ${mine.length}`],["follow",`フォロー中 ${followed.length}`]].map(([k,l])=>html`<button key=${k} className=${tab===k?"on":""} onClick=${()=>setT(k)}>${l}</button>`)}</div>
+    <div className="tabs">${[["fav",`お気に入り ${favSongs.length}`],["mine",`投稿曲 ${mine.length}`],["follow",`フォロー中 ${follows.size}`]].map(([k,l])=>html`<button key=${k} className=${tab===k?"on":""} onClick=${()=>setT(k)}>${l}</button>`)}</div>
     <div style=${{marginTop:8}}>
       ${tab==="fav" && (favSongs.length ? html`<div className="list">${favSongs.map(s=>html`<${SongRow} key=${s.id} song=${s} artist=${artistOf(s)} cur=${current?.id===s.id} playing=${playing} fav=${true} onPlay=${()=>play(s,favSongs)} onFav=${()=>toggleFav(s.id)}/>`)}</div>` : html`<div className="empty">ハートをタップした曲がここに並びます</div>`)}
       ${tab==="mine" && (mine.length ? html`<div className="list">${mine.map(s=>html`<div key=${s.id} className="row norank"><${Cover} item=${s} radius=${10}/><div style=${{minWidth:0}}><div className="t">${s.title}</div><div className="sub"><span className="n">${s.submittedAt}</span></div></div><div className="end">${statusTag(s.status)}</div></div>`)}</div>` : html`<div className="empty">まだ投稿した曲はありません<br/><button className="btn primary sm" style=${{margin:"14px auto 0"}} onClick=${()=>setTab("upload")}>楽曲を投稿する</button></div>`)}
-      ${tab==="follow" && (followed.length ? html`<div className="list">${followed.map(a=>html`<button key=${a.id} className="row norank" onClick=${()=>openArtist(a.id)}><${Cover} item=${a} radius="50%"/><div style=${{minWidth:0}}><div className="t">${a.name}</div><div className="sub">${fmtNum(a.followers)} フォロワー</div></div><${Icon} n="chev" size=${18}/></button>`)}</div>` : html`<div className="empty">フォローしたアーティストがここに並びます</div>`)}
+      ${tab==="follow" && (followed.length ? html`<div className="list">${followed.map(a=>html`<button key=${a.id} className="row norank" onClick=${()=>openArtist(a.id)}><${Cover} item=${a} radius="50%"/><div style=${{minWidth:0}}><div className="t">${a.name}</div><div className="sub">${fmtNum(a.followers)} フォロワー</div></div><${Icon} n="chev" size=${18}/></button>`)}</div>` : hiddenFollows===0 ? html`<div className="empty">フォローしたアーティストがここに並びます</div>` : null)}
+      ${tab==="follow" && hiddenFollows>0 && html`<div className="fl-listeners"><${Icon} n="info" size=${18}/><span>ほか ${hiddenFollows}件は、現在公開中の曲がないアーティストです（フォローは残っています）。<button className="link" onClick=${()=>openFollowList({mine:true,mode:"following"})}>一覧で確認・解除する</button></span></div>`}
     </div>
     <button className="btn ghost" style=${{marginTop:28}} onClick=${signOut}>ログアウト</button>
     <${LegalLinks} openLegal=${ctx.openLegal}/>
@@ -1340,17 +1344,18 @@ const profileApi = {
     const {data,error} = await sb.from("artists").select("id,name,bio").eq("user_id",uid).order("created_at",{ascending:true});
     if(error) throw error; return data||[];
   },
-  // 本人のフォルダに残った「使われていない画像」を片付ける（前回の削除失敗などで残ったもの）
+  // 本人の「使われていない画像」を片付ける（前回の削除失敗などで残ったもの）
+  //  一覧に出るのは、保存場所のルールにより本人の画像だけ
   async cleanup(uid, keep){
     try{
-      const {data,error} = await sb.storage.from("avatars").list(uid,{limit:100});
+      const {data,error} = await sb.storage.from("avatars").list("",{limit:100});
       if(error||!data) return;
-      const stale = data.map(f=>uid+"/"+f.name).filter(p=>!keep.includes(p));
+      const stale = data.map(f=>f.name).filter(n=>/^(avatar|header)-/.test(n) && !keep.includes(n));
       if(stale.length) await sb.storage.from("avatars").remove(stale);
     }catch(e){}
   },
   async upload(uid, kind, blob){
-    const path = `${uid}/${kind}-${uuid4()}.jpg`;
+    const path = `${kind}-${uuid4()}.jpg`;   // 会員IDを含めない（公開URLから会員IDが分からないように）
     const {error} = await sb.storage.from("avatars").upload(path, blob, {contentType:"image/jpeg", upsert:false, cacheControl:"31536000"});
     if(error) throw error;
     return path;
@@ -1675,6 +1680,7 @@ function FollowList({ctx}){
   useEffect(()=>{ setRows([]); setNext(null); load(true); },[kind,artistId]);
   useEffect(()=>{ if(!artistId){ setSum(null); return; } let alive=true; followApi.summary(artistId).then(s=>{ if(alive) setSum(s); }).catch(()=>{}); return ()=>{ alive=false; }; },[artistId,followVer]);
   const mineFollowing = v.mine ? follows.size : null;
+  const minePublic = v.mine ? artists.filter(a=>follows.has(a.id)).length : 0;
   const tabs = [["followers",`フォロワー ${sum?fmtNum(sum.followers):(v.mine&&!artistId?"0":"–")}`],
                 ["following",`フォロー中 ${v.mine?fmtNum(mineFollowing):(sum?fmtNum(sum.following):"–")}`]];
   const title = v.mine ? "あなたのフォロー" : (target ? target.name : "フォロー");
@@ -1684,6 +1690,7 @@ function FollowList({ctx}){
     ${v.mine && myPublicArtists.length>1 && mode==="followers" && html`<div className="field" style=${{marginBottom:10}}>
       <label htmlFor="fl-art" className="hint">表示するアーティスト</label>
       <select id="fl-art" className="input" value=${artistId} onChange=${e=>setArtistId(e.target.value)}>${myPublicArtists.map(a=>html`<option key=${a.id} value=${a.id}>${a.name}</option>`)}</select></div>`}
+    ${v.mine && mode==="following" && follows.size>0 && html`<p className="hint fl-breakdown">フォロー中 ${fmtNum(follows.size)}件（公開中 ${fmtNum(minePublic)}件${follows.size-minePublic>0?`・現在公開中の曲がない ${fmtNum(follows.size-minePublic)}件`:""}）</p>`}
     <div className="seg" role="tablist">${tabs.map(([k,l])=>html`<button key=${k} role="tab" aria-selected=${mode===k} className=${mode===k?"on":""} onClick=${()=>setMode(k)}>${l}</button>`)}</div>
     ${kind!=="mine" && !artistId ? html`<div className="empty">公開中の曲があるアーティストになると、フォロワーの一覧が表示されます</div>` : html`
       <div className="list" style=${{marginTop:8}}>

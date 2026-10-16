@@ -1,5 +1,5 @@
 // AIMUSE BOOST 自動テスト（本番のデータには一切アクセスしません）
-// 実行：node --test tests/
+// 実行：node --test tests/security.test.mjs
 // Supabase・AI への通信はすべて偽物（モック）に置き換えて、サーバー処理の安全性を確認します。
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -307,4 +307,30 @@ test("アプリは管理者として開いたときだけ古いカウンター�
   const sql = readFileSync(join(root, "supabase/boost_schema.sql"), "utf8");
   const click = sql.slice(sql.indexOf("function public.boost_record_click("), sql.indexOf("function public.boost_resolve_link("));
   assert.ok(!/delete\s+from/i.test(click), "クリック処理の中に削除があります");
+});
+test("アプリが書き込む列は、追加SQLで書き込みを許可した列だけ（列ごとの権限）", () => {
+  const html = readFileSync(join(root, "public/index.html"), "utf8");
+  const sql = readFileSync(join(root, "supabase/boost_schema.sql"), "utf8").replace(/--.*$/gm, "");
+  // 列を限定して update を許可しているテーブル：grant select, update (a, b) on public.<table>
+  const limited = {};
+  for (const m of sql.matchAll(/grant select, update \(([^)]+)\) on public\.(\w+) to authenticated/g)) limited[m[2]] = m[1].split(",").map((x) => x.trim());
+  assert.ok(limited.boost_settings && limited.boost_sns_accounts, "列限定の権限が見つかりません");
+  for (const m of html.matchAll(/sb\.from\("(\w+)"\)\.update\(\{([^}]*)\}\)/g)) {
+    if (!limited[m[1]]) continue;
+    const keys = [...m[2].matchAll(/(?:^|,)\s*(\w+)\s*(?=:|,|$)/g)].map((k) => k[1]);
+    for (const k of keys) assert.ok(limited[m[1]].includes(k), `${m[1]}.${k} は更新が許可されていません（保存が「権限がありません」で失敗します）`);
+  }
+});
+test("会員ごとの動作確認SQL：読み取り専用で始まり、変更命令がなく、確認できなければ必ずNG", () => {
+  const raw = readFileSync(join(root, "supabase/boost_member_check_readonly.sql"), "utf8");
+  const s = raw.replace(/--.*$/gm, "");
+  const first = s.slice(s.indexOf("begin"), s.indexOf("v_res := v_res"));
+  assert.ok(/set_config\('transaction_read_only', 'on', true\)/.test(first), "最初に読み取り専用にしていません");
+  assert.ok(!/transaction_read_only', 'off'/.test(s));
+  assert.ok(!/\b(insert\s+into|update\s+public|delete\s+from|create\s+(table|function|policy|role|or)|alter\s|grant\s|revoke\s|drop\s|truncate|commit|rollback)\b/i.test(s), "変更命令・取引操作が含まれています");
+  assert.ok(!/set_config\([^)]*,\s*false\)/.test(s), "取引の外まで残る設定があります");
+  assert.ok(!/\bset\s+role\b/i.test(s.replace(/set local role/gi, "")), "取引の外まで残る立場の切り替えがあります");
+  assert.ok(/when \(select j from raw\) is null then 'NG'/.test(s), "確認結果がないときにNGになりません");
+  assert.ok(/count\(\*\) filter \(where 判定 = 'OK'\) = 6/.test(s));
+  assert.equal((s.match(/'expect', '[^']+'\)/g) || []).length >= 6, true);
 });

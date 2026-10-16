@@ -141,7 +141,7 @@ ul.plain{margin:6px 0 0;padding-left:18px} ul.plain li{margin:3px 0}
 <script src="config.js"></script>
 <script>
 "use strict";
-const BUILD = "boost-0.2.2";
+const BUILD = "boost-0.2.3";
 const { useState, useEffect, useMemo, useCallback, useRef } = React;
 const html = htm.bind(React.createElement);
 const CFG = window.BOOST_CONFIG || {};
@@ -724,7 +724,7 @@ function Settings({ user, ai, dbReady, onLogout, toast }) {
   useEffect(() => { load(); }, [load]);
   async function saveLimit(v) {
     const n = Math.max(0, Math.min(500, parseInt(v, 10) || 0));
-    try { await must(sb.from("boost_settings").update({ value: n, updated_at: new Date().toISOString() }).eq("key", "ai_daily_limit"), "set_ai_limit"); setLimit(n); logEvent("action", "set_ai_limit", { value: n }); toast("上限を" + n + "回にしました"); }
+    try { await must(sb.from("boost_settings").update({ value: n }).eq("key", "ai_daily_limit"), "set_ai_limit"); setLimit(n); logEvent("action", "set_ai_limit", { value: n }); toast("上限を" + n + "回にしました"); }
     catch (e) { toast("保存できませんでした：" + errMsg(e)); }
   }
   return html`<div class="page stack">

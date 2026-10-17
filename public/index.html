@@ -18,6 +18,7 @@
   --violet:#a463ff;
   --indigo:#6b6cff;
   --grad:linear-gradient(120deg,#b46bff 0%,#7c5cff 45%,#5a72ff 100%);
+  --brand-grad:linear-gradient(120deg,#b46bff 0%,#7c5cff 45%,#5a72ff 100%);   /* ロゴ専用：テーマで変えない */
   --glow:rgba(140,100,255,.35);
   --ok:#3fd49a; --warn:#f6bd55; --bad:#ff5f7e;
   --f-display:"Unbounded","Zen Kaku Gothic New",system-ui,sans-serif;
@@ -45,8 +46,8 @@ p{margin:0}
 @keyframes enter{from{opacity:.0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
 /* header */
-.top{position:sticky;top:var(--st);z-index:20;margin-left:calc(-1*var(--gl));margin-right:calc(-1*var(--gr));padding:12px var(--gr) 10px var(--gl);background:linear-gradient(var(--bg) 70%,rgba(11,9,18,0));display:flex;align-items:center;gap:12px;min-height:56px}
-.logo{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.06em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.top{position:sticky;top:var(--st);z-index:20;margin-left:calc(-1*var(--gl));margin-right:calc(-1*var(--gr));padding:12px var(--gr) 10px var(--gl);background:linear-gradient(var(--bg) 70%,rgba(var(--bg-rgb,11,9,18),0));display:flex;align-items:center;gap:12px;min-height:56px}
+.logo{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.06em;background:var(--brand-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
 .logo-sub{font-family:var(--f-display);font-size:9px;letter-spacing:.32em;color:var(--faint);font-weight:500}
 .top h1{font-size:24px;font-weight:900;letter-spacing:.02em}
 .icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:50%;color:var(--fg);flex:none}
@@ -85,7 +86,7 @@ p{margin:0}
 .hero-meta{display:flex;justify-content:space-between;gap:10px;align-items:center}
 .hero-meta .t{font-weight:700;font-size:16px;line-height:1.35}
 .hero-meta .a{color:var(--muted);font-size:13px}
-.play-fab{width:44px;height:44px;border-radius:50%;background:var(--grad);display:grid;place-items:center;flex:none;box-shadow:0 8px 18px -6px var(--glow)}
+.play-fab{width:44px;height:44px;border-radius:50%;color:var(--on-btn,inherit);background:var(--grad);display:grid;place-items:center;flex:none;box-shadow:0 8px 18px -6px var(--glow)}
 
 .card{width:142px;display:flex;flex-direction:column;gap:8px;text-align:left}
 .card .cover{border-radius:14px}
@@ -100,7 +101,7 @@ p{margin:0}
 .row .rank{font-family:var(--f-display);font-weight:700;font-size:15px;width:24px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums}
 .row .rank.top{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
 .row .t{font-weight:700;font-size:14.5px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.row.cur .t{color:#c9a8ff}
+.row.cur .t{color:var(--accent-soft,#c9a8ff)}
 .row .sub{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px;min-width:0}
 .row .sub span.n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row .end{display:flex;align-items:center;gap:2px;color:var(--muted)}
@@ -147,9 +148,9 @@ textarea.input{min-height:130px;resize:vertical;line-height:1.7}
 .checks{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:6px 4px}
 .check{display:flex;gap:12px;align-items:flex-start;padding:10px;text-align:left;width:100%;font-size:13.5px;line-height:1.55}
 .box{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--faint);display:grid;place-items:center;flex:none;margin-top:1px;transition:.15s}
-.check.on .box{background:var(--grad);border-color:transparent}
+.check.on .box{background:var(--grad);border-color:transparent;color:var(--on-btn,inherit)}
 .btn{height:50px;border-radius:14px;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;width:100%}
-.btn.primary{background:var(--grad);box-shadow:0 10px 24px -10px var(--glow)}
+.btn.primary{color:var(--on-btn,inherit);background:var(--grad);box-shadow:0 10px 24px -10px var(--glow)}
 .btn.primary:disabled{opacity:.4;box-shadow:none}
 .btn.ghost{background:var(--surface2);border:1px solid var(--line)}
 .btn.sm{height:38px;font-size:13px;border-radius:11px;width:auto;padding:0 14px}
@@ -177,7 +178,7 @@ textarea.input{min-height:130px;resize:vertical;line-height:1.7}
 .tabs button{padding:10px 0;font-size:14px;color:var(--muted);font-weight:500;position:relative}
 .tabs button.on{color:var(--fg);font-weight:700}
 .tabs button.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--grad);border-radius:2px}
-.admin-entry{display:flex;align-items:center;gap:12px;margin-top:16px;padding:14px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(120deg,rgba(164,99,255,.14),rgba(90,114,255,.08));text-align:left;width:100%}
+.admin-entry{display:flex;align-items:center;gap:12px;margin-top:16px;padding:14px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(120deg,rgba(var(--accent-rgb,164,99,255),.14),rgba(var(--btn-rgb,90,114,255),.08));text-align:left;width:100%}
 
 /* profile edit（v1.6） */
 .pbanner{margin:6px 0 0;aspect-ratio:3/1;border-radius:16px;background:var(--surface2) center/cover no-repeat;border:1px solid var(--line)}
@@ -221,7 +222,7 @@ button.stat{font:inherit;color:inherit;background:none;border:0;cursor:pointer;w
 .fl-breakdown{margin:0 0 10px}
 
 /* onboarding（第3段階） */
-.welcome{position:relative;margin-top:14px;padding:18px 16px 16px;border-radius:18px;border:1px solid var(--line);background:linear-gradient(135deg,rgba(164,99,255,.16),rgba(90,114,255,.08)),var(--surface);display:flex;flex-direction:column;gap:8px}
+.welcome{position:relative;margin-top:14px;padding:18px 16px 16px;border-radius:18px;border:1px solid var(--line);background:linear-gradient(135deg,rgba(var(--accent-rgb,164,99,255),.16),rgba(var(--btn-rgb,90,114,255),.08)),var(--surface);display:flex;flex-direction:column;gap:8px}
 .welcome h2{font-size:19px;font-weight:900;padding-right:34px}
 .welcome .welcome-lead{font-size:15px;font-weight:700;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;width:fit-content}
 .welcome p{font-size:13.5px;line-height:1.7;color:var(--fg)}
@@ -234,6 +235,26 @@ button.stat{font:inherit;color:inherit;background:none;border:0;cursor:pointer;w
 .guide-ic{width:40px;height:40px;border-radius:12px;margin:0;flex:none}
 .guide-step h2{font-size:15.5px;font-weight:900;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
 .guide-step p{font-size:13.5px;line-height:1.75;color:var(--muted);margin-top:4px}
+
+/* color theme（第4段階） */
+.th-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+.th-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px;border-radius:14px;border:1px solid var(--line);background:var(--surface);text-align:left;min-width:0}
+.th-card.on{border:2px solid var(--violet);padding:11px}
+.th-card b{font-size:14px}
+.th-card>span{font-size:11.5px;color:var(--muted)}
+.th-sw{display:flex;gap:6px;align-items:center;width:100%;height:34px;border-radius:9px;padding:0 9px;margin-bottom:6px;border:1px solid rgba(255,255,255,.12)}
+.th-sw i{width:16px;height:16px;border-radius:50%;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+.th-check{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:var(--fg);margin-top:4px;text-decoration:underline;text-underline-offset:3px}
+.th-check.inline{margin:0 0 0 8px;vertical-align:middle;text-transform:none;letter-spacing:0}
+.th-custom{display:flex;flex-direction:column;gap:8px}
+.th-color{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.th-color input[type=color]{width:44px;height:44px;border:0;padding:0;background:none;border-radius:10px;flex:none;cursor:pointer}
+.th-color span{display:flex;flex-direction:column;min-width:0;flex:1}
+.th-color b{font-size:14px}
+.th-color small{font-size:11.5px;color:var(--muted)}
+.th-color code{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.th-preview{margin-top:14px;padding:12px;border:1px dashed var(--line);border-radius:14px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.th-preview .tabs{width:100%}
 
 /* legal pages（利用規約・プライバシーポリシー・投稿ガイドライン） */
 .legal-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 16px;margin-top:18px}
@@ -277,7 +298,7 @@ button.stat{font:inherit;color:inherit;background:none;border:0;cursor:pointer;w
 .nav-in{max-width:520px;margin:0 auto;height:var(--nav-h);display:grid;grid-template-columns:repeat(4,1fr)}
 .nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;color:var(--faint);font-weight:500}
 .nav button.on{color:var(--fg);font-weight:700}
-.nav .up{width:44px;height:30px;border-radius:10px;background:var(--grad);display:grid;place-items:center;color:#fff}
+.nav .up{width:44px;height:30px;border-radius:10px;background:var(--grad);display:grid;place-items:center;color:var(--on-btn,#fff)}
 
 /* mini player */
 .mini{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + var(--sb));z-index:39;padding:0 var(--gr) 6px var(--gl);animation:enter .3s ease}
@@ -331,7 +352,7 @@ button.stat{font:inherit;color:inherit;background:none;border:0;cursor:pointer;w
 .toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + var(--mini-h) + var(--sb) + 18px);transform:translateX(-50%);z-index:100;background:#fff;color:#0b0912;font-weight:700;font-size:13.5px;padding:10px 16px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.4);animation:enter .25s;max-width:calc(100% - 32px);text-align:center}
 
 .eq{display:inline-flex;gap:2px;align-items:flex-end;height:12px}
-.eq i{width:3px;background:#c9a8ff;border-radius:1px;animation:eq .9s infinite ease-in-out}
+.eq i{width:3px;background:var(--accent-soft,#c9a8ff);border-radius:1px;animation:eq .9s infinite ease-in-out}
 .eq i:nth-child(2){animation-delay:.2s}.eq i:nth-child(3){animation-delay:.4s}
 @keyframes eq{0%,100%{height:3px}50%{height:12px}}
 
@@ -344,7 +365,7 @@ button.stat{font:inherit;color:inherit;background:none;border:0;cursor:pointer;w
 .drop b{font-size:15px}
 .drop span{font-size:12px;color:var(--muted)}
 .drop .fmt{font-family:var(--f-mono);font-size:11px;color:var(--faint);margin-top:4px}
-.drop-ic{width:52px;height:52px;border-radius:16px;background:var(--grad);display:grid;place-items:center;color:#fff;margin-bottom:6px;box-shadow:0 8px 20px -8px var(--glow)}
+.drop-ic{width:52px;height:52px;border-radius:16px;background:var(--grad);display:grid;place-items:center;color:var(--on-btn,#fff);margin-bottom:6px;box-shadow:0 8px 20px -8px var(--glow)}
 .drop.small{padding:16px 10px}
 .drop.small .drop-ic{width:42px;height:42px;border-radius:13px}
 .drop.small b{font-size:14px}
@@ -353,7 +374,7 @@ button.stat{font:inherit;color:inherit;background:none;border:0;cursor:pointer;w
 .opt-l{color:var(--faint);font-size:11px;margin-left:6px;font-weight:500}
 .fcard{border:1px solid var(--line);border-radius:16px;background:var(--surface);padding:12px;display:flex;flex-direction:column;gap:12px}
 .fcard-h{display:grid;grid-template-columns:46px minmax(0,1fr);gap:12px;align-items:center}
-.fthumb{width:46px;height:46px;border-radius:12px;background:var(--grad);display:grid;place-items:center;color:#fff}
+.fthumb{width:46px;height:46px;border-radius:12px;background:var(--grad);display:grid;place-items:center;color:var(--on-btn,#fff)}
 .fname{font-weight:700;font-size:14px;line-height:1.4;overflow-wrap:anywhere}
 .fmeta{color:var(--muted)}
 .fcard-f{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -411,6 +432,99 @@ const CONFIG = {
   reportReasons: ["既存曲に酷似している","不適切なジャケット画像","不適切な歌詞","なりすまし・名義の問題"]
 };
 
+/* ---------- THEME（カラーテーマ：第4段階） ----------
+   ・テーマは {v:1, preset, accent, bg, button}（色は #rrggbb）。標準テーマは CSS を一切上書きしない＝従来と完全に同じ見た目
+   ・それ以外は3色から全体の色を計算し、文字の読みやすさ（コントラスト比）を自動で確保する
+       本文の文字：背景に対して 7:1 以上 / 補足の文字：4.5:1 以上 / アクセント（線・アイコン）：3:1 以上 / ボタンの文字：4.5:1 以上
+   ・背景は現在「暗い色」のみ対応（ライトモードは将来対応。色の計算は明るい背景にも対応できる作り）
+   ・ロゴの色（--brand-grad）はテーマで変わらない */
+const THEME_PRESETS = [
+  {id:"standard", name:"AIMUSE標準", sub:"パープル×ブラック", accent:"#a463ff", bg:"#0b0912", button:"#7c5cff"},
+  {id:"ocean",    name:"オーシャン",  sub:"ブルー×ネイビー",   accent:"#5ab8ff", bg:"#06101e", button:"#2f74ff"},
+  {id:"rose",     name:"ローズ",      sub:"ピンク×ブラック",   accent:"#ff7ab6", bg:"#0f090d", button:"#e0458c"},
+  {id:"emerald",  name:"エメラルド",  sub:"グリーン×ブラック", accent:"#3fd49a", bg:"#07100c", button:"#16a06c"},
+  {id:"gold",     name:"ゴールド",    sub:"ゴールド×ダーク",   accent:"#f2c14e", bg:"#0f0d08", button:"#d9a62e"},
+  {id:"mono",     name:"モノクロ",    sub:"ブラック×ホワイト", accent:"#ffffff", bg:"#0a0a0a", button:"#f2f2f2"}
+];
+const THEME_STANDARD = {v:1, preset:"standard", accent:"#a463ff", bg:"#0b0912", button:"#7c5cff"};
+const HEX6 = /^#[0-9a-f]{6}$/i;
+const themeValid = t => !!t && typeof t==="object" && t.v===1
+  && (THEME_PRESETS.some(p=>p.id===t.preset) || t.preset==="custom")
+  && ["accent","bg","button"].every(k=>typeof t[k]==="string" && HEX6.test(t[k]))
+  && Object.keys(t).every(k=>["v","preset","accent","bg","button"].includes(k));
+const themeOfPreset = id => { const p=THEME_PRESETS.find(x=>x.id===id)||THEME_PRESETS[0]; return {v:1, preset:p.id, accent:p.accent, bg:p.bg, button:p.button}; };
+const themeSame = (a,b) => !!a && !!b && ["preset","accent","bg","button"].every(k=>String(a[k]).toLowerCase()===String(b[k]).toLowerCase());
+
+// --- 色の計算（sRGB・WCAG 2.x のコントラスト比）
+const hexRgb = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const rgbHex = c => "#"+c.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,"0")).join("");
+const mixHex = (a,b,t) => { const x=hexRgb(a), y=hexRgb(b); return rgbHex(x.map((v,i)=>v+(y[i]-v)*t)); };
+const lum = h => { const c=hexRgb(h).map(v=>{ v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4); }); return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2]; };
+const contrast = (a,b) => { const x=lum(a), y=lum(b); return (Math.max(x,y)+0.05)/(Math.min(x,y)+0.05); };
+// 背景とのコントラストが min 以上になるまで、文字色側を白（暗い背景）／黒（明るい背景）に近づける
+const ensureContrast = (fg,bg,min) => { const target = lum(bg)<0.18 ? "#ffffff" : "#000000"; let c=fg;
+  for(let t=0; t<=1.0001 && contrast(c,bg)<min; t+=0.05) c=mixHex(fg,target,t); return c; };
+const hueShift = (h,deg) => { let [r,g,b]=hexRgb(h).map(v=>v/255); const mx=Math.max(r,g,b), mn=Math.min(r,g,b), l=(mx+mn)/2; let hh=0,s=0;
+  if(mx!==mn){ const d=mx-mn; s=l>0.5?d/(2-mx-mn):d/(mx+mn); hh = mx===r?(g-b)/d+(g<b?6:0) : mx===g?(b-r)/d+2 : (r-g)/d+4; hh/=6; }
+  hh=((hh*360+deg)%360+360)%360/360;
+  const f=(p,q,t)=>{ t=(t+1)%1; return t<1/6?p+(q-p)*6*t : t<1/2?q : t<2/3?p+(q-p)*(2/3-t)*6 : p; };
+  if(s===0) return rgbHex([l,l,l].map(v=>v*255));
+  const q=l<0.5?l*(1+s):l+s-l*s, p=2*l-q; return rgbHex([f(p,q,hh+1/3),f(p,q,hh),f(p,q,hh-1/3)].map(v=>v*255)); };
+const BG_MAX_LUM = 0.04;   // 現在は暗い背景のみ（これより明るい色は自動で暗くする）
+
+// テーマ → 画面全体の色（CSSの共通色指定）。notes は自動調整した内容（画面で知らせる）
+function themeDerive(t){
+  const notes = [];
+  let bg = t.bg;
+  if(lum(bg) > BG_MAX_LUM){ let k=0; while(lum(bg)>BG_MAX_LUM && k<40){ bg=mixHex(bg,"#000000",0.08); k++; } notes.push("背景は、現在は暗い色のみ対応しています（明るい背景は今後対応予定）。読みやすい暗さに自動で調整しました"); }
+  const fg = ensureContrast(mixHex("#f4f2f8", t.accent, 0.04), bg, 7);
+  const surface = mixHex(mixHex(bg,"#ffffff",0.045), t.accent, 0.03);
+  const surface2 = mixHex(mixHex(bg,"#ffffff",0.085), t.accent, 0.045);
+  const line = mixHex(mixHex(bg,"#ffffff",0.14), t.accent, 0.07);
+  const muted = ensureContrast(mixHex(fg,bg,0.38), surface, 4.5);
+  const faint = ensureContrast(mixHex(fg,bg,0.56), bg, 3);
+  let accent = ensureContrast(t.accent, surface, 3);
+  if(accent.toLowerCase()!==t.accent.toLowerCase()) notes.push("アクセントカラーを、背景の上で見やすい明るさに自動で調整しました");
+  const accentSoft = ensureContrast(mixHex(accent,"#ffffff",0.35), surface, 4.5);
+  // ボタン：グラデーションの3色すべてで、ボタンの文字が 4.5:1 以上になるようにする
+  let btn = t.button, onBtn = "#ffffff", stops = [];
+  for(let k=0; k<30; k++){
+    stops = [mixHex(btn,"#ffffff",0.16), btn, hueShift(mixHex(btn,"#000000",0.06),-24)];
+    const w = Math.min(...stops.map(s=>contrast("#ffffff",s))), d = Math.min(...stops.map(s=>contrast("#0b0912",s)));
+    onBtn = w>=d ? "#ffffff" : "#0b0912";
+    if(Math.max(w,d) >= 4.5) break;
+    btn = w>=d ? mixHex(btn,"#000000",0.08) : mixHex(btn,"#ffffff",0.08);
+  }
+  if(btn.toLowerCase()!==t.button.toLowerCase()) notes.push("ボタンの文字が読みやすいよう、ボタンの色の明るさを自動で調整しました");
+  const rgb = h => hexRgb(h).join(",");
+  return { notes, vars:{
+    "--bg":bg, "--surface":surface, "--surface2":surface2, "--line":line, "--fg":fg, "--muted":muted, "--faint":faint,
+    "--violet":accent, "--indigo":hueShift(accent,-30), "--accent-soft":accentSoft,
+    "--grad":`linear-gradient(120deg,${stops[0]} 0%,${stops[1]} 45%,${stops[2]} 100%)`,
+    "--glow":`rgba(${rgb(btn)},.35)`, "--on-btn":onBtn,
+    "--accent-rgb":rgb(accent), "--btn-rgb":rgb(btn), "--bg-rgb":rgb(bg)
+  }};
+}
+const THEME_VARS = ["--bg","--surface","--surface2","--line","--fg","--muted","--faint","--violet","--indigo","--accent-soft","--grad","--glow","--on-btn","--accent-rgb","--btn-rgb","--bg-rgb"];
+// 画面に反映（標準テーマは上書きを外して従来のCSSのまま）
+function themeApply(t){
+  const root = document.documentElement.style;
+  const use = themeValid(t) ? t : THEME_STANDARD;
+  THEME_VARS.forEach(k=>root.removeProperty(k));
+  let bg = "#0b0912";
+  if(!themeSame(use, THEME_STANDARD)){ const d=themeDerive(use); Object.entries(d.vars).forEach(([k,v])=>root.setProperty(k,v)); bg=d.vars["--bg"]; }
+  const m = document.querySelector('meta[name="theme-color"]'); if(m) m.setAttribute("content", bg);
+}
+// 端末内の保存（ゲスト用のテーマ／ログイン中の人のテーマの一時記録）。保存できない環境でも動く
+const themeStore = {
+  get(k){ try{ const v=JSON.parse(localStorage.getItem(k)); return v; }catch(e){ return null; } },
+  set(k,v){ try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,JSON.stringify(v)); }catch(e){} },
+  guest(){ const t=this.get("aimuse.theme.guest"); return themeValid(t)?t:THEME_STANDARD; },
+  last(){ const x=this.get("aimuse.theme.last"); return x && themeValid(x.theme) ? x : null; }
+};
+// 起動時：前回この端末で表示していたテーマをすぐに反映（ログイン情報の確認を待つ間のちらつきを防ぐ）
+themeApply((themeStore.last()||{}).theme || themeStore.guest());
+
 const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355,"バラード":260,"ローファイ":190,"アニソン風":305,"アンビエント":235};
 
 /* ===== データ層（本番：Supabase） =====
@@ -421,7 +535,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-17.3";
+const BUILD = "2026-10-17.4";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -531,7 +645,8 @@ const auth = {
   subscribe(f){ this.listeners.add(f); f({user:this.user,profile:this.profile,ready:this.ready,recovery:this.recovery}); return ()=>this.listeners.delete(f); },
   async loadProfile(){
     if(!sb||!this.user){ this.profile=null; return; }
-    let r = await sb.from("profiles").select("id,display_name,is_admin,avatar_path,header_path").eq("id",this.user.id).maybeSingle();
+    let r = await sb.from("profiles").select("id,display_name,is_admin,avatar_path,header_path,theme").eq("id",this.user.id).maybeSingle();
+    if(r.error) r = await sb.from("profiles").select("id,display_name,is_admin,avatar_path,header_path").eq("id",this.user.id).maybeSingle();   // v1.8 SQL 未実行時
     if(r.error) r = await sb.from("profiles").select("id,display_name,is_admin").eq("id",this.user.id).maybeSingle();   // v1.6 SQL 未実行時
     const data = r.data;
     this.profile = data||{id:this.user.id,display_name:(this.user.email||"").split("@")[0],is_admin:false};
@@ -723,7 +838,7 @@ function Home({ctx}){
       <div className="spacer"></div>
       <button className="icon-btn" aria-label="検索" onClick=${()=>setTab("search")}><${Icon} n="search"/></button>
     </header>
-    <div className="demo-note"><${Icon} n="info" size=${18}/><span>${repoMode==="unconfigured"?html`<b>接続設定が未完了です</b>　サーバーとの接続設定（config.js）が完了するまで、楽曲を表示できません。`:repoMode==="error"?html`<b>読み込みに失敗しました</b>　通信状態を確認して、ページを再読み込みしてください。`:html`<b>AIMUSE</b>　AIで制作された楽曲だけを集めた音楽配信サービスです。表示されるのは審査で承認された楽曲だけです。`}</span></div>
+    ${!(showWelcome && repoMode!=="unconfigured" && repoMode!=="error") && html`<div className="demo-note"><${Icon} n="info" size=${18}/><span>${repoMode==="unconfigured"?html`<b>接続設定が未完了です</b>　サーバーとの接続設定（config.js）が完了するまで、楽曲を表示できません。`:repoMode==="error"?html`<b>読み込みに失敗しました</b>　通信状態を確認して、ページを再読み込みしてください。`:html`<b>AIMUSE</b>　AIで制作された楽曲だけを集めた音楽配信サービスです。表示されるのは審査で承認された楽曲だけです。`}</span></div>`}
     ${showWelcome && html`<${WelcomeCard} ctx=${ctx}/>`}
     ${songs.length===0&&html`<div className="home-empty">
       <span className="drop-ic"><${Icon} n="music" size=${26}/></span>
@@ -1046,6 +1161,7 @@ function MyPage({ctx}){
     <header className="top"><h1>マイページ</h1></header>
     <div className="demo-note"><${Icon} n="info" size=${18}/><span>ログインすると、楽曲の投稿と審査状況の確認ができます。</span></div>
     <${AuthPanel} ctx=${ctx}/>
+    <button className="btn ghost sm" style=${{margin:"18px auto 0"}} onClick=${ctx.openSettings}>カラーテーマを変更</button>
   </div>`;
   const myName = (profile&&profile.display_name)||(user.email||"").split("@")[0];
   const favSongs = songs.filter(s=>favs.has(s.id));
@@ -1076,7 +1192,8 @@ function MyPage({ctx}){
       ${tab==="follow" && (followed.length ? html`<div className="list">${followed.map(a=>html`<button key=${a.id} className="row norank" onClick=${()=>openArtist(a.id)}><${Cover} item=${a} radius="50%"/><div style=${{minWidth:0}}><div className="t">${a.name}</div><div className="sub">${fmtNum(a.followers)} フォロワー</div></div><${Icon} n="chev" size=${18}/></button>`)}</div>` : hiddenFollows===0 ? html`<div className="empty">フォローしたアーティストがここに並びます</div>` : null)}
       ${tab==="follow" && hiddenFollows>0 && html`<div className="fl-listeners"><${Icon} n="info" size=${18}/><span>ほか ${hiddenFollows}件は、現在公開中の曲がないアーティストです（フォローは残っています）。<button className="link" onClick=${()=>openFollowList({mine:true,mode:"following"})}>一覧で確認・解除する</button></span></div>`}
     </div>
-    <button className="btn ghost" style=${{marginTop:28}} onClick=${signOut}>ログアウト</button>
+    <button className="btn ghost" style=${{marginTop:28}} onClick=${ctx.openSettings}><${Icon} n="eye" size=${18}/>設定（カラーテーマ）</button>
+    <button className="btn ghost" style=${{marginTop:10}} onClick=${signOut}>ログアウト</button>
     <${LegalLinks} openLegal=${ctx.openLegal} openGuide=${ctx.openGuide}/>
   </div>`;
 }
@@ -1461,7 +1578,7 @@ function ProfileCropper({kind, source, onCancel, onDone}){
     setBusy(true);
     const s=s0*view.z, out=document.createElement("canvas"); out.width=spec.w; out.height=spec.h;
     const ctx2=out.getContext("2d"); ctx2.imageSmoothingQuality="high";
-    ctx2.fillStyle="#15121f"; ctx2.fillRect(0,0,spec.w,spec.h);   // 透明部分（PNG）は背景色で塗る
+    ctx2.fillStyle=(getComputedStyle(document.documentElement).getPropertyValue("--surface")||"#15121f").trim()||"#15121f"; ctx2.fillRect(0,0,spec.w,spec.h);   // 透明部分（PNG）は背景色で塗る
     ctx2.drawImage(source, -view.x/s, -view.y/s, W/s, H/s, 0, 0, spec.w, spec.h);
     let q=spec.quality, blob=await canvasBlob(out,q);
     while(blob && blob.size>PROFILE_SAVE_MAX && q>.5){ q-=.1; blob=await canvasBlob(out,q); }
@@ -1799,6 +1916,59 @@ function GuidePage({ctx}){
   </div>`;
 }
 
+/* ---------- SETTINGS（設定：カラーテーマ） ----------
+   ・選んだ色はすぐ画面全体に反映（リアルタイムプレビュー）。「保存する」まで記録しない。保存せずに戻ると元に戻る
+   ・ログイン中：Supabase（本人のプロフィール）に保存 / ゲスト：この端末に保存
+   ・「標準に戻す」はワンタップで標準テーマにして保存 */
+function SettingsPage({ctx}){
+  const {goBack,user,activeTheme,saveTheme,say} = ctx;
+  const [draft,setDraft] = useState(()=>activeTheme);
+  const [busy,setBusy] = useState(false);
+  const savedRef = useRef(activeTheme);
+  savedRef.current = activeTheme;
+  // 保存せずに画面を離れたら、保存済みのテーマに戻す
+  useEffect(()=>()=>themeApply(savedRef.current),[]);
+  useEffect(()=>{ themeApply(draft); },[draft]);
+  const notes = themeSame(draft,THEME_STANDARD) ? [] : themeDerive(draft).notes;
+  const dirty = !themeSame(draft,activeTheme);
+  const pick = id => setDraft(themeOfPreset(id));
+  const setColor = (k,v) => { if(HEX6.test(v)) setDraft(d=>({...d,[k]:v.toLowerCase(),preset:"custom"})); };
+  const save = async t => { setBusy(true); const ok = await saveTheme(t); setBusy(false); if(ok) setDraft(t); };
+  const isSel = id => draft.preset===id;
+  return html`<div className="screen">
+    <header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>設定</h1></header>
+    <section className="sec" style=${{marginTop:4}}>
+      <div className="sec-h"><div><span className="en">THEME</span><h2>カラーテーマ</h2></div></div>
+      <p className="hint">選ぶとすぐに画面全体へ反映されます（プレビュー）。「保存する」を押すまで記録されません。${user?"ログイン中は、どの端末でも同じテーマになります。":"ログインしていない間は、この端末にだけ保存されます。"}</p>
+      <div className="th-grid" role="radiogroup" aria-label="プリセットテーマ">
+        ${THEME_PRESETS.map(p=>html`<button key=${p.id} role="radio" aria-checked=${isSel(p.id)} className=${"th-card"+(isSel(p.id)?" on":"")} onClick=${()=>pick(p.id)}>
+          <span className="th-sw" style=${{background:p.bg}} aria-hidden="true"><i style=${{background:p.accent}}></i><i style=${{background:p.button}}></i></span>
+          <b>${p.name}</b><span>${p.sub}</span>
+          ${isSel(p.id) && html`<span className="th-check"><${Icon} n="check" size=${14} sw=${3}/>選択中</span>`}
+        </button>`)}
+      </div>
+      <div className="label">オリジナルカラー${draft.preset==="custom" && html`<span className="th-check inline"><${Icon} n="check" size=${12} sw=${3}/>使用中</span>`}</div>
+      <div className="th-custom">
+        ${[["accent","アクセントカラー","選択中の印・アイコン・リンクなど"],["bg","背景カラー","画面の背景（現在は暗い色のみ）"],["button","ボタンカラー","ボタン・タブの下線など"]].map(([k,l,h])=>html`<label key=${k} className="th-color">
+          <input type="color" value=${draft[k]} onInput=${e=>setColor(k,e.target.value)} onChange=${e=>setColor(k,e.target.value)} aria-label=${l}/>
+          <span><b>${l}</b><small>${h}</small></span><code>${draft[k].toUpperCase()}</code>
+        </label>`)}
+      </div>
+      ${notes.length>0 && html`<div className="warn-line" style=${{marginTop:10}}><${Icon} n="info" size=${15}/><span>${notes.join(" / ")}</span></div>`}
+      <div className="th-preview" aria-label="プレビュー">
+        <div className="tabs" style=${{marginTop:0}}><button className="on">選択中のタブ</button><button>ほかのタブ</button></div>
+        <div className="row norank" style=${{marginTop:6}}><${Cover} item=${{id:"p",hues:[270,230],pattern:1}} radius=${10}/><div style=${{minWidth:0}}><div className="t" style=${{color:"var(--accent-soft,#c9a8ff)"}}>再生中の曲</div><div className="sub"><span className="n">アーティスト名</span></div></div><span className="tag ok">公開中</span></div>
+        <button className="btn primary sm" tabIndex="-1">ボタンの見え方</button>
+      </div>
+      <div className="form" style=${{marginTop:14}}>
+        <button className="btn primary" onClick=${()=>save(draft)} disabled=${busy||!dirty}>${busy?"保存中…":"保存する"}</button>
+        <button className="btn ghost" onClick=${()=>save(themeOfPreset("standard"))} disabled=${busy||themeSame(activeTheme,THEME_STANDARD)&&themeSame(draft,THEME_STANDARD)}>標準に戻す（AIMUSE標準で保存）</button>
+        ${dirty && html`<button className="link" onClick=${()=>setDraft(activeTheme)}>変更を取り消す</button>`}
+      </div>
+    </section>
+  </div>`;
+}
+
 /* ---------- LEGAL（利用規約・プライバシーポリシー・投稿ガイドライン） ----------
    ・法律専門家による確認前の草案。【要確認：…】は公開前に確定させる項目（画面上で色付き表示）
    ・本文は blocks の配列：文字列＝段落、配列＝箇条書き
@@ -1910,6 +2080,7 @@ const LEGAL_DOCS = [
         "会員登録のとき：メールアドレス、パスワード、表示名（任意）。表示名を入力しなかった場合は、メールアドレスの「@」より前の部分が表示名として自動で設定されます。パスワードは認証サービス（Supabase Auth）が管理しており、運営者がパスワードそのものを閲覧する機能はありません。",
         "プロフィールを編集するとき：アイコン画像、背景画像、表示名、アーティスト名、自己紹介。アイコン・背景画像は、端末の中で切り抜き・縮小してから保存するため、撮影場所などの撮影情報（Exif）は保存されません。アーティスト名を変更した場合は、変更前と変更後の名前、日時、変更した人の記録を保存します。",
         "楽曲を投稿するとき：楽曲名、アーティスト名、ジャンル、使用したAIツール名、音源ファイル、ジャケット画像（任意）、歌詞（任意）、それぞれのファイルの元のファイル名・サイズ・形式、再生時間、権利に関する申告の内容、投稿日時。",
+        "カラーテーマを保存するとき（ログイン中）：選んだテーマの種類と色。本人のアカウントに保存し、公開されません。",
         "サービスを利用するとき：お気に入り・フォローの登録内容、通報の内容（対象の楽曲、理由、通報した会員のIDと表示名、日時）。",
         "再生数を数えるとき：ログイン中の方は会員ID、ログインしていない方はIPアドレスを元に戻せない形に変換（ハッシュ化）した値を、再生した楽曲と時間帯とともに記録します。IPアドレスそのものは、この記録には保存しません。",
         "通信の際に自動的に送られる情報：本サービスの表示や利用の際、IPアドレス、ブラウザの種類などの情報が、本サービスを動かすために運営者が利用している外部サービス（4.に記載）に送られます。",
@@ -1953,6 +2124,7 @@ const LEGAL_DOCS = [
       [
         "本サービスは、ログイン状態を保つため、ブラウザの保存領域（localStorage）にログイン情報（認証用の情報）を保存します。ログアウトすると削除されます。",
         "本サービスを最新の状態に更新するため、ブラウザの一時的な保存領域（sessionStorage）に、本サービスの版の情報を保存することがあります。",
+        "画面の表示に関する設定（はじめての方向けの案内を閉じたかどうか、ログインしていない間のカラーテーマ、前回表示したカラーテーマ）を、ブラウザの保存領域（localStorage）に保存します。ブラウザのデータを消去すると削除されます。",
         "本サービスは、広告や閲覧履歴の追跡を目的としたCookieやアクセス解析ツールを使用していません。",
         "4.に記載した外部サービスが、サービスの提供や安全確保のために、独自にCookieなどを使用する場合があります。"
       ]
@@ -2139,6 +2311,7 @@ function App(){
   const [artistId,setArtistId] = useState(null);
   const [legalDoc,setLegalDoc] = useState("terms");
   const [welcomeHidden,setWelcomeHidden] = useState(()=>welcomeStore.get());
+  const [guestTheme,setGuestTheme] = useState(()=>themeStore.guest());
   const [tracks,setTracks] = useState([]);
   const [reportsRaw,setReports] = useState([]);
   const [repoMode,setRepoMode] = useState("pending");
@@ -2261,6 +2434,28 @@ function App(){
   const openFollowList = view => { setFollowView(view); go("follows"); };
   // 初めての方への案内：ログインしたことがある端末・閉じた端末では表示しない
   const dismissWelcome = () => { welcomeStore.set(); setWelcomeHidden(true); };
+  // カラーテーマ：ログイン中は本人の保存済みテーマ（未保存ならこの端末のテーマ）、ログアウト後はこの端末のゲスト用テーマ
+  const userTheme = user && profile && themeValid(profile.theme) ? profile.theme : null;
+  const activeTheme = userTheme || guestTheme;
+  const themeKey = JSON.stringify(activeTheme);
+  useEffect(()=>{
+    if(!authState.ready || (user && !profile)) return;          // ログイン情報の確認が終わるまでは、起動時に反映したテーマのまま
+    if(tab!=="settings") themeApply(activeTheme);             // 設定画面ではプレビュー中の色を優先
+    themeStore.set("aimuse.theme.last", user ? {uid:user.id, theme:activeTheme} : null);
+  },[themeKey, authState.ready, uid, !!profile]);
+  const saveTheme = async t => {
+    if(!themeValid(t)){ say("テーマの形式が正しくありません"); return false; }
+    if(user){
+      const {error} = await sb.rpc("set_my_theme",{p_theme:t});
+      if(error){ say("テーマを保存できませんでした。通信状態を確認して、もう一度お試しください"); return false; }
+      auth.profile = {...auth.profile, theme:t}; auth.emit();
+      say("テーマを保存しました（どの端末でも同じテーマになります）");
+    } else {
+      themeStore.set("aimuse.theme.guest", t); setGuestTheme(t);
+      say("この端末にテーマを保存しました");
+    }
+    return true;
+  };
   const openGuide = () => go("guide");
   const openSignup = () => { authDraft.mode = "signup"; go("me"); };
 
@@ -2401,14 +2596,14 @@ function App(){
   };
 
   const signOut = () => auth.signOut().then(()=>{ say("ログアウトしました"); navTo("home"); });
-  const ctx = {showWelcome:!user&&!welcomeHidden&&authState.ready,dismissWelcome,openGuide,openSignup,followView,openFollowList,followVer,myArtistIds,legalDoc,openLegal,afterProfileSave,adminResetImage,user,profile,isAdmin,myFollowers,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
+  const ctx = {activeTheme,saveTheme,openSettings:()=>go("settings"),showWelcome:!user&&!welcomeHidden&&authState.ready,dismissWelcome,openGuide,openSignup,followView,openFollowList,followVer,myArtistIds,legalDoc,openLegal,afterProfileSave,adminResetImage,user,profile,isAdmin,myFollowers,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
     current,playing,toggle,pos,seek,next,prev,repeat,cycleRepeat,shuffle,setShuffle,close:()=>setPlayerOpen(false),showLyrics,setShowLyrics,queueLabel};
 
   useEffect(()=>{ document.body.style.overflow = playerOpen?"hidden":""; },[playerOpen]);
 
   const navItems = [["home","ホーム","home"],["search","検索","search"],["upload","投稿","plus"],["me","マイページ","user"]];
-  const navActive = (tab==="artist"||tab==="follows")?(history[0]||"home"):(tab==="admin"||tab==="legal"||tab==="profile")?"me":tab==="guide"?(history[0]||"home"):tab;
-  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin,legal:LegalPage,profile:ProfileEdit,follows:FollowList,guide:GuidePage}[tab];
+  const navActive = (tab==="artist"||tab==="follows")?(history[0]||"home"):(tab==="admin"||tab==="legal"||tab==="profile"||tab==="settings")?"me":tab==="guide"?(history[0]||"home"):tab;
+  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin,legal:LegalPage,profile:ProfileEdit,follows:FollowList,guide:GuidePage,settings:SettingsPage}[tab];
 
   return html`<div className="app">
     <${Screen} key=${tab+(tab==="artist"?artistId:tab==="follows"?JSON.stringify(followView):"")} ctx=${ctx}/>

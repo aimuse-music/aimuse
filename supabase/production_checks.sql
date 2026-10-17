@@ -1,7 +1,8 @@
 -- =====================================================================
--- AIMUSE 本番環境チェック r5（読み取り専用。何も変更しません）
--- 構築SQL（v1.5）・プロフィール編集SQL（v1.6）・フォロー一覧SQL（v1.7）を実行した後に、SQL Editor で実行してください。
--- 結果は23行。「結果」列がすべて OK なら正常です。
+-- AIMUSE 本番環境チェック r6（読み取り専用。何も変更しません）
+-- 構築SQL（v1.5）・プロフィール編集（v1.6）・フォロー一覧（v1.7）・カラーテーマ（v1.8）を実行した後に、SQL Editor で実行してください。
+-- 結果は24行。「結果」列がすべて OK なら正常です。
+-- r6：v1.8（カラーテーマ）の関数1個・確認24を追加
 -- r5：v1.7（フォロワー・フォロー中一覧）の関数7個・索引2個（確認23）を追加
 -- r4：v1.6（プロフィール編集）の関数10個・avatars のルール4件・確認3項目（20〜22）を追加
 -- r3：チェック7・8は AIMUSE の28関数だけを対象にしました
@@ -23,7 +24,9 @@ with aimuse_fn(name) as (
          ('admin_artist_name_history'),('avatar_can_upload'),('avatar_can_delete'),
          -- v1.7 フォロワー・フォロー中一覧
          ('is_visible_member'),('is_public_artist'),('public_artist_of_user'),('public_artist_follow_summary'),
-         ('public_artist_followers'),('public_artist_following'),('my_following')
+         ('public_artist_followers'),('public_artist_following'),('my_following'),
+         -- v1.8 カラーテーマ
+         ('set_my_theme')
 ),
 pubfn as (
   select p.oid, p.proname::text as name, p.prosecdef, p.proconfig
@@ -65,12 +68,12 @@ checks(no, item, ok, detail) as (
                 and policyname in ('aimuse select own or admin','aimuse update own')),
     null
   union all
-  select 7, 'AIMUSEの関数45個がそろい、権限の強い関数は search_path 固定',
-    (select count(*) from pubfn where name in (select name from aimuse_fn)) = 45
+  select 7, 'AIMUSEの関数46個がそろい、権限の強い関数は search_path 固定',
+    (select count(*) from pubfn where name in (select name from aimuse_fn)) = 46
     and not exists (select 1 from pubfn
                     where name in (select name from aimuse_fn) and prosecdef
                       and not coalesce(proconfig @> array['search_path=""'], false)),
-    (select count(*)::text || '/45個' from pubfn where name in (select name from aimuse_fn))
+    (select count(*)::text || '/46個' from pubfn where name in (select name from aimuse_fn))
       || coalesce(' 要確認:' || (select string_agg(name, ', ') from pubfn
                                  where name in (select name from aimuse_fn) and prosecdef
                                    and not coalesce(proconfig @> array['search_path=""'], false)), '')
@@ -160,6 +163,12 @@ checks(no, item, ok, detail) as (
   union all
   select 23, 'v1.7：フォロー一覧用の索引（大人数のページ分割用）',
     to_regclass('public.follows_artist_created_idx') is not null and to_regclass('public.follows_user_created_idx') is not null,
+    null
+  union all
+  select 24, 'v1.8：テーマ設定は形式チェックつき・本人も関数経由でしか変更できない',
+    exists (select 1 from pg_constraint where conrelid = 'public.profiles'::regclass and conname = 'profiles_theme_chk')
+    and not has_column_privilege('authenticated', 'public.profiles', 'theme', 'UPDATE')
+    and not has_column_privilege('anon', 'public.profiles', 'theme', 'UPDATE'),
     null
   union all
   select 15, '（参考）現在のデータ件数',

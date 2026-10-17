@@ -74,6 +74,7 @@
     if(q.table==="profiles"){
       if(q.op==="select"){
         if(window.__noV16 && /avatar_path/.test(q.cols)) return E('column profiles.avatar_path does not exist');
+        if(window.__noV18 && /theme/.test(q.cols)) return E('column profiles.theme does not exist');
         return { data: one(db.profiles.filter(p=>(p.id===me||isAdmin()) && match(p)).map(p=>pick(p,q.cols))), error:null };
       }
       if(q.op==="update"){
@@ -160,6 +161,15 @@
       }
       const p=db.profiles.find(x=>x.id===me); const col=p_kind+"_path"; const old=p[col]; p[col]=p_path; save();
       return {data:old,error:null};
+    },
+    set_my_theme({p_theme}){
+      if(window.__fail && window.__fail.theme) return E("ネットワークエラー");
+      const me=uid(); if(!me) return E("ERROR: ログインしてください");
+      const t=p_theme, K=["v","preset","accent","bg","button"], H=/^#[0-9a-fA-F]{6}$/;
+      const okT = t===null || (t && typeof t==="object" && !Array.isArray(t) && K.every(k=>k in t) && Object.keys(t).every(k=>K.includes(k)) && t.v===1
+        && ["standard","ocean","rose","emerald","gold","mono","custom"].includes(t.preset) && ["accent","bg","button"].every(k=>typeof t[k]==="string"&&H.test(t[k])));
+      if(!okT) return E("ERROR: テーマの形式が正しくありません");
+      const p=db.profiles.find(x=>x.id===me); p.theme=t; save(); return {data:null,error:null};
     },
     rename_my_artist({p_artist,p_name}){
       if(window.__fail.rename) return E("ネットワークエラー");

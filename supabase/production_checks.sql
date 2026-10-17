@@ -1,7 +1,8 @@
 -- =====================================================================
--- AIMUSE 本番環境チェック r9（読み取り専用。何も変更しません）
+-- AIMUSE 本番環境チェック r10（読み取り専用。何も変更しません）
 -- 構築SQL（v1.5）・v1.6〜v1.10 をすべて実行した後に、SQL Editor で実行してください。
 -- 結果は29行。「結果」列がすべて OK なら正常です。
+-- r10：v1.9 r4 のパスワード照合の関数名（account_reauth_begin・account_reauth_end）に対応
 -- r9：v1.9 r3 の退会の受付・完全削除のスイッチ（確認29）を追加
 -- r8：v1.9 r2（退会の申請をサーバーのパスワード照合経由に）の関数・確認28（レビューの投稿者名）を追加
 -- r7：v1.9（楽曲の削除・退会）の関数10個・確認25〜27を追加
@@ -31,7 +32,7 @@ with aimuse_fn(name) as (
          -- v1.8 カラーテーマ
          ('set_my_theme'),
          -- v1.9 楽曲の削除・退会
-         ('delete_my_track'),('account_request_deletion'),('account_reauth_allowed'),('account_reauth_failed'),('cancel_my_account_deletion'),('my_account_deletion'),
+         ('delete_my_track'),('account_request_deletion'),('account_reauth_begin'),('account_reauth_end'),('cancel_my_account_deletion'),('my_account_deletion'),
          ('account_purge_claim'),('account_purge_pending_files'),('account_purge_mark_files'),('account_purge_db'),
          ('account_purge_finish'),('account_purge_fail')
 ),
@@ -193,9 +194,9 @@ checks(no, item, ok, detail) as (
     (select bool_and(not has_function_privilege('anon', p.oid, 'execute')
                      and not has_function_privilege('authenticated', p.oid, 'execute')
                      and has_function_privilege('service_role', p.oid, 'execute'))
-     from pubfn p where p.name like 'account_purge_%' or p.name in ('account_request_deletion','account_reauth_allowed','account_reauth_failed'))
-    and (select count(*) from pubfn where name like 'account_purge_%' or name in ('account_request_deletion','account_reauth_allowed','account_reauth_failed')) = 9,
-    (select count(*)::text || '/9個' from pubfn where name like 'account_purge_%' or name in ('account_request_deletion','account_reauth_allowed','account_reauth_failed'))
+     from pubfn p where p.name like 'account_purge_%' or p.name in ('account_request_deletion','account_reauth_begin','account_reauth_end'))
+    and (select count(*) from pubfn where name like 'account_purge_%' or name in ('account_request_deletion','account_reauth_begin','account_reauth_end')) = 9,
+    (select count(*)::text || '/9個' from pubfn where name like 'account_purge_%' or name in ('account_request_deletion','account_reauth_begin','account_reauth_end'))
   union all
   select 27, 'v1.9：失敗が続いて止まった退会処理がない（あれば運営の確認が必要）',
     not exists (select 1 from aimuse_private.account_deletions where status = 'failed'),

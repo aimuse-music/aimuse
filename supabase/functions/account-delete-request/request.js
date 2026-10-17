@@ -2,11 +2,11 @@
 // 本人確認は「ログイン時刻」ではなく、Supabase の正式な機能で毎回確認します。
 //   ① 送られてきたログイン情報（JWT）を Supabase の認証サーバーで確認 → 会員を特定（偽のログイン情報は通らない。公開用キーだけでは通らない）
 //   ①' 受付のスイッチと許可リストを確認（この関数の設定。データベース側でも同じ確認をする）
-//   ② 1時間に5回までの制限を確認（account_reauth_allowed）
+//   ② 1時間に5回までの枠を1つ予約（account_reauth_begin。会員ごとに1件ずつ処理するので、同時に送られても5回を超えない）
 //   ③ 入力されたパスワードを signInWithPassword（正式なログイン機能）で照合
 //      ・照合に使ったメールアドレスは①で特定した本人のもの（他人のメールアドレスは指定できない）
 //      ・照合のために作られたログインは、すぐに終了（admin.signOut）
-//      ・失敗は account_reauth_failed で記録
+//      ・結果は account_reauth_end で記録（失敗は回数に残す。成功・一時的な障害は予約を消して数えない）
 //   ④ 照合できた会員IDで account_request_deletion を呼ぶ（この関数は service_role 専用）
 //   ⑤ ほかの端末のログインを終了（admin.signOut の others）
 // 返す内容に、会員ID・メールアドレスは含めません。
@@ -39,17 +39,18 @@ export async function handleDeletionRequest({ admin, verifyPassword, userJwt, pa
     return reply(400, { code: "PASSWORD_REQUIRED", message: "パスワードを入力してください" });
   }
 
-  const { data: allowed, error: limitErr } = await admin.rpc("account_reauth_allowed", { p_user: user.id });
+  const { data: attempt, error: limitErr } = await admin.rpc("account_reauth_begin", { p_user: user.id });
   if (limitErr) return reply(500, { code: "SERVER_ERROR", message: "申請できませんでした。時間をおいてお試しください" });
-  if (allowed === false) return reply(429, { code: "TOO_MANY_ATTEMPTS", message: "パスワードの確認に続けて失敗したため、1時間ほど時間をおいてからお試しください" });
+  if (!attempt) return reply(429, { code: "TOO_MANY_ATTEMPTS", message: "パスワードの確認に続けて失敗したため、1時間ほど時間をおいてからお試しください" });
 
-  const check = await verifyPassword(user.email, password);
-  if (!check.ok || !check.userId || check.userId !== user.id) {
+  // 照合中に処理が止まった場合、予約は「失敗」として残る（回数を少なく数える側には倒れない）
+  let check;
+  try { check = await verifyPassword(user.email, password); } catch (_) { check = { ok: false, rejected: false }; }
+  const failed = !check.ok || !check.userId || check.userId !== user.id;
+  await admin.rpc("account_reauth_end", { p_attempt: attempt, p_failed: failed && check.rejected !== false });
+  if (failed) {
     if (check.temporaryJwt) await admin.auth.admin.signOut(check.temporaryJwt, "local").catch(() => {});
-    if (check.rejected) {
-      await admin.rpc("account_reauth_failed", { p_user: user.id });
-      return reply(401, { code: "WRONG_PASSWORD", message: "パスワードが正しくありません" });
-    }
+    if (check.rejected) return reply(401, { code: "WRONG_PASSWORD", message: "パスワードが正しくありません" });
     return reply(503, { code: "VERIFY_UNAVAILABLE", message: "本人確認ができませんでした。時間をおいてお試しください" });
   }
   // 照合のために作られたログインは使わないので終了

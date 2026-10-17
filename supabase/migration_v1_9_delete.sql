@@ -1,5 +1,7 @@
 -- =====================================================================
--- AIMUSE v1.9 r3 楽曲の削除（投稿者本人）とアカウントの退会（30日間の取り消し期間つき）
+-- AIMUSE v1.9 r4 楽曲の削除（投稿者本人）とアカウントの退会（30日間の取り消し期間つき）
+-- r4：パスワード照合の回数制限を、同時に送られても5回を超えない方式に変更（account_reauth_begin・account_reauth_end）。
+--     完全削除のときに、その会員のパスワード照合の記録も消す
 -- r3：退会の受付と完全削除に「データベース側のスイッチ」と「テスト用アカウントの許可リスト」を追加。
 --     初期状態は「誰も申請できない・完全削除は動かない」。運営者が SQL で切り替えるまで何も起きません
 -- r2：退会の申請は、サーバー側の処理（Edge Function「account-delete-request」）がパスワードを
@@ -168,11 +170,14 @@ do $$ begin
   end if;
 end $$;
 
--- 本人確認（パスワード照合）の失敗記録：1人1時間に5回まで（総当たりの防止）
+-- 本人確認（パスワード照合）の試行記録：1人1時間に5回まで（総当たりの防止）
+--   照合の前に1行を予約し（同時に送られても1件ずつ数える）、成功・一時的な障害のときだけ消す
 create table if not exists aimuse_private.reauth_failures (
   user_id uuid not null,
   at timestamptz not null default now()
 );
+alter table aimuse_private.reauth_failures add column if not exists id uuid not null default gen_random_uuid();
+create unique index if not exists reauth_failures_id_key on aimuse_private.reauth_failures(id);
 create index if not exists reauth_failures_user_idx on aimuse_private.reauth_failures(user_id, at);
 alter table aimuse_private.reauth_failures enable row level security;
 revoke all on aimuse_private.reauth_failures from public;
@@ -316,9 +321,9 @@ $$;
 -- 退会の申請（サーバー側の処理 account-delete-request 専用。service_role でのみ実行可）
 --   本人確認の流れ（Edge Function の中）：
 --     ① 送られてきたログイン情報（JWT）を Supabase で確認し、会員を特定（auth.getUser）
---     ② この関数群で「1時間に5回まで」を確認（account_reauth_allowed）
+--     ② 「1時間に5回まで」の枠を1つ予約（account_reauth_begin。同時に送られても5回を超えない）
 --     ③ 入力されたパスワードを Supabase の正式なログイン機能（signInWithPassword）で照合
---        失敗したら account_reauth_failed で記録。照合用に作られたログインはすぐに終了
+--        結果を account_reauth_end で記録（失敗は残す・成功と一時的な障害は消す）。照合用に作られたログインはすぐに終了
 --     ④ 照合できた会員IDで、この関数を呼ぶ（アプリ・会員・管理者は直接呼べません）
 --   ・管理者アカウントは退会できません（先に管理者権限を外す必要があります）
 --   ・公開中・審査待ちの曲を非公開にし、元の状態を記録します（取り消し時に復元）
@@ -371,22 +376,37 @@ begin
 end;
 $$;
 
--- パスワード照合をしてよいか（直近1時間の失敗が5回未満）
-create or replace function public.account_reauth_allowed(p_user uuid)
-returns boolean
-language sql stable security definer set search_path = ''
+-- 旧案（確認と記録が別々の関数。同時に送ると上限を超えられた）が残っていれば削除
+drop function if exists public.account_reauth_allowed(uuid);
+drop function if exists public.account_reauth_failed(uuid);
+
+-- パスワード照合の前に枠を1つ予約（直近1時間の記録が5件未満のときだけ）。上限なら null
+--   会員ごとの鍵で1件ずつ処理するので、同時に送られても5回を超えない（1日より古い記録は掃除）
+create or replace function public.account_reauth_begin(p_user uuid)
+returns uuid
+language plpgsql security definer set search_path = ''
 as $$
-  select (select count(*) from aimuse_private.reauth_failures f
-          where f.user_id = p_user and f.at > now() - interval '1 hour') < 5;
+declare
+  v_id uuid;
+begin
+  if p_user is null then return null; end if;
+  perform pg_advisory_xact_lock(hashtextextended('aimuse_reauth:' || p_user::text, 0));
+  delete from aimuse_private.reauth_failures where at < now() - interval '1 day';
+  if (select count(*) from aimuse_private.reauth_failures f
+      where f.user_id = p_user and f.at > now() - interval '1 hour') >= 5 then
+    return null;
+  end if;
+  insert into aimuse_private.reauth_failures (user_id) values (p_user) returning id into v_id;
+  return v_id;
+end;
 $$;
 
--- パスワード照合の失敗を記録（1日より古い記録は掃除）
-create or replace function public.account_reauth_failed(p_user uuid)
+-- 照合の結果：失敗なら予約をそのまま失敗として残す。成功・一時的な障害なら予約を消す（回数に数えない）
+create or replace function public.account_reauth_end(p_attempt uuid, p_failed boolean)
 returns void
 language sql security definer set search_path = ''
 as $$
-  insert into aimuse_private.reauth_failures (user_id) values (p_user);
-  delete from aimuse_private.reauth_failures where at < now() - interval '1 day';
+  delete from aimuse_private.reauth_failures where id = p_attempt and not coalesce(p_failed, true);
 $$;
 
 -- 旧案（会員が直接呼ぶ申請関数）が残っていれば削除
@@ -589,6 +609,7 @@ begin
      set reviews = coalesce((select jsonb_agg(e) from jsonb_array_elements(d.reviews) e
                              where e->>'user_id' is distinct from v_user::text), '[]'::jsonb)
    where d.reviews @> jsonb_build_array(jsonb_build_object('user_id', v_user::text));
+  delete from aimuse_private.reauth_failures where user_id = v_user;
   update aimuse_private.account_deletions set db_done_at = coalesce(db_done_at, now()) where id = p_request;
 end;
 $$;
@@ -612,6 +633,7 @@ begin
          hidden_tracks = '[]'::jsonb, last_error = null
    where id = p_request;
   delete from aimuse_private.account_deletion_files where request_id = p_request;
+  delete from aimuse_private.reauth_failures where user_id = v_user;
 end;
 $$;
 
@@ -638,8 +660,8 @@ revoke all on function aimuse_private.collect_account_files(uuid, uuid) from pub
 revoke all on function aimuse_private.purge_lease(uuid, uuid) from public;
 revoke all on function public.delete_my_track(uuid) from public, anon, authenticated;
 revoke all on function public.account_request_deletion(uuid) from public, anon, authenticated;
-revoke all on function public.account_reauth_allowed(uuid) from public, anon, authenticated;
-revoke all on function public.account_reauth_failed(uuid) from public, anon, authenticated;
+revoke all on function public.account_reauth_begin(uuid) from public, anon, authenticated;
+revoke all on function public.account_reauth_end(uuid, boolean) from public, anon, authenticated;
 revoke all on function public.cancel_my_account_deletion() from public, anon, authenticated;
 revoke all on function public.my_account_deletion() from public, anon, authenticated;
 revoke all on function public.account_purge_claim() from public, anon, authenticated;
@@ -657,8 +679,8 @@ grant execute on function public.my_account_deletion() to authenticated;
 do $$ begin
   if exists (select 1 from pg_roles where rolname = 'service_role') then
     execute 'grant execute on function public.account_request_deletion(uuid) to service_role';
-    execute 'grant execute on function public.account_reauth_allowed(uuid) to service_role';
-    execute 'grant execute on function public.account_reauth_failed(uuid) to service_role';
+    execute 'grant execute on function public.account_reauth_begin(uuid) to service_role';
+    execute 'grant execute on function public.account_reauth_end(uuid, boolean) to service_role';
     execute 'grant execute on function public.account_purge_claim() to service_role';
     execute 'grant execute on function public.account_purge_pending_files(uuid, uuid) to service_role';
     execute 'grant execute on function public.account_purge_mark_files(uuid, uuid) to service_role';

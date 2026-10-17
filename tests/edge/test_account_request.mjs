@@ -64,6 +64,8 @@ ok("3 パスワード違いは 401・失敗を記録・申請しない", r.statu
 ok("3 照合に使うメールアドレスはログイン中の本人のもの", r.log.includes("verify:hamu@example.com"), r.log);
 r = await call("jwt-hamu", "hamu-pass", { verifyDown: true });
 ok("4 認証サーバーの一時的な障害は 503（失敗回数に数えない・申請しない）", r.status === 503 && q(`select count(*) from aimuse_private.reauth_failures where user_id='${HAMU}'`) === "1" && active(HAMU) === "0", r.status);
+{ const e = env(); const r2 = await handleDeletionRequest({ admin: e.admin, verifyPassword: async () => { throw new Error("network"); }, userJwt: "jwt-hamu", password: "hamu-pass", mode: "all" });
+  ok("4b 照合中の例外も 503（回数に数えない・申請しない）（C4）", r2.status === 503 && q(`select count(*) from aimuse_private.reauth_failures where user_id='${HAMU}'`) === "1" && active(HAMU) === "0", r2.status); }
 r = await call("jwt-ryo", "ryo-pass");
 ok("5 管理者アカウントは 403", r.status === 403 && r.body.code === "ADMIN_ACCOUNT" && active(USERS["jwt-ryo"].id) === "0", r.body);
 ok("5 照合用に作られたログインはすぐ終了", r.log.some(x => x === "signOut:temporary:local"), r.log);

@@ -84,7 +84,7 @@ html{scroll-behavior:smooth}
   <header class="head">
     <span class="eyebrow">AIMUSE 第1〜6段階 ・ 2026年10月17日</span>
     <h1>AIMUSE 公開手順書</h1>
-    <span class="status">監査完了 ・ C1〜C3 とリピート修正は手元で実装・テスト済み ・ 本番作業は未実施 ・ 運営者の承認待ち</span>
+    <span class="status">監査完了 ・ C1〜C4 とリピート修正は手元で実装・テスト済み ・ 本番作業は未実施 ・ 運営者の承認待ち</span>
     <p class="muted">本番の Supabase・GitHub・Cloudflare・Edge Functions・Cron・BOOST には、この監査では一切触れていません。下の手順は、承認をいただいた段階から1つずつ進めるための計画です。</p>
   </header>
 
@@ -97,7 +97,7 @@ html{scroll-behavior:smooth}
   <section id="verdict">
     <div class="box verdict">
       <span class="eyebrow">結論</span>
-      <h2>段階的に公開できる状態。必要な修正（C1〜C3・リピート）は手元で実装・テスト済み</h2>
+      <h2>段階的に公開できる状態。必要な修正（C1〜C4・リピート）は手元で実装・テスト済み</h2>
       <ul>
         <li><b>SQL（v1.6〜v1.10）</b>：本番に近いデータ（会員300人・曲1,190曲ほか）で、既存データを1件も変えずに適用でき、元に戻す用SQLで適用前と同じ状態に戻せることを確認しました <span class="pill p-ok">22/22 合格</span></li>
         <li><b>今の公開中の画面との両立</b>：SQL を先に入れても、今の画面（main）が使う機能は従来どおり動きます（v1.5 の権限テスト 63/63）。そのため「SQL を先に入れ、画面は後から」の順で進められます</li>
@@ -184,7 +184,7 @@ html{scroll-behavior:smooth}
         <tr><td><b>C2</b> <span class="pill p-ok">済</span></td><td>新しい形式のキー対応：<code>SUPABASE_SECRET_KEYS</code>・<code>SUPABASE_PUBLISHABLE_KEYS</code> を読み、旧形式は予備。秘密キーは <code>apikey</code> ヘッダーだけで送る。ライブラリを使わず Supabase の公開 API を直接呼ぶ。「Verify JWT」はオフにし、関数の中でログイン情報を認証サーバーに確認＋パスワード照合。公開用キーだけの呼び出しは何もしない</td><td>段階7</td></tr>
         <tr><td><b>C3</b> <span class="pill p-ok">済</span></td><td>受付スイッチと許可リストを<b>2か所</b>に：関数の設定（<code>AIMUSE_DELETE_MODE</code>・<code>AIMUSE_DELETE_TESTERS</code>）とデータベース（<code>account_deletion_mode</code>・<code>deletion_testers</code>）。両方が許可したときだけ申請できる。初期値は off（誰も申請できない）。完全削除も2か所のスイッチ（<code>AIMUSE_PURGE_ENABLED</code>・<code>account_purge_enabled</code>）で、途中でオフにすると次の手順で止まる</td><td>段階7</td></tr>
         <tr><td><b>R1</b> <span class="pill p-ok">済</span></td><td>1曲リピートで曲の終わりに止まる不具合：曲の終わりで「再生中」の状態が変わらず、再生の指示が出ていなかった。同じ曲を直接再生し直し、1曲リピートでは端末の繰り返し機能も使う。シャッフルは全曲を1回ずつ、ロック画面などからの一時停止も表示に反映</td><td>段階5</td></tr>
-        <tr><td>C4（小）</td><td>完全削除のときにパスワード照合の失敗記録も消す／同時送信での回数上限を厳密にする</td><td>段階9までに（未実装）</td></tr>
+        <tr><td>C4 済</td><td>パスワード照合の回数制限を「照合の前に枠を1つ予約する」方式に変更（account_reauth_begin・account_reauth_end）。12回同時に送っても照合は5回まで。成功・一時的な障害は回数に数えない。完全削除のとき（データ削除・完了の両方）に、その会員の照合記録も消す（v1.9 r4）</td><td>段階5（v1.9 に含む）</td></tr>
       </tbody>
     </table></div>
   </section>
@@ -220,8 +220,9 @@ html{scroll-behavior:smooth}
       <div class="stage-h"><span class="stage-no">0</span><div class="t"><h3>準備と事前確認（本番は変更しない）</h3><span class="tags"><span class="pill p-acc">読み取りのみ</span></span></div></div>
       <div class="field"><h4>実施する作業</h4><ul>
         <li>Cloudflare のプレビュー公開が止まっていることを、運営者が確認する</li>
-        <li>ご承認後、開発ブランチを GitHub に push する（main には反映しない）</li>
+        <li>ご承認後、開発ブランチを GitHub に push する（main には反映しない）。<code>release-fixes</code> は push 済み。段階2〜4で使う <code>follow-lists</code>・<code>onboarding</code>・<code>color-theme</code> の3つも push が必要（3つとも <code>release-fixes</code> の履歴の途中のコミットと同じ）</li>
         <li>本番の SQL Editor で、読み取り専用の <code>stage0_inventory_readonly.sql</code>（構造・関数・権限・RLS・BOOST の確認）と <code>release_preflight.sql</code> を実行し、結果を保存する</li>
+        <li>関数が「相違（中身）」になった場合は、読み取り専用の <code>stage0b_function_diff_readonly.sql</code> で原因を切り分ける（2026年10月17日の本番では、28個すべて「改行コードだけ違う」・設定は一致。処理は構築SQLと同じ）</li>
         <li>テスト用アカウントを2つ用意する（投稿者役・リスナー役。退会の検証で削除しても困らないもの）</li>
         <li>Supabase のプランで、バックアップが取られているかを確認する</li>
       </ul></div>
@@ -229,7 +230,7 @@ html{scroll-behavior:smooth}
       <div class="field"><h4>実行前の確認</h4><ul><li>第1〜6段階のバックアップファイルが手元に残っていること</li><li>今の本番サイトが正常に動いていること</li></ul></div>
       <div class="go"><h4>成功の条件</h4><ul class="chk">
         <li><input type="checkbox" id="c0a"><label for="c0a">事前確認の「結果」がすべて OK（3番は「なし（未適用）」）</label></li>
-        <li><input type="checkbox" id="c0d"><label for="c0d">構造の確認（stage0_inventory_readonly.sql）の判定がすべて「一致」「OK」「参考」</label></li>
+        <li><input type="checkbox" id="c0d"><label for="c0d">構造の確認（stage0_inventory_readonly.sql）の判定がすべて「一致」「OK」「参考」。関数の「相違（中身）」は、stage0b で「改行コードだけ違う」「空白・字下げだけ違う」「コメントと空白だけ違う」のどれかで、まとめの2・3行目が OK なら問題なし</label></li>
         <li><input type="checkbox" id="c0b"><label for="c0b">件数（20〜24番）を保存した</label></li>
         <li><input type="checkbox" id="c0c"><label for="c0c">テスト用アカウント2つでログインできる</label></li>
       </ul></div>
@@ -312,7 +313,7 @@ html{scroll-behavior:smooth}
       <div class="stage-h"><span class="stage-no">5</span><div class="t"><h3>SQL v1.9・v1.10 と画面：曲の削除（退会・PWA はオフ）</h3><span class="tags"><span class="pill p-warn">データベースの変更</span> <span class="pill p-acc">画面の公開</span></span></div></div>
       <div class="field"><h4>実施する作業</h4><ol>
         <li><code>migration_v1_9_delete.sql</code> → <code>migration_v1_10_review_names.sql</code> を実行</li>
-        <li>ここで初めて <code>production_checks.sql</code>（r9）を実行し、29行すべて OK を確認</li>
+        <li>ここで初めて <code>production_checks.sql</code>（r10）を実行し、29行すべて OK を確認</li>
         <li>ブランチ <code>release-fixes</code> の画面をマージ（<code>config.js</code> は初期値の「PWA：オフ・退会：オフ」のまま）</li>
       </ol><p class="note">Edge Functions はまだ作りません。退会の入口は表示されず、仮に開けても「準備中」と表示されます。</p></div>
       <div class="field"><h4>iPhone での操作</h4><p>SQL Editor（3本）→ GitHub → Cloudflare。</p></div>
@@ -378,7 +379,7 @@ where key in ('account_deletion_mode', 'account_purge_enabled');
 update aimuse_private.account_deletions set purge_after = now()
 where status = 'pending'
   and user_id = (select id from auth.users where email = 'テスト用のメールアドレス');</pre></div>
-      <div class="field"><h4>iPhone での操作</h4><p>Supabase の管理画面 → Edge Functions →「Deploy a new function」→ エディタに各フォルダの2ファイルを貼り付け → Secrets に値を登録。手動実行は関数の画面の「Test」で、ヘッダーに合言葉を付けて送ります（管理画面のこの機能は <span class="pill p-warn">要確認</span>）。</p></div>
+      <div class="field"><h4>iPhone での操作</h4><p>Supabase の管理画面 → Edge Functions →「Deploy a new function」→ エディタに各フォルダの3ファイル（<code>index.ts</code>・<code>request.js</code> または <code>purge.js</code>・<code>supa.js</code>）を貼り付け → Secrets に値を登録。手動実行は関数の画面の「Test」で、ヘッダーに合言葉を付けて送ります（管理画面のこの機能は <span class="pill p-warn">要確認</span>）。</p></div>
       <div class="field"><h4>実行前の確認</h4><ul><li>C2・C3 が手元のテストに合格している</li><li>テスト用アカウントに、テスト用の曲・アイコン・背景がある</li><li>本物の利用者の退会申請が0件（状況のSQLで確認）</li></ul></div>
       <div class="go"><h4>成功の条件</h4><ul class="chk">
         <li><input type="checkbox" id="c7a"><label for="c7a">パスワード違いは断られ、5回で1時間止まる</label></li>
@@ -463,7 +464,7 @@ select cron.schedule('aimuse-account-purge', '17 18 * * *', $$
       <li>SQL Editor が1回の実行を1つのまとまりとして扱うこと（途中失敗で全体が取り消されること）</li>
       <li>新しい形式のキーでの Edge Functions の動作（C2 実装後に段階7で確認）</li>
       <li>パスワード違いのときの Supabase の応答と、ほかの端末のログイン終了</li>
-      <li>管理画面から Edge Function を手動で実行できるか、2ファイル構成の関数を作れるか</li>
+      <li>管理画面から Edge Function を手動で実行できるか、3ファイル構成の関数を作れるか</li>
       <li>iPhone のホーム画面のアプリでのログインのし直し、画面ロック中の再生、ノッチ部分の見え方</li>
       <li>Android 実機でのインストールの表示</li>
       <li>Supabase のプランでのバックアップの有無と保存期間</li>
@@ -477,9 +478,10 @@ select cron.schedule('aimuse-account-purge', '17 18 * * *', $$
       <thead><tr><th>ファイル</th><th>用途</th></tr></thead>
       <tbody>
         <tr><td class="mono">supabase/stage0_inventory_readonly.sql</td><td>段階0：本番の構造・関数・権限・RLS・BOOST を構築SQLと比べる（読み取り専用・1つの SELECT 文）</td></tr>
+        <tr><td class="mono">supabase/stage0b_function_diff_readonly.sql</td><td>段階0：関数の違いが改行・空白・コメントだけか、処理の中身かを切り分ける。権限の強さ・search_path も関数ごとに確認（読み取り専用・本文は出さない）</td></tr>
         <tr><td class="mono">supabase/release_preflight.sql</td><td>各段階の前後に実行する読み取り専用の確認（どの段階でも実行可）</td></tr>
         <tr><td class="mono">supabase/migration_v1_6〜v1_10_*.sql</td><td>本番に入れるSQL（各段階で1本ずつ）</td></tr>
-        <tr><td class="mono">supabase/production_checks.sql</td><td>r9・29項目。v1.10 まで入れた後に実行</td></tr>
+        <tr><td class="mono">supabase/production_checks.sql</td><td>r10・29項目。v1.10 まで入れた後に実行</td></tr>
         <tr><td class="mono">supabase/rollback/rollback_v1_6〜v1_10.sql</td><td>元に戻す用（緊急時のみ）</td></tr>
         <tr><td class="mono">supabase/emergency/admin_cancel_deletion.sql</td><td>運営による退会の取り消し（緊急時のみ）</td></tr>
         <tr><td class="mono">release/sw_killswitch.js</td><td>PWA の緊急停止用</td></tr>

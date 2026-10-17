@@ -7,7 +7,7 @@
 
 1. 送られてきたログイン情報（JWT）を、Supabase の認証サーバー（`/auth/v1/user`）で確認して会員を特定（公開用キーだけの呼び出しは何もしない）
 2. 受付スイッチ（この関数の設定）を確認：`AIMUSE_DELETE_MODE` が off（初期値）なら誰も申請できない／testers なら `AIMUSE_DELETE_TESTERS` の会員だけ／all なら全員
-3. 1時間に5回までの制限を確認（`account_reauth_allowed`）
+3. 1時間に5回までの枠を1つ予約（`account_reauth_begin`。同時に送られても5回を超えない。結果は `account_reauth_end` で記録）
 4. パスワードを Supabase の正式なログイン機能（`/auth/v1/token`）で照合。照合用のログインはすぐ終了
 5. `account_request_deletion`（秘密キー専用）で申請。**データベース側でも**受付スイッチと許可リストを確認
 6. ほかの端末のログインを終了（`/auth/v1/logout?scope=others`）

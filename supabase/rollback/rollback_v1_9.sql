@@ -71,6 +71,8 @@ drop function if exists public.delete_my_track(uuid);
 drop function if exists public.account_request_deletion(uuid);
 drop function if exists public.account_reauth_allowed(uuid);
 drop function if exists public.account_reauth_failed(uuid);
+drop function if exists public.account_reauth_begin(uuid);
+drop function if exists public.account_reauth_end(uuid, boolean);
 drop function if exists public.cancel_my_account_deletion();
 drop function if exists public.my_account_deletion();
 drop function if exists public.account_purge_claim();

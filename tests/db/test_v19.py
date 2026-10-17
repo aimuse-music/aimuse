@@ -78,17 +78,27 @@ o,e = run("service", f"select * from public.account_request_deletion('{U['ryo']}
 ok("B3 管理者アカウントは退会できない", "管理者アカウントは退会できません" in e, e[:70])
 o,e = run("anon", f"select * from public.account_request_deletion('{U['hamu']}')")
 ok("B4 未ログインは申請できない", "permission denied" in e, e[:60])
-o,e = run("hamu", f"select public.account_reauth_failed('{U['hamu']}')")
-o2,e2 = run("anon", f"select public.account_reauth_allowed('{U['hamu']}')")
-ok("B4b 試行回数の記録・確認も会員・未ログインからは使えない", "permission denied" in e and "permission denied" in e2)
-for i in range(4): run("service", f"select public.account_reauth_failed('{U['mike']}')")
-o,e = run("service", f"select public.account_reauth_allowed('{U['mike']}')")
-run("service", f"select public.account_reauth_failed('{U['mike']}')")
-o2,e2 = run("service", f"select public.account_reauth_allowed('{U['mike']}')")
-o3,e3 = run("service", f"select public.account_reauth_allowed('{U['hamu']}')")
-ok("B4c パスワード照合は1時間に5回失敗すると止まる（他の会員には影響しない）", (o,o2,o3)==("t","f","t"), (o,o2,o3))
+o,e = run("hamu", f"select public.account_reauth_begin('{U['hamu']}')")
+o2,e2 = run("anon", f"select public.account_reauth_end(gen_random_uuid(), true)")
+ok("B4b 試行回数の予約・記録も会員・未ログインからは使えない", "permission denied" in e and "permission denied" in e2)
+ids = [run("service", f"select public.account_reauth_begin('{U['mike']}')")[0] for _ in range(4)]
+for i in ids: run("service", f"select public.account_reauth_end('{i}', true)")
+o,e = run("service", f"select public.account_reauth_begin('{U['mike']}') is not null")
+o2,e2 = run("service", f"select public.account_reauth_begin('{U['mike']}') is not null")
+o3,e3 = run("service", f"select public.account_reauth_begin('{U['hamu']}') is not null")
+ok("B4c パスワード照合は1時間に5回で止まる（照合中の分も数える・他の会員には影響しない）", (o,o2,o3)==("t","f","t"), (o,o2,o3))
 run("postgres", f"update aimuse_private.reauth_failures set at=now()-interval '61 minutes' where user_id='{U['mike']}'")
-ok("B4d 1時間たてば、また照合できる", run("service", f"select public.account_reauth_allowed('{U['mike']}')")[0]=="t")
+ok("B4d 1時間たてば、また照合できる", run("service", f"select public.account_reauth_begin('{U['mike']}') is not null")[0]=="t")
+run("postgres", f"delete from aimuse_private.reauth_failures where user_id in ('{U['mike']}','{U['hamu']}')")
+a = run("service", f"select public.account_reauth_begin('{U['mike']}')")[0]
+run("service", f"select public.account_reauth_end('{a}', false)")
+ok("B4e 成功・一時的な障害は回数に数えない（予約を消す）", sq(f"select count(*) from aimuse_private.reauth_failures where user_id='{U['mike']}'")=="0")
+outs = []
+def try_begin(): outs.append(run("service", f"select coalesce(public.account_reauth_begin('{U['mike']}')::text,'LIMIT'), pg_sleep(0.3)")[0])
+th = [threading.Thread(target=try_begin) for _ in range(12)]; [t.start() for t in th]; [t.join() for t in th]
+granted = [x for x in outs if x and not x.startswith("LIMIT")]
+ok("B4f 12回同時に送っても、照合できるのは5回だけ（C4）", len(granted)==5 and sq(f"select count(*) from aimuse_private.reauth_failures where user_id='{U['mike']}'")=="5", (len(granted), len(outs)))
+run("postgres", f"delete from aimuse_private.reauth_failures where user_id='{U['mike']}'")
 before_follow = sq("select public.artist_follower_count(id) from public.artists where name='ミケ'")
 o,e = run("service", f"select status, purge_after::date - requested_at::date from public.account_request_deletion('{U['hamu']}')")
 ok("B5 パスワード照合を通ったサーバー処理から申請できる（30日後に削除開始）", o=="pending|30", (o,e[:80]))
@@ -208,16 +218,21 @@ for f in rest:
 run("service", f"select public.account_purge_mark_files('{req}','{tok2}')")
 o,e = run("service", f"select public.account_purge_finish('{req}','{tok2}')")
 ok("E16 会員が残っている間は「完了」にしない", "DB_NOT_DONE" in e or "USER_REMAINS" in e, e[:60])
+run("postgres", f"insert into aimuse_private.reauth_failures (user_id) values ('{U['hamu']}'),('{U['mike']}')")
 o,e = run("service", f"select public.account_purge_db('{req}','{tok2}')")
+ok("E17b データ削除で、本人のパスワード照合の記録も消える（ミケの記録は残る）（C4）",
+   sq(f"select count(*) from aimuse_private.reauth_failures where user_id='{U['hamu']}'")=="0" and sq(f"select count(*) from aimuse_private.reauth_failures where user_id='{U['mike']}'")=="1")
 ok("E17 ファイルが全部消えたらデータを削除", not e and sq(f"select count(*) from public.tracks where user_id='{U['hamu']}'")=="0"
    and sq(f"select count(*) from aimuse_private.track_deletions where track->>'user_id'='{U['hamu']}'")=="0", e[:80])
 o,e = run("service", f"select public.account_purge_db('{req}','{tok2}')")
 ok("E18 データ削除を再実行しても安全", not e, e[:60])
 o,e = run("service", f"select public.account_purge_finish('{req}','{tok2}')")
 ok("E19 会員（ログイン情報）が残っている間は「完了」にしない", "USER_REMAINS" in e and sq(f"select status from aimuse_private.account_deletions where id='{req}'")=="processing", e[:60])
+run("postgres", f"insert into aimuse_private.reauth_failures (user_id) values ('{U['hamu']}')")   # 途中で記録が増えた場合
 run("postgres", f"delete from auth.users where id='{U['hamu']}'")   # Edge Function の auth.admin.deleteUser に相当
 o,e = run("service", f"select public.account_purge_finish('{req}','{tok2}')")
 left = sq(f"select (select count(*) from public.profiles where id='{U['hamu']}')+(select count(*) from public.artists where user_id='{U['hamu']}')+(select count(*) from public.follows where user_id='{U['hamu']}')+(select count(*) from public.favorites where user_id='{U['hamu']}')+(select count(*) from public.reviews where user_id='{U['hamu']}')+(select count(*) from aimuse_private.account_deletion_files)")
+ok("E20b 完了のときにも、本人のパスワード照合の記録が残らない（C4）", sq(f"select count(*) from aimuse_private.reauth_failures where user_id='{U['hamu']}'")=="0")
 ok("E20 会員の削除を確認してから「完了」。関連データ・ファイル一覧も残らない", not e and sq(f"select status from aimuse_private.account_deletions where id='{req}'")=="done" and left=="0", (e[:60], left))
 ok("E21 ミケ・Ryoのデータとファイルは無事", sq(f"select count(*) from public.tracks where user_id in ('{U['mike']}','{U['ryo']}')")=="4"
    and sq(f"select count(*) from storage.objects where name like '{U['mike']}%' or name like '{U['ryo']}%' or owner_id='{U['mike']}'")=="5"

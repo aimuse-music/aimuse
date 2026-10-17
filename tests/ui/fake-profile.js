@@ -140,26 +140,13 @@
       const d=db.deletions.find(x=>x.user_id===uid()&&ACTIVE.includes(x.status));
       return {data: d ? [{status:d.status,requested_at:d.requested_at,purge_after:d.purge_after,can_cancel:d.status==="pending"&&Date.parse(d.purge_after)>Date.now()}] : [], error:null};
     },
-    request_my_account_deletion(){
-      if(window.__noV19) return E("Could not find the function public.request_my_account_deletion");
-      const me=uid(); if(!me) return E("ログインしてください");
-      if(!session.reauthAt || Date.now()-session.reauthAt > 10*60*1000 || window.__staleAuth) return E("本人確認のため、パスワードをもう一度入力してください（REAUTH_REQUIRED）");
-      if(isAdmin()) return E("管理者アカウントは退会できません。先に管理者権限を外してください");
-      let d=db.deletions.find(x=>x.user_id===me&&ACTIVE.includes(x.status));
-      if(!d){
-        const now=new Date();
-        d={user_id:me,status:"pending",requested_at:now.toISOString(),purge_after:new Date(now.getTime()+30*86400000).toISOString(),
-           hidden:db.tracks.filter(t=>t.user_id===me&&["public","pending"].includes(t.status)).map(t=>({id:t.id,status:t.status}))};
-        db.deletions.push(d); db.tracks.forEach(t=>{ if(t.user_id===me&&["public","pending"].includes(t.status)) t.status="hidden"; }); save();
-      }
-      return {data:[{status:d.status,requested_at:d.requested_at,purge_after:d.purge_after}],error:null};
-    },
     cancel_my_account_deletion(){
       if(window.__fail.cancel) return E("ネットワークエラー");
       const me=uid(); if(!me) return E("ログインしてください");
       const d=db.deletions.find(x=>x.user_id===me&&ACTIVE.includes(x.status));
       if(!d) return E("取り消せる退会申請がありません");
-      if(d.status!=="pending"||Date.parse(d.purge_after)<=Date.now()) return E("完全削除の処理がすでに始まっているため、取り消せません");
+      if(d.status!=="pending") return E("完全削除の処理がすでに始まっているため、取り消せません");
+      if(Date.parse(d.purge_after)<=Date.now()) return E("取り消しの期限（申請から30日）を過ぎたため、取り消せません");
       d.status="canceled"; let n=0;
       d.hidden.forEach(h=>{ const t=db.tracks.find(x=>x.id===h.id&&x.status==="hidden"); if(t){ t.status=h.status; n++; } }); save();
       return {data:[{status:"canceled",restored:n,kept_hidden:0}],error:null};
@@ -282,6 +269,23 @@
       async signOut(o){ await delay(); window.__log.push({op:"signOut",scope:o&&o.scope}); if(o&&o.scope==="others") return { error:null }; session=null; localStorage.removeItem("fake-session"); fire("SIGNED_OUT"); return { error:null }; },
       async signUp(){ return { error:{message:"n/a"} }; }, async updateUser(){ return { error:null }; }, async resetPasswordForEmail(){ return { error:null }; }
     },
+    // Edge Function（account-delete-request）の代わり：パスワード照合・1時間5回まで・管理者は不可（本物の処理は tests/edge で検証）
+    functions:{ async invoke(name,{body}={}){ await delay(); window.__log.push({op:"invoke",name,hasPassword:!!(body&&body.password)});
+      const fail=(status,code)=>({data:null,error:{message:"Edge Function returned a non-2xx status code",context:{status,json:async()=>({code})}}});
+      if(window.__noFn) return fail(404,"NOT_FOUND");
+      const me=uid(); if(!me) return fail(401,"LOGIN_REQUIRED");
+      db.reauthFails=db.reauthFails||{}; const n=db.reauthFails[me]||0;
+      if(n>=5) return fail(429,"TOO_MANY_ATTEMPTS");
+      if(!body||body.password!=="password"){ db.reauthFails[me]=n+1; save(); return fail(401,"WRONG_PASSWORD"); }
+      if(isAdmin()) return fail(403,"ADMIN_ACCOUNT");
+      let d=db.deletions.find(x=>x.user_id===me&&ACTIVE.includes(x.status));
+      if(!d){ const now=new Date();
+        d={user_id:me,status:"pending",requested_at:now.toISOString(),purge_after:new Date(now.getTime()+30*86400000).toISOString(),
+           hidden:db.tracks.filter(t=>t.user_id===me&&["public","pending"].includes(t.status)).map(t=>({id:t.id,status:t.status}))};
+        db.deletions.push(d); db.tracks.forEach(t=>{ if(t.user_id===me&&["public","pending"].includes(t.status)) t.status="hidden"; }); save(); }
+      window.__log.push({op:"signOutOthers(server)"});
+      return {data:{status:d.status,purge_after:d.purge_after},error:null};
+    } },
     from: query,
     async rpc(name, args){ await delay(); window.__log.push({op:"rpc",name,args});
       if(window.__noV16 && !["artist_follower_count","increment_plays","set_duration_if_missing"].includes(name)) return E(`Could not find the function public.${name}`);

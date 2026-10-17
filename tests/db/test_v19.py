@@ -4,7 +4,7 @@ Each call runs in its own committed transaction, so the scenario is stateful (li
 import subprocess, json, time, threading, sys
 DBN = sys.argv[1] if len(sys.argv) > 1 else "v19t"
 BASE = ["psql","-h","/home/pgtest/pg","-p","55432","-U","postgres","-X","-At","-q"]
-U = {"ryo":"11111111-1111-4111-8111-111111111111","hamu":"22222222-2222-4222-8222-222222222222","mike":"33333333-3333-4333-8333-333333333333"}
+U = {"ryo":"11111111-1111-4111-8111-111111111111","hamu":"22222222-2222-4222-8222-222222222222","mike":"33333333-3333-4333-8333-333333333333","neko":"44444444-4444-4444-8444-444444444444"}
 T = lambda n: f"aaaaaaaa-0000-4000-8000-00000000000{n}"
 def psql(db, s):
     p = subprocess.run(BASE+["-d",db], input=s, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -66,18 +66,29 @@ ok("A16 利用停止中の会員は削除できない", "削除できません" 
 run("postgres", f"update public.profiles set is_banned=false where id='{U['mike']}'")
 
 # ===================== B. 退会の申請 =====================
-o,e = run("hamu", "select * from public.request_my_account_deletion()", amr_age=None)
-ok("B1 本人確認の情報がないログインでは申請できない", "REAUTH_REQUIRED" in e, e[:70])
-o,e = run("hamu", "select * from public.request_my_account_deletion()", amr_age=20*60)
-ok("B2 20分前のログインでは申請できない（パスワード再入力が必要）", "REAUTH_REQUIRED" in e, e[:70])
-o,e = run("ryo", "select * from public.request_my_account_deletion()")
+o,e = run("hamu", f"select * from public.account_request_deletion('{U['hamu']}')")
+ok("B1 本人（会員のログイン）でも申請関数は直接呼べない（パスワード照合を通るサーバー処理だけ）", "permission denied" in e, e[:70])
+o,e = run("ryo", f"select * from public.account_request_deletion('{U['hamu']}')")
+ok("B2 管理者でも他人の退会を申請できない", "permission denied" in e, e[:70])
+o,e = run("service", f"select * from public.account_request_deletion('{U['ryo']}')")
 ok("B3 管理者アカウントは退会できない", "管理者アカウントは退会できません" in e, e[:70])
-o,e = run("anon", "select * from public.request_my_account_deletion()")
+o,e = run("anon", f"select * from public.account_request_deletion('{U['hamu']}')")
 ok("B4 未ログインは申請できない", "permission denied" in e, e[:60])
+o,e = run("hamu", f"select public.account_reauth_failed('{U['hamu']}')")
+o2,e2 = run("anon", f"select public.account_reauth_allowed('{U['hamu']}')")
+ok("B4b 試行回数の記録・確認も会員・未ログインからは使えない", "permission denied" in e and "permission denied" in e2)
+for i in range(4): run("service", f"select public.account_reauth_failed('{U['mike']}')")
+o,e = run("service", f"select public.account_reauth_allowed('{U['mike']}')")
+run("service", f"select public.account_reauth_failed('{U['mike']}')")
+o2,e2 = run("service", f"select public.account_reauth_allowed('{U['mike']}')")
+o3,e3 = run("service", f"select public.account_reauth_allowed('{U['hamu']}')")
+ok("B4c パスワード照合は1時間に5回失敗すると止まる（他の会員には影響しない）", (o,o2,o3)==("t","f","t"), (o,o2,o3))
+run("postgres", f"update aimuse_private.reauth_failures set at=now()-interval '61 minutes' where user_id='{U['mike']}'")
+ok("B4d 1時間たてば、また照合できる", run("service", f"select public.account_reauth_allowed('{U['mike']}')")[0]=="t")
 before_follow = sq("select public.artist_follower_count(id) from public.artists where name='ミケ'")
-o,e = run("hamu", "select status, purge_after::date - requested_at::date from public.request_my_account_deletion()")
-ok("B5 直前にパスワード確認した本人は申請できる（30日後に削除開始）", o=="pending|30", (o,e[:80]))
-o2,e2 = run("hamu", "select status from public.request_my_account_deletion()")
+o,e = run("service", f"select status, purge_after::date - requested_at::date from public.account_request_deletion('{U['hamu']}')")
+ok("B5 パスワード照合を通ったサーバー処理から申請できる（30日後に削除開始）", o=="pending|30", (o,e[:80]))
+o2,e2 = run("service", f"select status from public.account_request_deletion('{U['hamu']}')")
 ok("B6 二重に申請しても申請は1件のまま", o2=="pending" and sq(f"select count(*) from aimuse_private.account_deletions where user_id='{U['hamu']}'")=="1", o2)
 ok("B7 公開中・審査待ちの曲を非公開にし、元の状態を記録", sq(f"select string_agg(status,',' order by id) from public.tracks where user_id='{U['hamu']}'")=="hidden,hidden,hidden"
    and sq(f"select hidden_tracks::text from aimuse_private.account_deletions where user_id='{U['hamu']}'").count('"public"')==2, sq(f"select hidden_tracks from aimuse_private.account_deletions where user_id='{U['hamu']}'"))
@@ -141,13 +152,13 @@ o,e = run("hamu", "select * from public.cancel_my_account_deletion()")
 ok("D7 もう一度取り消しても安全（申請がないと返る）", "取り消せる退会申請がありません" in e, e[:60])
 
 # ===================== E. 30日後の完全削除（サーバー側の処理） =====================
-o,e = run("hamu", "select status from public.request_my_account_deletion()")
+o,e = run("service", f"select status from public.account_request_deletion('{U['hamu']}')")
 ok("E1 再申請できる（取り消し済みの記録とは別）", o=="pending" and sq(f"select count(*) from aimuse_private.account_deletions where user_id='{U['hamu']}'")=="2", (o,e[:60]))
 o,e = run("service", "select count(*) from public.account_purge_claim()")
 ok("E2 30日たつまでは削除処理の対象にならない", o=="0", (o,e[:60]))
 run("postgres", f"update aimuse_private.account_deletions set purge_after=now()-interval '1 minute' where user_id='{U['hamu']}' and status='pending'")
 o,e = run("hamu", "select * from public.cancel_my_account_deletion()")
-ok("E3 30日を過ぎたら取り消せない", "取り消せません" in e, e[:60])
+ok("E3 30日を過ぎたら取り消せない", "期限" in e, e[:60])
 o,e = run("hamu", "select can_cancel from public.my_account_deletion()")
 ok("E4 状況の確認でも「取り消し不可」と分かる", o=="f", o)
 # 2つの処理が同時に取り出そうとする
@@ -231,5 +242,47 @@ ok("F4 運営が状態を戻せば、再び自動で処理される", o=="1", o)
 run("postgres", f"update aimuse_private.account_deletions set attempts=10, locked_until=now()-interval '1 minute' where user_id='{U['mike']}'")
 o,e = run("service", "select count(*) from public.account_purge_claim()")
 ok("F5 応答なく止まったまま10回に達した処理も「確認待ち」になる", o=="0" and sq(f"select status from aimuse_private.account_deletions where user_id='{U['mike']}'")=="failed", o)
+
+# ===================== G. 取り消し期限と削除処理の競合 =====================
+NEKO = U["neko"]
+run("postgres", f"insert into auth.users (id,email,email_confirmed_at) values ('{NEKO}','neko@example.com',now())")
+def bg(who, sql, out):
+    out.append(run(who, sql))
+# G1 削除処理が先に取り出して処理中 → その間に取り消しを押しても取り消せない
+run("service", f"select * from public.account_request_deletion('{NEKO}')")
+run("postgres", f"update aimuse_private.account_deletions set purge_after=now()-interval '1 second' where user_id='{NEKO}' and status='pending'")
+oa, ob = [], []
+ta = threading.Thread(target=bg, args=("service", "select request_id is not null from public.account_purge_claim(); select pg_sleep(2)", oa)); ta.start()
+time.sleep(0.6)
+tb = threading.Thread(target=bg, args=("neko", "select * from public.cancel_my_account_deletion()", ob)); tb.start()
+ta.join(); tb.join()
+ok("G1 削除処理が始まった直後に取り消しを押しても、取り消せない（処理中）", oa[0][0].startswith("t") and "取り消せません" in ob[0][1]
+   and sq(f"select status from aimuse_private.account_deletions where user_id='{NEKO}' order by requested_at desc limit 1")=="processing", (oa, ob))
+o,e = run("neko", "select can_cancel from public.my_account_deletion()")
+ok("G2 処理中は「取り消し不可」と表示される", o=="f", o)
+# G3 期限の直前に取り消しを押した（処理中に期限が来た）→ 取り消しが優先され、削除処理は取り出さない
+run("postgres", f"update aimuse_private.account_deletions set status='canceled' where user_id='{NEKO}'")
+run("service", f"select * from public.account_request_deletion('{NEKO}')")
+run("postgres", f"update aimuse_private.account_deletions set purge_after=now()+interval '1.5 seconds' where user_id='{NEKO}' and status='pending'")
+oa, ob = [], []
+ta = threading.Thread(target=bg, args=("neko", "select status from public.cancel_my_account_deletion(); select pg_sleep(3)", oa)); ta.start()
+time.sleep(2.0)   # この時点で期限は過ぎているが、取り消しの処理が先に始まっている
+tb = threading.Thread(target=bg, args=("service", "select count(*) from public.account_purge_claim()", ob)); tb.start()
+ta.join(); tb.join()
+o,e = run("service", "select count(*) from public.account_purge_claim()")
+ok("G3 期限直前の取り消しと、期限直後の削除処理が重なっても、取り消しが成立し削除は始まらない",
+   oa[0][0].startswith("canceled") and ob[0][0]=="0" and o=="0"
+   and sq(f"select status from aimuse_private.account_deletions where user_id='{NEKO}' order by requested_at desc limit 1")=="canceled", (oa, ob, o))
+# G4 期限を過ぎたら（削除処理の前でも）取り消せない
+run("service", f"select * from public.account_request_deletion('{NEKO}')")
+run("postgres", f"update aimuse_private.account_deletions set purge_after=now()-interval '1 second' where user_id='{NEKO}' and status='pending'")
+o,e = run("neko", "select * from public.cancel_my_account_deletion()")
+ok("G4 期限を過ぎたら、削除処理が始まる前でも取り消せない", "期限" in e, e[:60])
+# G5 失敗が続いて「確認待ち」の間も取り消せない
+run("postgres", f"update aimuse_private.account_deletions set status='failed' where user_id='{NEKO}' and status='pending'")
+o,e = run("neko", "select * from public.cancel_my_account_deletion()")
+ok("G5 運営の確認待ち（failed）の間も取り消せない", "取り消せません" in e, e[:60])
+o,e = run("service", f"select status from public.account_request_deletion('{NEKO}')")
+ok("G6 処理中・確認待ちの間に再申請しても、新しい申請は作られない", o=="failed" and sq(f"select count(*) from aimuse_private.account_deletions where user_id='{NEKO}' and status in ('pending','processing','failed')")=="1", o)
 
 f=[r for r in R if not r[1]]; print(f"\n合計 {len(R)} 件 / 不合格 {len(f)} 件"); [print("  FAIL:",x[0]) for x in f]

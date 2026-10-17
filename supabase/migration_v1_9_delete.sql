@@ -1,5 +1,7 @@
 -- =====================================================================
--- AIMUSE v1.9 楽曲の削除（投稿者本人）とアカウントの退会（30日間の取り消し期間つき）
+-- AIMUSE v1.9 r2 楽曲の削除（投稿者本人）とアカウントの退会（30日間の取り消し期間つき）
+-- r2：退会の申請は、サーバー側の処理（Edge Function「account-delete-request」）がパスワードを
+--     Supabase の正式なログイン機能で照合してから行う方式に変更（ログイン時刻だけに頼らない）
 -- Supabase の SQL Editor に全文を貼り付けて、1回実行してください。
 --   ・前提：v1.5〜v1.8 を実行済みであること。満たさなければ何も変更せずに中止します
 --   ・追加のみ：既存のデータは削除・変更しません。何度実行しても壊れません
@@ -144,17 +146,21 @@ as $$
     and not aimuse_private.is_withdrawing(r.user_id);
 $$;
 
--- 本人確認から間もないログインか（ログイン時刻はSupabaseが署名した情報「amr」から読むため、利用者は偽装できません）
-create or replace function aimuse_private.recently_authenticated(p_minutes integer)
-returns boolean
-language sql stable set search_path = ''
-as $$
-  select coalesce((
-    select max((e->>'timestamp')::double precision)
-    from jsonb_array_elements(case when jsonb_typeof(auth.jwt()->'amr') = 'array' then auth.jwt()->'amr' else '[]'::jsonb end) e
-    where jsonb_typeof(e->'timestamp') = 'number'
-  ) >= extract(epoch from now()) - p_minutes * 60, false);
-$$;
+-- 本人確認（パスワード照合）の失敗記録：1人1時間に5回まで（総当たりの防止）
+create table if not exists aimuse_private.reauth_failures (
+  user_id uuid not null,
+  at timestamptz not null default now()
+);
+create index if not exists reauth_failures_user_idx on aimuse_private.reauth_failures(user_id, at);
+alter table aimuse_private.reauth_failures enable row level security;
+revoke all on aimuse_private.reauth_failures from public;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on aimuse_private.reauth_failures from anon, authenticated';
+  end if;
+end $$;
+-- 旧案（ログイン時刻で判定する関数）が残っていれば削除
+drop function if exists aimuse_private.recently_authenticated(integer);
 
 
 -- ---------- 3. 退会手続き中の会員を守る仕組み ----------
@@ -285,34 +291,35 @@ $$;
 
 -- ---------- 5. 退会の申請・取り消し・状況の確認（本人のみ） ----------
 
--- 退会の申請
---   ・直近10分以内にパスワードで本人確認したログインであること（アプリは申請直前にパスワードを再入力させます）
+-- 退会の申請（サーバー側の処理 account-delete-request 専用。service_role でのみ実行可）
+--   本人確認の流れ（Edge Function の中）：
+--     ① 送られてきたログイン情報（JWT）を Supabase で確認し、会員を特定（auth.getUser）
+--     ② この関数群で「1時間に5回まで」を確認（account_reauth_allowed）
+--     ③ 入力されたパスワードを Supabase の正式なログイン機能（signInWithPassword）で照合
+--        失敗したら account_reauth_failed で記録。照合用に作られたログインはすぐに終了
+--     ④ 照合できた会員IDで、この関数を呼ぶ（アプリ・会員・管理者は直接呼べません）
 --   ・管理者アカウントは退会できません（先に管理者権限を外す必要があります）
 --   ・公開中・審査待ちの曲を非公開にし、元の状態を記録します（取り消し時に復元）
 --   ・削除するファイルの一覧を記録します
 --   ・すでに申請中なら、新しく作らずに今の申請を返します（二重に押しても安全）
-create or replace function public.request_my_account_deletion()
+create or replace function public.account_request_deletion(p_user uuid)
 returns table (status text, requested_at timestamptz, purge_after timestamptz)
 language plpgsql security definer set search_path = ''
 as $$
 #variable_conflict use_column
 declare
-  v_uid uuid := auth.uid();
   v_req aimuse_private.account_deletions%rowtype;
 begin
-  if v_uid is null then
-    raise exception 'ログインしてください';
+  if p_user is null or not exists (select 1 from auth.users u where u.id = p_user) then
+    raise exception '会員が見つかりません';
   end if;
-  if not aimuse_private.recently_authenticated(10) then
-    raise exception '本人確認のため、パスワードをもう一度入力してください（REAUTH_REQUIRED）';
-  end if;
-  if public.is_admin() then
+  if exists (select 1 from public.profiles p where p.id = p_user and p.is_admin) then
     raise exception '管理者アカウントは退会できません。先に管理者権限を外してください';
   end if;
-  perform pg_advisory_xact_lock(hashtextextended('aimuse_account:' || v_uid::text, 0));
+  perform pg_advisory_xact_lock(hashtextextended('aimuse_account:' || p_user::text, 0));
 
   select * into v_req from aimuse_private.account_deletions d
-  where d.user_id = v_uid and d.status in ('pending', 'processing', 'failed')
+  where d.user_id = p_user and d.status in ('pending', 'processing', 'failed')
   for update;
   if found then
     return query select v_req.status, v_req.requested_at, v_req.purge_after;
@@ -320,17 +327,38 @@ begin
   end if;
 
   insert into aimuse_private.account_deletions (user_id, purge_after, hidden_tracks)
-  values (v_uid, now() + interval '30 days',
+  values (p_user, now() + interval '30 days',
           coalesce((select jsonb_agg(jsonb_build_object('id', t.id, 'status', t.status))
-                    from public.tracks t where t.user_id = v_uid and t.status in ('public', 'pending')), '[]'::jsonb))
+                    from public.tracks t where t.user_id = p_user and t.status in ('public', 'pending')), '[]'::jsonb))
   returning * into v_req;
 
-  update public.tracks set status = 'hidden' where user_id = v_uid and status in ('public', 'pending');
-  perform aimuse_private.collect_account_files(v_req.id, v_uid);
+  update public.tracks set status = 'hidden' where user_id = p_user and status in ('public', 'pending');
+  perform aimuse_private.collect_account_files(v_req.id, p_user);
 
   return query select v_req.status, v_req.requested_at, v_req.purge_after;
 end;
 $$;
+
+-- パスワード照合をしてよいか（直近1時間の失敗が5回未満）
+create or replace function public.account_reauth_allowed(p_user uuid)
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select (select count(*) from aimuse_private.reauth_failures f
+          where f.user_id = p_user and f.at > now() - interval '1 hour') < 5;
+$$;
+
+-- パスワード照合の失敗を記録（1日より古い記録は掃除）
+create or replace function public.account_reauth_failed(p_user uuid)
+returns void
+language sql security definer set search_path = ''
+as $$
+  insert into aimuse_private.reauth_failures (user_id) values (p_user);
+  delete from aimuse_private.reauth_failures where at < now() - interval '1 day';
+$$;
+
+-- 旧案（会員が直接呼ぶ申請関数）が残っていれば削除
+drop function if exists public.request_my_account_deletion();
 
 -- 退会の取り消し（本人のみ・30日以内・完全削除が始まる前まで）
 --   ・申請時に非公開にした曲を元の状態（公開中・審査待ち）に戻します
@@ -359,8 +387,12 @@ begin
   if not found then
     raise exception '取り消せる退会申請がありません';
   end if;
-  if v_req.status <> 'pending' or v_req.purge_after <= now() then
+  -- 期限の判定は、削除処理の取り出し（account_purge_claim）と同じ行の鍵をかけた上で行うため、同時でも両方は成立しない
+  if v_req.status <> 'pending' then
     raise exception '完全削除の処理がすでに始まっているため、取り消せません';
+  end if;
+  if v_req.purge_after <= now() then
+    raise exception '取り消しの期限（申請から30日）を過ぎたため、取り消せません';
   end if;
 
   update aimuse_private.account_deletions
@@ -560,13 +592,14 @@ $$;
 
 -- ---------- 7. 関数の実行権限：まず全員から外し、必要なものだけ許可 ----------
 revoke all on function aimuse_private.is_withdrawing(uuid) from public;
-revoke all on function aimuse_private.recently_authenticated(integer) from public;
 revoke all on function aimuse_private.tracks_block_withdrawing() from public;
 revoke all on function aimuse_private.profiles_block_withdrawing() from public;
 revoke all on function aimuse_private.collect_account_files(uuid, uuid) from public;
 revoke all on function aimuse_private.purge_lease(uuid, uuid) from public;
 revoke all on function public.delete_my_track(uuid) from public, anon, authenticated;
-revoke all on function public.request_my_account_deletion() from public, anon, authenticated;
+revoke all on function public.account_request_deletion(uuid) from public, anon, authenticated;
+revoke all on function public.account_reauth_allowed(uuid) from public, anon, authenticated;
+revoke all on function public.account_reauth_failed(uuid) from public, anon, authenticated;
 revoke all on function public.cancel_my_account_deletion() from public, anon, authenticated;
 revoke all on function public.my_account_deletion() from public, anon, authenticated;
 revoke all on function public.account_purge_claim() from public, anon, authenticated;
@@ -578,12 +611,14 @@ revoke all on function public.account_purge_fail(uuid, uuid, text) from public, 
 
 -- 会員本人用
 grant execute on function public.delete_my_track(uuid) to authenticated;
-grant execute on function public.request_my_account_deletion() to authenticated;
 grant execute on function public.cancel_my_account_deletion() to authenticated;
 grant execute on function public.my_account_deletion() to authenticated;
 -- サーバー側の削除処理（Edge Function）専用
 do $$ begin
   if exists (select 1 from pg_roles where rolname = 'service_role') then
+    execute 'grant execute on function public.account_request_deletion(uuid) to service_role';
+    execute 'grant execute on function public.account_reauth_allowed(uuid) to service_role';
+    execute 'grant execute on function public.account_reauth_failed(uuid) to service_role';
     execute 'grant execute on function public.account_purge_claim() to service_role';
     execute 'grant execute on function public.account_purge_pending_files(uuid, uuid) to service_role';
     execute 'grant execute on function public.account_purge_mark_files(uuid, uuid) to service_role';

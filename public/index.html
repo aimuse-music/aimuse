@@ -1,6 +1,16 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="description" content="AIで制作された楽曲だけを集めた音楽配信サービス"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><title>AIMUSE</title></head><body>
-<meta name="claude:viewport-fit-sides" content="cover">
+<!doctype html><html><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="description" content="AIで制作された楽曲だけを集めた音楽配信サービス"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><title>AIMUSE</title>
 <meta name="theme-color" content="#0b0912">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="application-name" content="AIMUSE">
+<meta name="apple-mobile-web-app-title" content="AIMUSE">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head><body>
+<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Unbounded:wght@500;700&family=JetBrains+Mono:wght@500&display=swap">
@@ -35,6 +45,10 @@
   background:var(--bg);
 }
 html,body{background:var(--bg);color:var(--fg)}
+/* ホーム画面のアプリ（PWA）：ノッチ・時計の部分に、スクロールした中身が重ならないよう背景色で覆う */
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:55;pointer-events:none}
+.offline-bar{position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);z-index:70;display:flex;gap:8px;align-items:center;justify-content:center;
+  padding:8px var(--gr) 8px var(--gl);background:#3a2a0b;color:#ffe7b3;font-size:12.5px;font-weight:700;line-height:1.5;text-align:center}
 body{font-family:var(--f-body);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
 *{box-sizing:border-box}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
@@ -48,7 +62,7 @@ p{margin:0}
 @keyframes enter{from{opacity:.0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
 /* header */
-.top{position:sticky;top:var(--st);z-index:20;margin-left:calc(-1*var(--gl));margin-right:calc(-1*var(--gr));padding:12px var(--gr) 10px var(--gl);background:linear-gradient(var(--bg) 70%,rgba(var(--bg-rgb,11,9,18),0));display:flex;align-items:center;gap:12px;min-height:56px}
+.top{position:sticky;top:var(--st);z-index:20;margin-left:calc(-1*var(--gl));margin-right:calc(-1*var(--gr));padding:12px var(--gr) 10px var(--gl);background:linear-gradient(var(--bg) calc(100% - 10px),rgba(var(--bg-rgb,11,9,18),0));display:flex;align-items:center;gap:12px;min-height:56px}
 .logo{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.06em;background:var(--brand-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
 .logo-sub{font-family:var(--f-display);font-size:9px;letter-spacing:.32em;color:var(--faint);font-weight:500}
 .top h1{font-size:24px;font-weight:900;letter-spacing:.02em}
@@ -549,7 +563,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-17.5";
+const BUILD = "2026-10-17.6";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -561,6 +575,13 @@ async function newerBuildAvailable(){
     sessionStorage.setItem("aimuse.reloadedFor",m[1]);
     return true;
   }catch(e){ return false; }
+}
+
+// ホーム画面のアプリ（PWA）用の Service Worker を登録（https・localhost のときだけ）
+//   保存するのはオフライン時の案内ページとアイコンだけ。画面・音源・会員情報は保存しない（sw.js を参照）
+const swUpdate = () => { try{ navigator.serviceWorker && navigator.serviceWorker.getRegistration().then(r=>r&&r.update()).catch(()=>{}); }catch(e){} };
+if("serviceWorker" in navigator && (location.protocol==="https:"||location.hostname==="localhost")){
+  window.addEventListener("load",()=>{ navigator.serviceWorker.register("/sw.js",{updateViaCache:"none"}).catch(()=>{}); });
 }
 
 // 旧版で端末内（全員共通）に保存していたお気に入り・フォローは使わないので削除する
@@ -1914,8 +1935,8 @@ const GUIDE_STEPS = [
     "他の人に表示されるのはアーティスト名などの公開情報だけです。メールアドレスや表示名は表示されません。"]},
   {ic:"home", h:"ホーム画面に追加（おすすめ）", tag:null, body:[
     "iPhone（Safari）：画面下の共有ボタン →「ホーム画面に追加」",
-    "Android（Chrome）：右上のメニュー →「ホーム画面に追加」",
-    "アプリのようにすぐ開けるようになります。"]}
+    "Android（Chrome）：右上のメニュー →「アプリをインストール」または「ホーム画面に追加」",
+    "ホーム画面の AIMUSE アイコンから開くと、アプリのように全画面で使えます。ログインは、ホーム画面のアプリで改めて必要になる場合があります（特に iPhone）。"]}
 ];
 
 function GuidePage({ctx}){
@@ -2001,7 +2022,7 @@ function SettingsPage({ctx}){
 
 /* ---------- 楽曲の削除（投稿者本人）・退会（第5段階） ----------
    ・楽曲の削除：サーバーの delete_my_track で、本人の曲だけを1回の処理で削除（途中で失敗しても半分だけ消えない。再試行しても安全）
-   ・退会：パスワードを再入力して本人確認 → 申請（すぐに非公開・30日間は取り消し可）→ 30日後にサーバー側で完全削除
+   ・退会：パスワードをサーバーで照合して本人確認 → 申請（すぐに非公開・30日間は取り消し可）→ 30日後にサーバー側で完全削除
    ・管理用の秘密キーはブラウザでは一切使いません */
 const fmtDateTime = s => { const d=new Date(s); if(isNaN(d)) return ""; const p=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`; };
 const accountApi = {
@@ -2011,28 +2032,31 @@ const accountApi = {
     if(error) return null;                      // v1.9 SQL 未実行時は「申請なし」として扱う
     return (data&&data[0])||null;
   },
-  async reauth(password){
-    const email = auth.user&&auth.user.email;
-    if(!email||!password) throw new Error("パスワードを入力してください");
-    const {data,error} = await sb.auth.signInWithPassword({email,password});
-    if(error||!data||!data.user||data.user.id!==auth.user.id) throw new Error("パスワードが正しくありません");
-  },
-  async request(){
-    const {data,error} = await sb.rpc("request_my_account_deletion");
-    if(error){
-      const m = error.message||"";
-      throw new Error(/REAUTH_REQUIRED/.test(m) ? "本人確認の有効時間が過ぎました。パスワードをもう一度入力してください"
-        : /管理者アカウント/.test(m) ? "管理者アカウントは退会できません"
-        : /function|schema cache/i.test(m) ? "現在、退会の申請を受け付けられません（準備中）。時間をおいてお試しください"
-        : "申請できませんでした。通信状態を確認して、もう一度お試しください");
-    }
-    return (data&&data[0])||null;
+  // 退会の申請：パスワードをサーバー（Edge Function「account-delete-request」）へ送り、
+  // サーバーが Supabase の正式なログイン機能で照合してから申請する（ブラウザ側の判定には頼らない）
+  async requestDeletion(password){
+    if(!password) throw new Error("パスワードを入力してください");
+    let res;
+    try{ res = await sb.functions.invoke("account-delete-request",{body:{password}}); }
+    catch(e){ throw new Error("申請できませんでした。通信状態を確認して、もう一度お試しください"); }
+    const {data,error} = res||{};
+    if(!error) return data||null;
+    let body=null, status=0;
+    try{ status = error.context&&error.context.status||0; body = error.context&&await error.context.json(); }catch(e){}
+    const code = body&&body.code;
+    throw new Error(code==="WRONG_PASSWORD" ? "パスワードが正しくありません"
+      : code==="TOO_MANY_ATTEMPTS" ? "パスワードの確認に続けて失敗したため、1時間ほど時間をおいてからお試しください"
+      : code==="ADMIN_ACCOUNT" ? "管理者アカウントは退会できません"
+      : code==="LOGIN_REQUIRED" ? "ログインし直してから、もう一度お試しください"
+      : (status===404||code==="NOT_CONFIGURED") ? "現在、退会の申請を受け付けられません（準備中）。時間をおいてお試しください"
+      : "申請できませんでした。通信状態を確認して、もう一度お試しください");
   },
   async cancel(){
     const {data,error} = await sb.rpc("cancel_my_account_deletion");
     if(error){
       const m = error.message||"";
-      throw new Error(/取り消せません/.test(m) ? "完全削除の処理がすでに始まっているため、取り消せません"
+      throw new Error(/期限/.test(m) ? "取り消しの期限（申請から30日）を過ぎたため、取り消せません"
+        : /取り消せません/.test(m) ? "完全削除の処理がすでに始まっているため、取り消せません"
         : /取り消せる退会申請がありません/.test(m) ? "取り消せる退会申請がありません"
         : "取り消せませんでした。通信状態を確認して、もう一度お試しください");
     }
@@ -2113,10 +2137,8 @@ function AccountDeletePage({ctx}){
   const submit = async () => {
     setBusy(true); setErr("");
     try{
-      await accountApi.reauth(pw);          // パスワードの再入力で本人確認（サーバー側でも確認時刻を検証）
-      const r = await accountApi.request();
+      const r = await accountApi.requestDeletion(pw);   // サーバーがパスワードを照合し、ほかの端末のログインも終了する
       setPw("");
-      try{ await sb.auth.signOut({scope:"others"}); }catch(e){}   // ほかの端末のログインを終了
       await refreshAccount();
       say(r ? `退会を申請しました。${fmtDateTime(r.purge_after)} まで取り消せます` : "退会を申請しました");
     }catch(e){ setErr(e.message||"申請できませんでした"); }
@@ -2182,7 +2204,7 @@ const LEGAL_DOCS = [
       "アカウントの不正利用に気づいた場合は、すぐにお問い合わせ窓口へご連絡ください。",
       "表示名・アーティスト名に「AIMUSE」「運営」「公式」「管理者」など、運営者や公式アカウントと誤解される名称は使用できません。",
       "アーティスト名は、他の会員がすでに使用している名前には変更できません。また、アーティスト名の変更は24時間に3回までです。運営者は、なりすまし防止のため、アーティスト名の変更履歴（変更前後の名前・日時）を記録・確認します。",
-      "表示名は、本人と運営者だけに表示されます。他の利用者に表示されるのは、アーティスト名、アイコン、背景画像、自己紹介です。",
+      "表示名は、本人と運営者だけに表示されます。他の利用者に表示されるのは、アーティスト名、アイコン、背景画像、自己紹介です。レビューを投稿した場合も、表示名は表示されず、公開中の楽曲があるアーティストの方はアーティスト名、それ以外の方は「リスナー」と表示されます。",
       "退会（アカウントの削除）は、マイページの「設定」→「アカウントを削除（退会）」から、パスワードを再入力して申請できます。",
       "退会を申請すると、公開プロフィールと投稿した楽曲はすぐに非公開になり、投稿・お気に入り・フォローなどの操作はできなくなります。申請から30日間は、本人がログインして退会を取り消すことができ、取り消すと元の公開状態に戻ります（申請後に通報を受けて確認中の楽曲など、一部は非公開のままとなる場合があります）。",
       "申請から30日を過ぎると、会員情報、投稿した楽曲（音源・ジャケット）、アイコン・背景画像、お気に入り、フォローなどの情報を順次削除し、アプリから元に戻すことはできなくなります。保存期間の詳細はプライバシーポリシーに定めます。",
@@ -2298,6 +2320,7 @@ const LEGAL_DOCS = [
         "公開中の楽曲があるアーティストのアイコン、背景画像、自己紹介は、会員でない方を含め誰でも見ることができます。アイコン・背景画像は、表示のために公開の保存領域に保存しており、画像のURLを知っている人は誰でも表示できます（ファイル名は推測できないランダムな名前です）。",
         "公開中の楽曲については、投稿時の元のファイル名を技術的な方法で取得できる場合があります。",
         "フォロー・フォロワーの一覧には、公開中の曲があるアーティストの名前とアイコンだけが表示されます。公開中の曲がない会員（リスナー）がフォローしている場合は、人数だけが表示され、名前などは表示されません。公開中の曲があるアーティストがフォローしているアーティストは、フォロー中の一覧として公開されます。",
+        "レビューを投稿した場合、評価とコメントは、公開中の楽曲の閲覧者に公開されます。投稿者名は、公開中の楽曲があるアーティストの方はアーティスト名、それ以外の方は「リスナー」と表示し、表示名は表示しません。",
         "メールアドレス、表示名、お気に入りの内容、リスナーとしてのフォローの内容、通報の内容、審査中・非公開の楽曲、アーティスト名の変更履歴は、他の利用者には公開されません。",
         "運営者（管理者）は、審査や問い合わせ対応などのため、会員のメールアドレス・表示名、審査中・非公開の楽曲、通報の内容を閲覧できます。"
       ]
@@ -2307,6 +2330,7 @@ const LEGAL_DOCS = [
         "本サービスは、ログイン状態を保つため、ブラウザの保存領域（localStorage）にログイン情報（認証用の情報）を保存します。ログアウトすると削除されます。",
         "本サービスを最新の状態に更新するため、ブラウザの一時的な保存領域（sessionStorage）に、本サービスの版の情報を保存することがあります。",
         "画面の表示に関する設定（はじめての方向けの案内を閉じたかどうか、ログインしていない間のカラーテーマ、前回表示したカラーテーマ）を、ブラウザの保存領域（localStorage）に保存します。ブラウザのデータを消去すると削除されます。",
+        "ホーム画面に追加して使えるよう、オフライン時の案内ページ・アイコン・アプリの情報を、ブラウザの保存領域（Service Worker のキャッシュ）に保存します。音源・画像・会員情報・画面の内容は保存しません。",
         "本サービスは、広告や閲覧履歴の追跡を目的としたCookieやアクセス解析ツールを使用していません。",
         "4.に記載した外部サービスが、サービスの提供や安全確保のために、独自にCookieなどを使用する場合があります。"
       ]
@@ -2559,9 +2583,20 @@ function App(){
   const reloadIfNewer = () => { if(playingRef.current) return; newerBuildAvailable().then(n=>{ if(n && !playingRef.current) location.reload(); }); };
   useEffect(()=>{ if(firstUid.current){ firstUid.current=false; return; } reloadIfNewer(); },[uid]);
   useEffect(()=>{
-    const onVis = () => { if(document.visibilityState==="visible") reloadIfNewer(); };
+    const onVis = () => { if(document.visibilityState==="visible"){ reloadIfNewer(); swUpdate(); } };
     document.addEventListener("visibilitychange",onVis);
-    return ()=>document.removeEventListener("visibilitychange",onVis);
+    // 戻るボタン・アプリの切り替えで、前の画面がそのまま復元されたとき（bfcache）は、最新の状態を読み直す
+    const onShow = e => { if(e.persisted){ repo.refresh(); reloadIfNewer(); } };
+    window.addEventListener("pageshow",onShow);
+    return ()=>{ document.removeEventListener("visibilitychange",onVis); window.removeEventListener("pageshow",onShow); };
+  },[]);
+  // オフラインの案内（つながったら自動で読み直す）
+  const [online,setOnline] = useState(()=>navigator.onLine!==false);
+  useEffect(()=>{
+    const on = () => { setOnline(true); repo.refresh(); };
+    const off = () => setOnline(false);
+    window.addEventListener("online",on); window.addEventListener("offline",off);
+    return ()=>{ window.removeEventListener("online",on); window.removeEventListener("offline",off); };
   },[]);
 
   const toSong = t => { const lyr=Array.isArray(t.lyrics)&&t.lyrics.length?t.lyrics:null; return {
@@ -2801,6 +2836,7 @@ function App(){
   const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin,legal:LegalPage,profile:ProfileEdit,follows:FollowList,guide:GuidePage,settings:SettingsPage,account:AccountDeletePage}[tab];
 
   return html`<div className="app">
+    ${!online && html`<div className="offline-bar" role="status"><${Icon} n="info" size=${15}/><span>オフラインです。曲の再生・検索・投稿にはインターネット接続が必要です（つながると自動で更新します）</span></div>`}
     <${Screen} key=${tab+(tab==="artist"?artistId:tab==="follows"?JSON.stringify(followView):"")} ctx=${ctx}/>
     ${current && !playerOpen && html`<${MiniPlayer} song=${current} artist=${artistOf(current)} playing=${playing} pos=${pos} toggle=${toggle} open=${()=>setPlayerOpen(true)} fav=${favs.has(current.id)} onFav=${()=>toggleFav(current.id)}/>`}
     <nav className="nav" aria-label="メインナビゲーション"><div className="nav-in">

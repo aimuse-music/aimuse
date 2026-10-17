@@ -32,9 +32,11 @@ function fakeClient(fail = {}) {
       return { data: rows, error: null };
     },
     storage: { from: (bucket) => ({ async remove(names) {
-      calls.push("storage.remove");
+      calls.push("storage.remove"); (this.removed ||= []).push(...names.map(n => bucket + ":" + n));
       if (fail.storage && fail.storage-- > 0) return { data: null, error: { message: "storage 503 (injected)" } };
       if (fail.storageSilently) return { data: [], error: null };   // 成功と返すが実際には消えない
+      if (fail.bucket && fail.bucket[bucket] && fail.bucket[bucket]-- > 0) return { data: null, error: { message: `storage 503 on ${bucket} (injected)` } };
+      if (fail.partial && fail.partial-- > 0) names = names.slice(0, Math.ceil(names.length / 2));   // 半分だけ消えて「成功」と返る
       psql(`delete from storage.objects where bucket_id=${lit(bucket)} and name in (${names.map(lit).join(",")});`);
       return { data: names.map(n => ({ name: n })), error: null };
     } }) },
@@ -104,6 +106,51 @@ c = fakeClient(); const orig = c.auth.admin.deleteUser;
 c.auth.admin.deleteUser = async (id) => { psql(`delete from auth.users where id='${id}'`); return { data: null, error: { status: 404, message: "User not found" } }; };
 r = await runPurge(c);
 ok("7 会員がすでに無い（404）場合も、無いことを確認して完了", r.done === 1 && st("44444444-4444-4444-8444-444444444444").startsWith("done"), r);
+
+// ---- 8. ファイルの種類・保存先の違い・途中失敗・再試行（音源・ジャケット・アイコン・背景・削除済み曲・後から増えたファイル）
+const U5 = "55555555-5555-4555-8555-555555555555", RYO = "11111111-1111-4111-8111-111111111111";
+const tid = (i) => `aaaa5555-0000-4000-8000-${String(i).padStart(12, "0")}`;
+const setup8 = psql(`insert into auth.users (id,email,email_confirmed_at) values ('${U5}','u5@example.com',now());
+  insert into public.tracks (id,user_id,title,artist,genre,tool,tool_name,audio_path,image_path,status)
+    select '${tid(1)}'::uuid,'${U5}'::uuid,'曲1','ゴゴ','J-POP','Suno','Suno','${U5}/${tid(1)}.mp3','${U5}/${tid(1)}.jpg','public' union all
+    select '${tid(2)}'::uuid,'${U5}','曲2','ゴゴ','J-POP','Suno','Suno','${U5}/${tid(2)}.wav','${U5}/${tid(2)}.png','pending' union all
+    select '${tid(3)}'::uuid,'${U5}','曲3（音源ファイルが既に無い）','ゴゴ','J-POP','Suno','Suno','${U5}/${tid(3)}.m4a',null,'hidden';
+  insert into storage.objects (bucket_id,name,owner_id) values
+    ('audio','${U5}/${tid(1)}.mp3','${U5}'),('covers','${U5}/${tid(1)}.jpg','${U5}'),
+    ('audio','${U5}/${tid(2)}.wav','${U5}'),('covers','${U5}/${tid(2)}.png','${U5}'),
+    ('audio','${U5}/${tid(9)}.mp3','${U5}'),('covers','${U5}/${tid(9)}.heic','${U5}'),
+    ('avatars','avatar-5e5e5e5e-0000-4000-8000-000000000001.jpg','${U5}'),
+    ('avatars','header-5e5e5e5e-0000-4000-8000-000000000002.webp','${U5}'),
+    ('avatars','avatar-5e5e5e5e-0000-4000-8000-000000000003.png','${U5}');
+  insert into storage.objects (bucket_id,name,owner_id)
+    select 'audio', '${U5}/' || gen_random_uuid() || '.mp3', '${U5}' from generate_series(1,620);
+  update public.profiles set avatar_path='avatar-5e5e5e5e-0000-4000-8000-000000000001.jpg', header_path='header-5e5e5e5e-0000-4000-8000-000000000002.webp' where id='${U5}';
+  insert into aimuse_private.track_deletions (track_id, track) values ('${tid(9)}', jsonb_build_object('id','${tid(9)}','user_id','${U5}','audio_path','${U5}/${tid(9)}.mp3','image_path','${U5}/${tid(9)}.heic','status','public'));`);
+if (setup8.err) console.log('setup8:', setup8.err);
+const before = { ryo: q(`select count(*) from storage.objects where name like '${RYO}%'`), total: q(`select count(*) from storage.objects`) };
+const u5files = +q(`select count(*) from storage.objects where name like '${U5}%' or owner_id='${U5}'`);
+// 申請（申請時にファイル一覧を記録）
+psql(`begin; set local role service_role; set local request.jwt.claims='{"role":"service_role"}'; select * from public.account_request_deletion('${U5}'); commit;`);
+const listed = q(`select count(*) from aimuse_private.account_deletion_files f join aimuse_private.account_deletions d on d.id=f.request_id where d.user_id='${U5}'`);
+ok("8 申請時に、音源・ジャケット・アイコン・背景・削除済み曲・使われていないファイル・参照先が無いファイルまで一覧に記録",
+   +listed === u5files + 1, { listed, u5files });   // +1 = 参照されているが実体の無い曲3の音源
+// 申請の後に、管理者の作業などで本人のフォルダにファイルが増えた
+psql(`insert into storage.objects (bucket_id,name,owner_id) values ('covers','${U5}/${tid(8)}.jpg',null)`);
+psql(`update aimuse_private.account_deletions set purge_after=now()-interval '1 minute' where user_id='${U5}' and status='pending'`);
+// 1回目：アイコン・背景の保存場所（avatars）だけ失敗
+c = fakeClient({ bucket: { avatars: 1 } }); const c8a = c;
+r = await runPurge(c);
+const left1 = +q(`select count(*) from storage.objects where name like '${U5}%' or owner_id='${U5}'`);
+ok("8 アイコン・背景の保存場所だけ失敗：完了にせず、会員とデータは残る", r.failed === 1 && st(U5).startsWith("processing") && q(`select count(*) from auth.users where id='${U5}'`) === "1" && q(`select count(*) from public.tracks where user_id='${U5}'`) === "3", { r, left1 });
+ok("8 失敗した時点までに消えたファイルは「削除済み」と記録", +q(`select count(*) from aimuse_private.account_deletion_files f join aimuse_private.account_deletions d on d.id=f.request_id where d.user_id='${U5}' and f.deleted_at is not null`) > 0);
+// 2回目：半分だけ消えて「成功」と返る Storage
+later(); c = fakeClient({ partial: 3 });
+r = await runPurge(c);
+ok("8 一部しか消えなくても、残りを次の回で削除して最後まで進む", r.done === 1 && st(U5).startsWith("done"), { r, st: st(U5) });
+ok("8 本人のファイルはすべて削除（後から増えたファイル・500件を超える分も含む）", q(`select count(*) from storage.objects where name like '${U5}%' or owner_id='${U5}'`) === "0");
+ok("8 100件ずつに分けて削除している（600件超で7回以上）", c8a.calls.filter(x => x === "storage.remove").length >= 7, c8a.calls.filter(x => x === "storage.remove").length);
+ok("8 ほかの会員のファイルは1つも消えていない", q(`select count(*) from storage.objects where name like '${RYO}%'`) === before.ryo && +q(`select count(*) from storage.objects`) === +before.total + 1 - u5files - 1, { before, now: q(`select count(*) from storage.objects`) });
+ok("8 削除済み曲の記録（30日復元用）と、他の曲の記録に含まれるレビューも残らない", q(`select count(*) from aimuse_private.track_deletions where track->>'user_id'='${U5}'`) === "0");
 
 const f = R.filter(x => !x[1]); console.log(`\n合計 ${R.length} 件 / 不合格 ${f.length} 件`); f.forEach(x => console.log("  FAIL:", x[0]));
 process.exit(f.length ? 1 : 0);

@@ -72,17 +72,12 @@ const route = r => { const u = r.request().url();
   ok('2 チェックだけでは申請できない', await submit.isDisabled());
   await p.fill('#del-pw', 'wrong'); await submit.click(); await w(600);
   const e2 = await p.locator('[role=alert]').innerText().catch(() => '');
-  ok('2 パスワードが違うと申請しない', /パスワードが正しくありません/.test(e2) && await rpcCount('request_my_account_deletion') === 0, e2);
-  // 本人確認の有効時間切れ（サーバーが拒否）
-  await p.evaluate(() => { window.__staleAuth = true; });
-  await p.fill('#del-pw', 'password'); await submit.click(); await w(700);
-  const e3 = await p.locator('[role=alert]').innerText().catch(() => '');
-  ok('2 サーバーが本人確認を認めなければ申請されない（メッセージ表示）', /本人確認の有効時間/.test(e3) && !(await p.evaluate(() => window.__db.deletions.length)), e3);
-  await p.evaluate(() => { window.__staleAuth = false; });
+  ok('2 パスワードが違うとサーバーが拒否し、申請しない', /パスワードが正しくありません/.test(e2) && !(await p.evaluate(() => window.__db.deletions.length)), e2);
+  ok('2 パスワードの照合はサーバー（Edge Function）で行う（ブラウザでログインし直さない）', await p.evaluate(() => window.__log.some(l => l.op === 'invoke' && l.name === 'account-delete-request' && l.hasPassword)));
   await p.fill('#del-pw', 'password'); await submit.click(); await w(900);
   const t2 = await toast();
   ok('2 申請できる（取り消し期限を表示）', /退会を申請しました。.*まで取り消せます/.test(t2), t2);
-  ok('2 ほかの端末のログインを終了する処理を呼ぶ', await p.evaluate(() => window.__log.some(l => l.op === 'signOut' && l.scope === 'others')));
+  ok('2 ほかの端末のログインはサーバー側で終了（ブラウザ側のログアウト処理は使わない）', await p.evaluate(() => window.__log.some(l => l.op === 'signOutOthers(server)') && !window.__log.some(l => l.op === 'signOut')));
   const st = await p.locator('.del-status').innerText().catch(() => '');
   ok('2 申請後は「退会手続き中」と取り消し期限・取り消しボタン', /退会手続き中です/.test(st) && /まで(は)?取り消せます/.test(st) && /退会を取り消す/.test(st), st.slice(0, 60));
   ok('2 「完了」とは表示しない', !/完了しました|削除しました/.test(st));
@@ -119,8 +114,24 @@ const route = r => { const u = r.request().url();
   await p.locator('button', { hasText: 'アカウントを削除（退会）' }).click(); await w(300);
   ok('5 管理者アカウントには申請ボタンを出さず理由を表示', await p.locator('button', { hasText: '退会を申請する' }).count() === 0 && /管理者アカウントは退会できません/.test(await p.locator('.screen').innerText()));
 
+  // ---- 5b. パスワードを5回間違えると、しばらく申請できない
+  {
+    const y = await mk(); const q = y.p;
+    await q.goto('http://aimuse.test/'); await q.waitForTimeout(900);
+    await q.locator('nav.nav button', { hasText: 'マイページ' }).click(); await q.waitForTimeout(300);
+    await q.fill('#a-email', 'mike@test.jp'); await q.fill('#a-pw', 'password'); await q.locator('.form button.btn.primary').click(); await q.locator('text=ログアウト').waitFor(); await q.waitForTimeout(600);
+    await q.locator('button', { hasText: '設定（カラーテーマ' }).click(); await q.waitForTimeout(300);
+    await q.locator('button', { hasText: 'アカウントを削除（退会）' }).click(); await q.waitForTimeout(300);
+    await q.locator('button[role=checkbox]').click();
+    for (let i = 0; i < 6; i++) { await q.fill('#del-pw', 'wrong' + i); await q.locator('button', { hasText: '退会を申請する' }).click(); await q.waitForTimeout(400); }
+    const m1 = await q.locator('[role=alert]').innerText().catch(() => '');
+    await q.fill('#del-pw', 'password'); await q.locator('button', { hasText: '退会を申請する' }).click(); await q.waitForTimeout(500);
+    const m2 = await q.locator('[role=alert]').innerText().catch(() => '');
+    ok('5b パスワードを5回間違えると、正しいパスワードでも1時間は申請できない', /1時間/.test(m1) && /1時間/.test(m2) && await q.locator('.del-status').count() === 0, { m1, m2 });
+  }
+
   // ---- 6. v1.9 SQL 未実行のサーバー
-  const x = await mk(() => { window.__noV19 = true; });
+  const x = await mk(() => { window.__noV19 = true; window.__noFn = true; });
   const p2 = x.p;
   await p2.goto('http://aimuse.test/'); await p2.waitForTimeout(900);
   await p2.locator('nav.nav button', { hasText: 'マイページ' }).click(); await p2.waitForTimeout(300);

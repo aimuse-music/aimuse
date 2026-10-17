@@ -18,3 +18,4 @@
 - `release/seed_prodlike.sql`・`release/audit_apply.py`（本番に近いデータで v1.6〜v1.10 の適用・元に戻す・再適用 23件）
 - `release/check_readonly.py`（確認用SQLが読み取り専用であることの検査：文が1つ・書き込みの命令なし・標準の読み取り関数だけ・読み取り専用の取引で実行できる）
 - `release/test_killswitch.js`（PWA の緊急停止）
+- `db/test_v111.py`（プレイリスト 35件）・`ui/test_playlist.js`（プレイリストの画面 23件）

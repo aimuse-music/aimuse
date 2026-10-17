@@ -44,10 +44,10 @@ const pngSize = b => [b.readUInt32BE(16), b.readUInt32BE(20)];
     capable: document.head.querySelector('meta[name=apple-mobile-web-app-capable]')?.content, title: document.head.querySelector('meta[name=apple-mobile-web-app-title]')?.content,
     status: document.head.querySelector('meta[name=apple-mobile-web-app-status-bar-style]')?.content, viewport: document.querySelector('meta[name=viewport]')?.content,
     themeMetas: document.querySelectorAll('meta[name=theme-color]').length }));
-  ok('1 head にアプリ情報（manifest）・iPhone用アイコン・ホーム画面用の設定', head.manifest && head.apple === '/icons/apple-touch-icon.png' && head.capable === 'yes' && head.title === 'AIMUSE' && head.status === 'black-translucent' && /viewport-fit=cover/.test(head.viewport) && head.themeMetas === 1, head);
+  ok('1 head にアプリ情報（manifest）・iPhone用アイコン・ホーム画面用の設定', head.manifest && /^\/icons\/apple-touch-icon\.png(\?v=\d+)?$/.test(head.apple) && head.capable === 'yes' && head.title === 'AIMUSE' && head.status === 'black-translucent' && /viewport-fit=cover/.test(head.viewport) && head.themeMetas === 1, head);
   const man = JSON.parse(fs.readFileSync(path.join(PUB, 'manifest.webmanifest'), 'utf8'));
   ok('1 アプリ名 AIMUSE・単独画面で起動・起動時はホーム', man.name === 'AIMUSE' && man.short_name === 'AIMUSE' && man.display === 'standalone' && man.start_url.startsWith('/') && man.scope === '/' && man.background_color === '#0b0912', { name: man.name, start: man.start_url });
-  const icons = man.icons.map(i => { const buf = fs.readFileSync(path.join(PUB, i.src)); return { src: i.src, ok: `${pngSize(buf).join('x')}` === i.sizes, purpose: i.purpose }; });
+  const icons = man.icons.map(i => { const buf = fs.readFileSync(path.join(PUB, i.src.split('?')[0])); return { src: i.src, ok: `${pngSize(buf).join('x')}` === i.sizes, purpose: i.purpose }; });
   ok('1 アイコン：192・512・マスク用512（実際の画像サイズと一致）', icons.length === 3 && icons.every(i => i.ok) && icons.some(i => i.purpose === 'maskable'), icons);
   const apple = pngSize(fs.readFileSync(path.join(PUB, 'icons/apple-touch-icon.png')));
   ok('1 iPhone用アイコン 180×180・透明部分なし', apple.join('x') === '180x180' && fs.readFileSync(path.join(PUB, 'icons/apple-touch-icon.png'))[25] === 2, apple);

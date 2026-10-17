@@ -1,0 +1,18 @@
+{
+  "id": "/",
+  "name": "AIMUSE",
+  "short_name": "AIMUSE",
+  "description": "AIで制作された楽曲だけを集めた音楽配信サービス",
+  "lang": "ja",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0912",
+  "theme_color": "#0b0912",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

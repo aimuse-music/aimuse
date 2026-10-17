@@ -1,6 +1,13 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="description" content="AIで制作された楽曲だけを集めた音楽配信サービス"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><title>AIMUSE</title></head><body>
-<meta name="claude:viewport-fit-sides" content="cover">
+<!doctype html><html><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="description" content="AIで制作された楽曲だけを集めた音楽配信サービス"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><title>AIMUSE</title>
 <meta name="theme-color" content="#0b0912">
+<link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<meta name="application-name" content="AIMUSE">
+<meta name="apple-mobile-web-app-title" content="AIMUSE">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head><body>
+<meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Unbounded:wght@500;700&family=JetBrains+Mono:wght@500&display=swap">
@@ -14,10 +21,13 @@
   --line:#2c2742;
   --fg:#f2eefb;
   --muted:#9d95b8;
-  --faint:#6b6488;
+  --faint:#8881a3;   /* 小さな補足文字：どの面の上でも 4.5:1 以上（第4段階の修正で #6b6488 から調整） */
   --violet:#a463ff;
   --indigo:#6b6cff;
   --grad:linear-gradient(120deg,#b46bff 0%,#7c5cff 45%,#5a72ff 100%);
+  --btn-grad:linear-gradient(120deg,#9d3dff 0%,#7654ff 45%,#4863ff 100%);   /* 文字をのせる面（ボタン等）：白文字で 4.5:1 以上 */
+  --text-grad:linear-gradient(120deg,#b46bff 0%,#9479ff 45%,#7186ff 100%);   /* グラデーションの文字：色付きの面の上でも 4.5:1 以上 */
+  --brand-grad:linear-gradient(120deg,#b46bff 0%,#7c5cff 45%,#5a72ff 100%);   /* ロゴ専用：テーマで変えない */
   --glow:rgba(140,100,255,.35);
   --ok:#3fd49a; --warn:#f6bd55; --bad:#ff5f7e;
   --f-display:"Unbounded","Zen Kaku Gothic New",system-ui,sans-serif;
@@ -32,6 +42,10 @@
   background:var(--bg);
 }
 html,body{background:var(--bg);color:var(--fg)}
+/* ホーム画面のアプリ（PWA）：ノッチ・時計の部分に、スクロールした中身が重ならないよう背景色で覆う */
+body::before{content:"";position:fixed;left:0;right:0;top:0;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:55;pointer-events:none}
+.offline-bar{position:fixed;left:0;right:0;top:env(safe-area-inset-top,0px);z-index:70;display:flex;gap:8px;align-items:center;justify-content:center;
+  padding:8px var(--gr) 8px var(--gl);background:#3a2a0b;color:#ffe7b3;font-size:12.5px;font-weight:700;line-height:1.5;text-align:center}
 body{font-family:var(--f-body);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;overscroll-behavior-y:none}
 *{box-sizing:border-box}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
@@ -45,8 +59,8 @@ p{margin:0}
 @keyframes enter{from{opacity:.0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
 /* header */
-.top{position:sticky;top:var(--st);z-index:20;margin-left:calc(-1*var(--gl));margin-right:calc(-1*var(--gr));padding:12px var(--gr) 10px var(--gl);background:linear-gradient(var(--bg) 70%,rgba(11,9,18,0));display:flex;align-items:center;gap:12px;min-height:56px}
-.logo{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.06em;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.top{position:sticky;top:var(--st);z-index:20;margin-left:calc(-1*var(--gl));margin-right:calc(-1*var(--gr));padding:12px var(--gr) 10px var(--gl);background:linear-gradient(var(--bg) calc(100% - 10px),rgba(var(--bg-rgb,11,9,18),0));display:flex;align-items:center;gap:12px;min-height:56px}
+.logo{font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.06em;background:var(--brand-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
 .logo-sub{font-family:var(--f-display);font-size:9px;letter-spacing:.32em;color:var(--faint);font-weight:500}
 .top h1{font-size:24px;font-weight:900;letter-spacing:.02em}
 .icon-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:50%;color:var(--fg);flex:none}
@@ -85,7 +99,7 @@ p{margin:0}
 .hero-meta{display:flex;justify-content:space-between;gap:10px;align-items:center}
 .hero-meta .t{font-weight:700;font-size:16px;line-height:1.35}
 .hero-meta .a{color:var(--muted);font-size:13px}
-.play-fab{width:44px;height:44px;border-radius:50%;background:var(--grad);display:grid;place-items:center;flex:none;box-shadow:0 8px 18px -6px var(--glow)}
+.play-fab{width:44px;height:44px;border-radius:50%;color:var(--on-btn,#fff);background:var(--btn-grad);display:grid;place-items:center;flex:none;box-shadow:0 8px 18px -6px var(--glow)}
 
 .card{width:142px;display:flex;flex-direction:column;gap:8px;text-align:left}
 .card .cover{border-radius:14px}
@@ -100,7 +114,7 @@ p{margin:0}
 .row .rank{font-family:var(--f-display);font-weight:700;font-size:15px;width:24px;text-align:center;color:var(--muted);font-variant-numeric:tabular-nums}
 .row .rank.top{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
 .row .t{font-weight:700;font-size:14.5px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.row.cur .t{color:#c9a8ff}
+.row.cur .t{color:var(--accent-soft,#c9a8ff)}
 .row .sub{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px;min-width:0}
 .row .sub span.n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row .end{display:flex;align-items:center;gap:2px;color:var(--muted)}
@@ -147,9 +161,9 @@ textarea.input{min-height:130px;resize:vertical;line-height:1.7}
 .checks{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);border-radius:14px;background:var(--surface);padding:6px 4px}
 .check{display:flex;gap:12px;align-items:flex-start;padding:10px;text-align:left;width:100%;font-size:13.5px;line-height:1.55}
 .box{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--faint);display:grid;place-items:center;flex:none;margin-top:1px;transition:.15s}
-.check.on .box{background:var(--grad);border-color:transparent}
+.check.on .box{background:var(--btn-grad);border-color:transparent;color:var(--on-btn,#fff)}
 .btn{height:50px;border-radius:14px;font-weight:700;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;width:100%}
-.btn.primary{background:var(--grad);box-shadow:0 10px 24px -10px var(--glow)}
+.btn.primary{color:var(--on-btn,#fff);background:var(--btn-grad);box-shadow:0 10px 24px -10px var(--glow)}
 .btn.primary:disabled{opacity:.4;box-shadow:none}
 .btn.ghost{background:var(--surface2);border:1px solid var(--line)}
 .btn.sm{height:38px;font-size:13px;border-radius:11px;width:auto;padding:0 14px}
@@ -177,7 +191,93 @@ textarea.input{min-height:130px;resize:vertical;line-height:1.7}
 .tabs button{padding:10px 0;font-size:14px;color:var(--muted);font-weight:500;position:relative}
 .tabs button.on{color:var(--fg);font-weight:700}
 .tabs button.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--grad);border-radius:2px}
-.admin-entry{display:flex;align-items:center;gap:12px;margin-top:16px;padding:14px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(120deg,rgba(164,99,255,.14),rgba(90,114,255,.08));text-align:left;width:100%}
+.admin-entry{display:flex;align-items:center;gap:12px;margin-top:16px;padding:14px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(120deg,rgba(var(--accent-rgb,164,99,255),.14),rgba(var(--btn-rgb,90,114,255),.08));text-align:left;width:100%}
+
+/* profile edit（v1.6） */
+.pbanner{margin:6px 0 0;aspect-ratio:3/1;border-radius:16px;background:var(--surface2) center/cover no-repeat;border:1px solid var(--line)}
+.profile.with-banner,.ahead.with-banner{margin-top:-46px;position:relative}
+.ahead.with-banner .cover-wrap{width:120px}
+.profile .btn.sm{margin-top:2px}
+.a-ic{display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--surface2) center/cover no-repeat;vertical-align:-3px;margin-right:6px}
+.pe-preview{border:1px solid var(--line);border-radius:18px;background:var(--surface);padding:10px 10px 16px}
+.pe-preview .pbanner{margin:0}
+.pe-img{display:flex;align-items:center;gap:12px}
+.pe-thumb{width:64px;height:64px;border-radius:12px;background:var(--surface2) center/cover no-repeat;border:1px solid var(--line);display:grid;place-items:center;color:var(--faint);flex:none}
+.pe-thumb.round{border-radius:50%}
+.pe-thumb:not(.round){width:120px;height:40px}
+.pe-links{display:flex;gap:16px;flex-wrap:wrap}
+.pe-links .link{text-decoration:underline;text-underline-offset:3px}
+select.input{appearance:none;-webkit-appearance:none}
+.crop-scrim{align-items:flex-end;z-index:90}
+.crop-sheet{align-items:center;gap:14px}
+.crop-sheet h3{align-self:flex-start}
+.crop-stage{position:relative;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;background:#000;border-radius:14px;cursor:grab}
+.crop-stage img{position:absolute;left:0;top:0;max-width:none;transform-origin:0 0;pointer-events:none;-webkit-user-drag:none}
+.crop-mask{position:absolute;inset:0;pointer-events:none;border:2px solid rgba(255,255,255,.85);border-radius:14px}
+.crop-stage.round .crop-mask{border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.55)}
+.crop-zoom{width:min(100%,320px);accent-color:var(--violet)}
+.crop-sheet .btn-row{width:100%}
+
+/* follow lists（v1.7） */
+button.stat{font:inherit;color:inherit;background:none;border:0;cursor:pointer;width:100%}
+.stat.tap span{text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line)}
+.fstats button{color:inherit;font:inherit;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line);padding:4px 0}
+.fl-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.fl-row{display:flex;gap:10px}
+.fl-main{display:flex;align-items:center;gap:12px;min-width:0;flex:1;text-align:left}
+.fl-main:disabled{opacity:.55;cursor:default}
+.fl-main .cover-wrap{width:48px;flex:none}
+.fl-main .cover{width:48px}
+.follow.sm{padding:6px 14px;font-size:12.5px;flex:none;white-space:nowrap}
+.fl-listeners{display:flex;gap:8px;align-items:flex-start;color:var(--muted);font-size:12.5px;line-height:1.55;margin-top:14px;padding:12px;border:1px dashed var(--line);border-radius:12px}
+.fl-listeners svg{flex:none;margin-top:1px}
+.fl-listeners .link{text-decoration:underline;text-underline-offset:3px;color:var(--fg);font-size:12.5px;margin-left:4px}
+.fl-breakdown{margin:0 0 10px}
+
+/* onboarding（第3段階） */
+.welcome{position:relative;margin-top:14px;padding:18px 16px 16px;border-radius:18px;border:1px solid var(--line);background:linear-gradient(135deg,rgba(var(--accent-rgb,164,99,255),.16),rgba(var(--btn-rgb,90,114,255),.08)),var(--surface);display:flex;flex-direction:column;gap:8px}
+.welcome h2{font-size:19px;font-weight:900;padding-right:34px}
+.welcome .welcome-lead{font-size:15px;font-weight:700;background:var(--text-grad);-webkit-background-clip:text;background-clip:text;color:transparent;width:fit-content}
+.welcome p{font-size:13.5px;line-height:1.7;color:var(--fg)}
+.welcome .welcome-sub{color:var(--fg);font-size:12.5px}   /* 色付きの面の上でも 4.5:1 以上を保つ */
+.welcome .btn-row{margin-top:6px}
+.welcome-x{position:absolute;top:8px;right:8px}
+.guide-lead{font-size:14px;line-height:1.8;color:var(--muted);margin-top:4px}
+.guide{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:12px}
+.guide-step{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid var(--line);border-radius:16px;background:var(--surface)}
+.guide-ic{width:40px;height:40px;border-radius:12px;margin:0;flex:none}
+.guide-step h2{font-size:15.5px;font-weight:900;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px}
+.guide-step p{font-size:13.5px;line-height:1.75;color:var(--muted);margin-top:4px}
+
+/* color theme（第4段階） */
+.th-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+.th-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px;border-radius:14px;border:1px solid var(--line);background:var(--surface);text-align:left;min-width:0}
+.th-card.on{border:2px solid var(--violet);padding:11px}
+.th-card b{font-size:14px}
+.th-card>span{font-size:11.5px;color:var(--muted)}
+.th-sw{display:flex;gap:6px;align-items:center;width:100%;height:34px;border-radius:9px;padding:0 9px;margin-bottom:6px;border:1px solid rgba(255,255,255,.12)}
+.th-sw i{width:16px;height:16px;border-radius:50%;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+.th-check{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:var(--fg);margin-top:4px;text-decoration:underline;text-underline-offset:3px}
+.th-check.inline{margin:0 0 0 8px;vertical-align:middle;text-transform:none;letter-spacing:0}
+.th-custom{display:flex;flex-direction:column;gap:8px}
+.th-color{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.th-color input[type=color]{width:44px;height:44px;border:0;padding:0;background:none;border-radius:10px;flex:none;cursor:pointer}
+.th-color span{display:flex;flex-direction:column;min-width:0;flex:1}
+.th-color b{font-size:14px}
+.th-color small{font-size:11.5px;color:var(--muted)}
+.th-color code{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.th-preview{margin-top:14px;padding:12px;border:1px dashed var(--line);border-radius:14px;display:flex;flex-direction:column;gap:10px;align-items:flex-start}
+.th-preview .tabs{width:100%}
+
+/* delete / withdrawal（第5段階） */
+.del-notes,.del-steps{margin:8px 0 4px;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.6;color:var(--muted)}
+.del-notes b,.del-steps b{color:var(--fg)}
+.del-status{border:1px solid rgba(246,189,85,.45);background:rgba(246,189,85,.08);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:8px;font-size:13.5px;line-height:1.6;margin-top:8px}
+.del-status-h{display:flex;gap:8px;align-items:center;color:var(--warn)}
+.del-status-h b{color:var(--fg);font-size:15px}
+.del-status p{color:var(--muted)}
+.del-status p b{color:var(--fg)}
+.row .end .icon-btn.del{color:var(--muted)}
 
 /* legal pages（利用規約・プライバシーポリシー・投稿ガイドライン） */
 .legal-links{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 16px;margin-top:18px}
@@ -221,7 +321,7 @@ textarea.input{min-height:130px;resize:vertical;line-height:1.7}
 .nav-in{max-width:520px;margin:0 auto;height:var(--nav-h);display:grid;grid-template-columns:repeat(4,1fr)}
 .nav button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:10.5px;color:var(--faint);font-weight:500}
 .nav button.on{color:var(--fg);font-weight:700}
-.nav .up{width:44px;height:30px;border-radius:10px;background:var(--grad);display:grid;place-items:center;color:#fff}
+.nav .up{width:44px;height:30px;border-radius:10px;background:var(--btn-grad);display:grid;place-items:center;color:var(--on-btn,#fff)}
 
 /* mini player */
 .mini{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + var(--sb));z-index:39;padding:0 var(--gr) 6px var(--gl);animation:enter .3s ease}
@@ -275,7 +375,7 @@ textarea.input{min-height:130px;resize:vertical;line-height:1.7}
 .toast{position:fixed;left:50%;bottom:calc(var(--nav-h) + var(--mini-h) + var(--sb) + 18px);transform:translateX(-50%);z-index:100;background:#fff;color:#0b0912;font-weight:700;font-size:13.5px;padding:10px 16px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.4);animation:enter .25s;max-width:calc(100% - 32px);text-align:center}
 
 .eq{display:inline-flex;gap:2px;align-items:flex-end;height:12px}
-.eq i{width:3px;background:#c9a8ff;border-radius:1px;animation:eq .9s infinite ease-in-out}
+.eq i{width:3px;background:var(--accent-soft,#c9a8ff);border-radius:1px;animation:eq .9s infinite ease-in-out}
 .eq i:nth-child(2){animation-delay:.2s}.eq i:nth-child(3){animation-delay:.4s}
 @keyframes eq{0%,100%{height:3px}50%{height:12px}}
 
@@ -288,7 +388,7 @@ textarea.input{min-height:130px;resize:vertical;line-height:1.7}
 .drop b{font-size:15px}
 .drop span{font-size:12px;color:var(--muted)}
 .drop .fmt{font-family:var(--f-mono);font-size:11px;color:var(--faint);margin-top:4px}
-.drop-ic{width:52px;height:52px;border-radius:16px;background:var(--grad);display:grid;place-items:center;color:#fff;margin-bottom:6px;box-shadow:0 8px 20px -8px var(--glow)}
+.drop-ic{width:52px;height:52px;border-radius:16px;background:var(--btn-grad);display:grid;place-items:center;color:var(--on-btn,#fff);margin-bottom:6px;box-shadow:0 8px 20px -8px var(--glow)}
 .drop.small{padding:16px 10px}
 .drop.small .drop-ic{width:42px;height:42px;border-radius:13px}
 .drop.small b{font-size:14px}
@@ -297,7 +397,7 @@ textarea.input{min-height:130px;resize:vertical;line-height:1.7}
 .opt-l{color:var(--faint);font-size:11px;margin-left:6px;font-weight:500}
 .fcard{border:1px solid var(--line);border-radius:16px;background:var(--surface);padding:12px;display:flex;flex-direction:column;gap:12px}
 .fcard-h{display:grid;grid-template-columns:46px minmax(0,1fr);gap:12px;align-items:center}
-.fthumb{width:46px;height:46px;border-radius:12px;background:var(--grad);display:grid;place-items:center;color:#fff}
+.fthumb{width:46px;height:46px;border-radius:12px;background:var(--btn-grad);display:grid;place-items:center;color:var(--on-btn,#fff)}
 .fname{font-weight:700;font-size:14px;line-height:1.4;overflow-wrap:anywhere}
 .fmeta{color:var(--muted)}
 .fcard-f{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -355,6 +455,101 @@ const CONFIG = {
   reportReasons: ["既存曲に酷似している","不適切なジャケット画像","不適切な歌詞","なりすまし・名義の問題"]
 };
 
+/* ---------- THEME（カラーテーマ：第4段階） ----------
+   ・テーマは {v:1, preset, accent, bg, button}（色は #rrggbb）。標準テーマは CSS を一切上書きしない＝従来と完全に同じ見た目
+   ・それ以外は3色から全体の色を計算し、文字の読みやすさ（コントラスト比）を自動で確保する
+       本文の文字：背景に対して 7:1 以上 / 補足・小さな文字：4.5:1 以上 / アクセント（線・アイコン）：3:1 以上 / ボタンの文字：4.5:1 以上
+   ・背景は現在「暗い色」のみ対応（ライトモードは将来対応。色の計算は明るい背景にも対応できる作り）
+   ・ロゴの色（--brand-grad）はテーマで変わらない */
+const THEME_PRESETS = [
+  {id:"standard", name:"AIMUSE標準", sub:"パープル×ブラック", accent:"#a463ff", bg:"#0b0912", button:"#7c5cff"},
+  {id:"ocean",    name:"オーシャン",  sub:"ブルー×ネイビー",   accent:"#5ab8ff", bg:"#06101e", button:"#2f74ff"},
+  {id:"rose",     name:"ローズ",      sub:"ピンク×ブラック",   accent:"#ff7ab6", bg:"#0f090d", button:"#e0458c"},
+  {id:"emerald",  name:"エメラルド",  sub:"グリーン×ブラック", accent:"#3fd49a", bg:"#07100c", button:"#16a06c"},
+  {id:"gold",     name:"ゴールド",    sub:"ゴールド×ダーク",   accent:"#f2c14e", bg:"#0f0d08", button:"#d9a62e"},
+  {id:"mono",     name:"モノクロ",    sub:"ブラック×ホワイト", accent:"#ffffff", bg:"#0a0a0a", button:"#f2f2f2"}
+];
+const THEME_STANDARD = {v:1, preset:"standard", accent:"#a463ff", bg:"#0b0912", button:"#7c5cff"};
+const HEX6 = /^#[0-9a-f]{6}$/i;
+const themeValid = t => !!t && typeof t==="object" && t.v===1
+  && (THEME_PRESETS.some(p=>p.id===t.preset) || t.preset==="custom")
+  && ["accent","bg","button"].every(k=>typeof t[k]==="string" && HEX6.test(t[k]))
+  && Object.keys(t).every(k=>["v","preset","accent","bg","button"].includes(k));
+const themeOfPreset = id => { const p=THEME_PRESETS.find(x=>x.id===id)||THEME_PRESETS[0]; return {v:1, preset:p.id, accent:p.accent, bg:p.bg, button:p.button}; };
+const themeSame = (a,b) => !!a && !!b && ["preset","accent","bg","button"].every(k=>String(a[k]).toLowerCase()===String(b[k]).toLowerCase());
+
+// --- 色の計算（sRGB・WCAG 2.x のコントラスト比）
+const hexRgb = h => [1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const rgbHex = c => "#"+c.map(v=>Math.max(0,Math.min(255,Math.round(v))).toString(16).padStart(2,"0")).join("");
+const mixHex = (a,b,t) => { const x=hexRgb(a), y=hexRgb(b); return rgbHex(x.map((v,i)=>v+(y[i]-v)*t)); };
+const lum = h => { const c=hexRgb(h).map(v=>{ v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4); }); return 0.2126*c[0]+0.7152*c[1]+0.0722*c[2]; };
+const contrast = (a,b) => { const x=lum(a), y=lum(b); return (Math.max(x,y)+0.05)/(Math.min(x,y)+0.05); };
+// 背景とのコントラストが min 以上になるまで、文字色側を白（暗い背景）／黒（明るい背景）に近づける
+const ensureContrast = (fg,bg,min) => { const target = lum(bg)<0.18 ? "#ffffff" : "#000000"; let c=fg;
+  for(let t=0; t<=1.0001 && contrast(c,bg)<min; t+=0.05) c=mixHex(fg,target,t); return c; };
+const hueShift = (h,deg) => { let [r,g,b]=hexRgb(h).map(v=>v/255); const mx=Math.max(r,g,b), mn=Math.min(r,g,b), l=(mx+mn)/2; let hh=0,s=0;
+  if(mx!==mn){ const d=mx-mn; s=l>0.5?d/(2-mx-mn):d/(mx+mn); hh = mx===r?(g-b)/d+(g<b?6:0) : mx===g?(b-r)/d+2 : (r-g)/d+4; hh/=6; }
+  hh=((hh*360+deg)%360+360)%360/360;
+  const f=(p,q,t)=>{ t=(t+1)%1; return t<1/6?p+(q-p)*6*t : t<1/2?q : t<2/3?p+(q-p)*(2/3-t)*6 : p; };
+  if(s===0) return rgbHex([l,l,l].map(v=>v*255));
+  const q=l<0.5?l*(1+s):l+s-l*s, p=2*l-q; return rgbHex([f(p,q,hh+1/3),f(p,q,hh),f(p,q,hh-1/3)].map(v=>v*255)); };
+const BG_MAX_LUM = 0.04;   // 現在は暗い背景のみ（これより明るい色は自動で暗くする）
+
+// テーマ → 画面全体の色（CSSの共通色指定）。notes は自動調整した内容（画面で知らせる）
+function themeDerive(t){
+  const notes = [];
+  let bg = t.bg;
+  if(lum(bg) > BG_MAX_LUM){ let k=0; while(lum(bg)>BG_MAX_LUM && k<40){ bg=mixHex(bg,"#000000",0.08); k++; } notes.push("背景は、現在は暗い色のみ対応しています（明るい背景は今後対応予定）。読みやすい暗さに自動で調整しました"); }
+  const fg = ensureContrast(mixHex("#f4f2f8", t.accent, 0.04), bg, 7);
+  const surface = mixHex(mixHex(bg,"#ffffff",0.045), t.accent, 0.03);
+  const surface2 = mixHex(mixHex(bg,"#ffffff",0.085), t.accent, 0.045);
+  const line = mixHex(mixHex(bg,"#ffffff",0.14), t.accent, 0.07);
+  const muted = ensureContrast(mixHex(fg,bg,0.38), surface, 4.5);
+  const faint = ensureContrast(mixHex(fg,bg,0.56), surface2, 4.5);
+  let accent = ensureContrast(t.accent, surface, 3);
+  if(accent.toLowerCase()!==t.accent.toLowerCase()) notes.push("アクセントカラーを、背景の上で見やすい明るさに自動で調整しました");
+  const accentSoft = ensureContrast(mixHex(accent,"#ffffff",0.35), surface, 4.5);
+  // ボタン：グラデーションの3色すべてで、ボタンの文字が 4.5:1 以上になるようにする
+  let btn = t.button, onBtn = "#ffffff", stops = [];
+  for(let k=0; k<30; k++){
+    stops = [mixHex(btn,"#ffffff",0.16), btn, hueShift(mixHex(btn,"#000000",0.06),-24)];
+    const w = Math.min(...stops.map(s=>contrast("#ffffff",s))), d = Math.min(...stops.map(s=>contrast("#0b0912",s)));
+    onBtn = w>=d ? "#ffffff" : "#0b0912";
+    if(Math.max(w,d) >= 4.5) break;
+    btn = w>=d ? mixHex(btn,"#000000",0.08) : mixHex(btn,"#ffffff",0.08);
+  }
+  if(btn.toLowerCase()!==t.button.toLowerCase()) notes.push("ボタンの文字が読みやすいよう、ボタンの色の明るさを自動で調整しました");
+  const rgb = h => hexRgb(h).join(",");
+  return { notes, vars:{
+    "--bg":bg, "--surface":surface, "--surface2":surface2, "--line":line, "--fg":fg, "--muted":muted, "--faint":faint,
+    "--violet":accent, "--indigo":hueShift(accent,-30), "--accent-soft":accentSoft,
+    "--grad":`linear-gradient(120deg,${stops[0]} 0%,${stops[1]} 45%,${stops[2]} 100%)`,
+    "--btn-grad":`linear-gradient(120deg,${stops[0]} 0%,${stops[1]} 45%,${stops[2]} 100%)`,
+    "--text-grad":`linear-gradient(120deg,${stops.map((c,i)=>ensureContrast(c,mixHex(surface,accent,0.16),4.6)+" "+[0,45,100][i]+"%").join(",")})`,
+    "--glow":`rgba(${rgb(btn)},.35)`, "--on-btn":onBtn,
+    "--accent-rgb":rgb(accent), "--btn-rgb":rgb(btn), "--bg-rgb":rgb(bg)
+  }};
+}
+const THEME_VARS = ["--bg","--surface","--surface2","--line","--fg","--muted","--faint","--violet","--indigo","--accent-soft","--grad","--btn-grad","--text-grad","--glow","--on-btn","--accent-rgb","--btn-rgb","--bg-rgb"];
+// 画面に反映（標準テーマは上書きを外して従来のCSSのまま）
+function themeApply(t){
+  const root = document.documentElement.style;
+  const use = themeValid(t) ? t : THEME_STANDARD;
+  THEME_VARS.forEach(k=>root.removeProperty(k));
+  let bg = "#0b0912";
+  if(!themeSame(use, THEME_STANDARD)){ const d=themeDerive(use); Object.entries(d.vars).forEach(([k,v])=>root.setProperty(k,v)); bg=d.vars["--bg"]; }
+  const m = document.querySelector('meta[name="theme-color"]'); if(m) m.setAttribute("content", bg);
+}
+// 端末内の保存（ゲスト用のテーマ／ログイン中の人のテーマの一時記録）。保存できない環境でも動く
+const themeStore = {
+  get(k){ try{ const v=JSON.parse(localStorage.getItem(k)); return v; }catch(e){ return null; } },
+  set(k,v){ try{ if(v==null) localStorage.removeItem(k); else localStorage.setItem(k,JSON.stringify(v)); }catch(e){} },
+  guest(){ const t=this.get("aimuse.theme.guest"); return themeValid(t)?t:THEME_STANDARD; },
+  last(){ const x=this.get("aimuse.theme.last"); return x && themeValid(x.theme) ? x : null; }
+};
+// 起動時：前回この端末で表示していたテーマをすぐに反映（ログイン情報の確認を待つ間のちらつきを防ぐ）
+themeApply((themeStore.last()||{}).theme || themeStore.guest());
+
 const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355,"バラード":260,"ローファイ":190,"アニソン風":305,"アンビエント":235};
 
 /* ===== データ層（本番：Supabase） =====
@@ -365,7 +560,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-16.1";
+const BUILD = "2026-10-17.7";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -377,6 +572,34 @@ async function newerBuildAvailable(){
     sessionStorage.setItem("aimuse.reloadedFor",m[1]);
     return true;
   }catch(e){ return false; }
+}
+
+// ---------- 機能スイッチ（config.js の features。true のときだけオン。書き間違い・未設定はすべてオフ） ----------
+//   pwa             … ホーム画面に追加（manifest・Service Worker）
+//   accountDeletion … 退会の申請画面（オフでも、手続き中の方の状況表示と取り消しは常に使える）
+//   ※ 画面のスイッチは表示を変えるだけ。退会の可否はサーバー（Edge Function とデータベース）でも判定する
+const FEATURES = (()=>{ const f=((window.AIMUSE_CONFIG||{}).features)||{}; return { pwa: f.pwa===true, accountDeletion: f.accountDeletion===true }; })();
+// 検証者用：URL の末尾に #account-delete-test を付けて開いたときだけ、この端末で退会画面の入口を表示（申請できるかはサーバーが判定）
+const deleteTestEntry = (()=>{ try{ if(location.hash==="#account-delete-test"){ sessionStorage.setItem("aimuse.deleteTest","1"); history.replaceState(null,"",location.pathname+location.search); } return sessionStorage.getItem("aimuse.deleteTest")==="1"; }catch(e){ return false; } })();
+const showAccountDeletion = FEATURES.accountDeletion || deleteTestEntry;
+
+// ホーム画面のアプリ（PWA）：オンのときだけ manifest を読み込み、Service Worker を登録（https・localhost のときだけ）
+//   保存するのはオフライン時の案内ページとアイコンだけ。画面・音源・会員情報は保存しない（sw.js を参照）
+//   オフにしたときは、以前に登録された Service Worker と保存を消す（緊急停止を兼ねる。ログイン・テーマは消さない）
+const swUpdate = () => { if(!FEATURES.pwa) return; try{ navigator.serviceWorker && navigator.serviceWorker.getRegistration().then(r=>r&&r.update()).catch(()=>{}); }catch(e){} };
+if(FEATURES.pwa){
+  const add = (tag,attrs) => { const el=document.createElement(tag); Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v)); document.head.appendChild(el); };
+  add("link",{rel:"manifest",href:"/manifest.webmanifest"});
+  add("meta",{name:"apple-mobile-web-app-capable",content:"yes"});
+  add("meta",{name:"mobile-web-app-capable",content:"yes"});
+}
+if("serviceWorker" in navigator && (location.protocol==="https:"||location.hostname==="localhost")){
+  if(FEATURES.pwa){
+    window.addEventListener("load",()=>{ navigator.serviceWorker.register("/sw.js",{updateViaCache:"none"}).catch(()=>{}); });
+  } else {
+    navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{});
+    try{ caches.keys().then(ks=>ks.filter(k=>k.startsWith("aimuse-")).forEach(k=>caches.delete(k))).catch(()=>{}); }catch(e){}
+  }
 }
 
 // 旧版で端末内（全員共通）に保存していたお気に入り・フォローは使わないので削除する
@@ -475,8 +698,12 @@ const auth = {
   subscribe(f){ this.listeners.add(f); f({user:this.user,profile:this.profile,ready:this.ready,recovery:this.recovery}); return ()=>this.listeners.delete(f); },
   async loadProfile(){
     if(!sb||!this.user){ this.profile=null; return; }
-    const {data} = await sb.from("profiles").select("id,display_name,is_admin").eq("id",this.user.id).maybeSingle();
+    let r = await sb.from("profiles").select("id,display_name,is_admin,avatar_path,header_path,theme").eq("id",this.user.id).maybeSingle();
+    if(r.error) r = await sb.from("profiles").select("id,display_name,is_admin,avatar_path,header_path").eq("id",this.user.id).maybeSingle();   // v1.8 SQL 未実行時
+    if(r.error) r = await sb.from("profiles").select("id,display_name,is_admin").eq("id",this.user.id).maybeSingle();   // v1.6 SQL 未実行時
+    const data = r.data;
     this.profile = data||{id:this.user.id,display_name:(this.user.email||"").split("@")[0],is_admin:false};
+    this.profile.deletion = await accountApi.status();   // 退会手続きの状況（申請していなければ null）
   },
   async init(){
     if(!sb){ this.ready=true; this.emit(); return; }
@@ -650,7 +877,7 @@ function SecHead({en,title,action,onAction}){
 
 /* ---------- HOME ---------- */
 function Home({ctx}){
-  const {songs,artistOf,play,favs,toggleFav,openArtist,artists,current,playing,setTab,repoMode,isAdmin} = ctx;
+  const {songs,artistOf,play,favs,toggleFav,openArtist,artists,current,playing,setTab,repoMode,isAdmin,showWelcome} = ctx;
   const [genre,setGenre] = useState(CONFIG.genres[0]);
   const featured = songs.slice(0,6);
   const fresh = [...songs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
@@ -665,7 +892,8 @@ function Home({ctx}){
       <div className="spacer"></div>
       <button className="icon-btn" aria-label="検索" onClick=${()=>setTab("search")}><${Icon} n="search"/></button>
     </header>
-    <div className="demo-note"><${Icon} n="info" size=${18}/><span>${repoMode==="unconfigured"?html`<b>接続設定が未完了です</b>　サーバーとの接続設定（config.js）が完了するまで、楽曲を表示できません。`:repoMode==="error"?html`<b>読み込みに失敗しました</b>　通信状態を確認して、ページを再読み込みしてください。`:html`<b>AIMUSE</b>　AIで制作された楽曲だけを集めた音楽配信サービスです。表示されるのは審査で承認された楽曲だけです。`}</span></div>
+    ${!(showWelcome && repoMode!=="unconfigured" && repoMode!=="error") && html`<div className="demo-note"><${Icon} n="info" size=${18}/><span>${repoMode==="unconfigured"?html`<b>接続設定が未完了です</b>　サーバーとの接続設定（config.js）が完了するまで、楽曲を表示できません。`:repoMode==="error"?html`<b>読み込みに失敗しました</b>　通信状態を確認して、ページを再読み込みしてください。`:html`<b>AIMUSE</b>　AIで制作された楽曲だけを集めた音楽配信サービスです。表示されるのは審査で承認された楽曲だけです。`}</span></div>`}
+    ${showWelcome && html`<${WelcomeCard} ctx=${ctx}/>`}
     ${songs.length===0&&html`<div className="home-empty">
       <span className="drop-ic"><${Icon} n="music" size=${26}/></span>
       <h2>${repoMode==="pending"?"読み込み中…":"公開中の楽曲はまだありません"}</h2>
@@ -970,7 +1198,7 @@ function Upload({ctx}){
     </div>`}
 
     ${step==="done" && html`<div className="form" style=${{alignItems:"center",textAlign:"center",paddingTop:24}}>
-      <div style=${{width:76,height:76,borderRadius:"50%",background:"var(--grad)",display:"grid",placeItems:"center"}}><${Icon} n="check" size=${36} sw=${2.6}/></div>
+      <div style=${{width:76,height:76,borderRadius:"50%",background:"var(--btn-grad)",color:"var(--on-btn,#fff)",display:"grid",placeItems:"center"}}><${Icon} n="check" size=${36} sw=${2.6}/></div>
       <h2 style=${{fontSize:22,fontWeight:900}}>審査を申請しました</h2>
       <p style=${{color:"var(--muted)",fontSize:14,maxWidth:320}}>「${f.title}」は審査待ちになりました。承認されると新着楽曲に表示されます。音源と画像はAIMUSEのサーバーに保存されました。</p>
       <div className="btn-row" style=${{width:"100%"}}><button className="btn ghost" onClick=${restart}>続けて投稿</button>${isAdmin?html`<button className="btn primary" onClick=${()=>setTab("admin")}>審査画面を見る</button>`:html`<button className="btn primary" onClick=${()=>setTab("me")}>マイページへ</button>`}</div>
@@ -980,61 +1208,88 @@ function Upload({ctx}){
 
 /* ---------- MY PAGE ---------- */
 function MyPage({ctx}){
-  const {songs,artists,artistOf,play,favs,toggleFav,follows,openArtist,submissions,setTab,current,playing,user,profile,isAdmin,signOut,recovery,myFollowers} = ctx;
+  const {songs,artists,artistOf,play,favs,toggleFav,follows,openArtist,submissions,setTab,current,playing,user,profile,isAdmin,signOut,recovery,myFollowers,openFollowList} = ctx;
   const [tab,setT] = useState("fav");
+  const [delSong,setDelSong] = useState(null);
   if(recovery) return html`<div className="screen"><header className="top"><h1>マイページ</h1></header><${NewPasswordPanel} ctx=${ctx}/></div>`;
   if(!user) return html`<div className="screen">
     <header className="top"><h1>マイページ</h1></header>
     <div className="demo-note"><${Icon} n="info" size=${18}/><span>ログインすると、楽曲の投稿と審査状況の確認ができます。</span></div>
     <${AuthPanel} ctx=${ctx}/>
+    <button className="btn ghost sm" style=${{margin:"18px auto 0"}} onClick=${ctx.openSettings}>カラーテーマを変更</button>
   </div>`;
   const myName = (profile&&profile.display_name)||(user.email||"").split("@")[0];
+  if(profile&&profile.deletion) return html`<div className="screen">
+    <header className="top"><h1>マイページ</h1></header>
+    <div style=${{fontSize:12.5,color:"var(--muted)",marginBottom:4}}>${user.email}</div>
+    <${DeletionStatus} ctx=${ctx}/>
+    <button className="btn ghost" style=${{marginTop:20}} onClick=${ctx.openSettings}><${Icon} n="eye" size=${18}/>設定（カラーテーマ）</button>
+    <button className="btn ghost" style=${{marginTop:10}} onClick=${signOut}>ログアウト</button>
+    <${LegalLinks} openLegal=${ctx.openLegal} openGuide=${ctx.openGuide}/>
+  </div>`;
   const favSongs = songs.filter(s=>favs.has(s.id));
   const mine = submissions.filter(s=>s.mine);
   const myPublic = mine.filter(s=>s.status==="public"||s.status==="hidden");
   const followed = artists.filter(a=>follows.has(a.id));
+  const hiddenFollows = Math.max(0, follows.size - followed.length);   // 公開中の曲がなくなったアーティスト（フォローは保持）
   const statusTag = st => st==="pending"?html`<span className="tag demo">審査待ち</span>`:st==="public"?html`<span className="tag ok">公開中</span>`:st==="hidden"?html`<span className="tag">非公開</span>`:html`<span className="tag bad">却下</span>`;
   return html`<div className="screen">
     <header className="top"><h1>マイページ</h1></header>
-    <div className="profile">
-      <div className="avatar"><div>${[...myName][0]?.toUpperCase()||"A"}</div></div>
+    <${ProfileBanner} url=${avatarUrl(profile&&profile.header_path)}/>
+    <div className=${"profile"+(profile&&profile.header_path?" with-banner":"")}>
+      <${AvatarCircle} url=${avatarUrl(profile&&profile.avatar_path)} name=${myName}/>
       <div><div style=${{fontSize:20,fontWeight:900}}>${myName}</div><div style=${{fontSize:12.5,color:"var(--muted)"}}>${user.email}${isAdmin?" · 管理者":""}</div></div>
+      <button className="btn sm ghost" onClick=${()=>setTab("profile")}>プロフィールを編集</button>
     </div>
     <div className="stats">
       <div className="stat"><b>${mine.length}</b><span>投稿曲</span></div>
-      <div className="stat"><b>${followed.length}</b><span>フォロー</span></div>
-      <div className="stat"><b>${fmtNum(myFollowers)}</b><span>フォロワー</span></div>
+      <button className="stat tap" onClick=${()=>openFollowList({mine:true,mode:"following"})}><b>${follows.size}</b><span>フォロー</span></button>
+      <button className="stat tap" onClick=${()=>openFollowList({mine:true,mode:"followers"})}><b>${fmtNum(myFollowers)}</b><span>フォロワー</span></button>
       <div className="stat"><b>${fmtNum(myPublic.reduce((a,s)=>a+s.plays,0))}</b><span>再生数</span></div>
     </div>
     ${isAdmin&&html`<button className="admin-entry" onClick=${()=>setTab("admin")}><${Icon} n="shield"/><div style=${{flex:1}}><b style=${{display:"block",fontSize:14}}>管理者画面</b><span style=${{fontSize:12,color:"var(--muted)"}}>投稿審査・通報対応・楽曲管理</span></div><${Icon} n="chev" size=${18}/></button>`}
-    <div className="tabs">${[["fav",`お気に入り ${favSongs.length}`],["mine",`投稿曲 ${mine.length}`],["follow",`フォロー中 ${followed.length}`]].map(([k,l])=>html`<button key=${k} className=${tab===k?"on":""} onClick=${()=>setT(k)}>${l}</button>`)}</div>
+    <div className="tabs">${[["fav",`お気に入り ${favSongs.length}`],["mine",`投稿曲 ${mine.length}`],["follow",`フォロー中 ${follows.size}`]].map(([k,l])=>html`<button key=${k} className=${tab===k?"on":""} onClick=${()=>setT(k)}>${l}</button>`)}</div>
     <div style=${{marginTop:8}}>
       ${tab==="fav" && (favSongs.length ? html`<div className="list">${favSongs.map(s=>html`<${SongRow} key=${s.id} song=${s} artist=${artistOf(s)} cur=${current?.id===s.id} playing=${playing} fav=${true} onPlay=${()=>play(s,favSongs)} onFav=${()=>toggleFav(s.id)}/>`)}</div>` : html`<div className="empty">ハートをタップした曲がここに並びます</div>`)}
-      ${tab==="mine" && (mine.length ? html`<div className="list">${mine.map(s=>html`<div key=${s.id} className="row norank"><${Cover} item=${s} radius=${10}/><div style=${{minWidth:0}}><div className="t">${s.title}</div><div className="sub"><span className="n">${s.submittedAt}</span></div></div><div className="end">${statusTag(s.status)}</div></div>`)}</div>` : html`<div className="empty">まだ投稿した曲はありません<br/><button className="btn primary sm" style=${{margin:"14px auto 0"}} onClick=${()=>setTab("upload")}>楽曲を投稿する</button></div>`)}
-      ${tab==="follow" && (followed.length ? html`<div className="list">${followed.map(a=>html`<button key=${a.id} className="row norank" onClick=${()=>openArtist(a.id)}><${Cover} item=${a} radius="50%"/><div style=${{minWidth:0}}><div className="t">${a.name}</div><div className="sub">${fmtNum(a.followers)} フォロワー</div></div><${Icon} n="chev" size=${18}/></button>`)}</div>` : html`<div className="empty">フォローしたアーティストがここに並びます</div>`)}
+      ${tab==="mine" && (mine.length ? html`<div className="list">${mine.map(s=>html`<div key=${s.id} className="row norank"><${Cover} item=${s} radius=${10}/><div style=${{minWidth:0}}><div className="t">${s.title}</div><div className="sub"><span className="n">${s.submittedAt}</span></div></div><div className="end">${statusTag(s.status)}<button className="icon-btn del" aria-label=${`「${s.title}」を削除`} onClick=${()=>setDelSong(s)}><${Icon} n="trash" size=${19}/></button></div></div>`)}</div>` : html`<div className="empty">まだ投稿した曲はありません<br/><button className="btn primary sm" style=${{margin:"14px auto 0"}} onClick=${()=>setTab("upload")}>楽曲を投稿する</button></div>`)}
+      ${tab==="follow" && (followed.length ? html`<div className="list">${followed.map(a=>html`<button key=${a.id} className="row norank" onClick=${()=>openArtist(a.id)}><${Cover} item=${a} radius="50%"/><div style=${{minWidth:0}}><div className="t">${a.name}</div><div className="sub">${fmtNum(a.followers)} フォロワー</div></div><${Icon} n="chev" size=${18}/></button>`)}</div>` : hiddenFollows===0 ? html`<div className="empty">フォローしたアーティストがここに並びます</div>` : null)}
+      ${tab==="follow" && hiddenFollows>0 && html`<div className="fl-listeners"><${Icon} n="info" size=${18}/><span>ほか ${hiddenFollows}件は、現在公開中の曲がないアーティストです（フォローは残っています）。<button className="link" onClick=${()=>openFollowList({mine:true,mode:"following"})}>一覧で確認・解除する</button></span></div>`}
     </div>
-    <button className="btn ghost" style=${{marginTop:28}} onClick=${signOut}>ログアウト</button>
-    <${LegalLinks} openLegal=${ctx.openLegal}/>
+    <button className="btn ghost" style=${{marginTop:28}} onClick=${ctx.openSettings}><${Icon} n="eye" size=${18}/>設定（カラーテーマ・アカウント）</button>
+    <button className="btn ghost" style=${{marginTop:10}} onClick=${signOut}>ログアウト</button>
+    <${LegalLinks} openLegal=${ctx.openLegal} openGuide=${ctx.openGuide}/>
+    ${delSong && html`<${TrackDeleteSheet} song=${delSong} say=${ctx.say} onClose=${()=>setDelSong(null)} onDeleted=${s=>{ setDelSong(null); ctx.afterTrackDeleted(s); }}/>`}
   </div>`;
 }
 
 /* ---------- ARTIST ---------- */
 function Artist({ctx}){
-  const {artistId,artists,songs,play,favs,toggleFav,follows,toggleFollow,goBack,current,playing,artistOf} = ctx;
+  const {artistId,artists,songs,play,favs,toggleFav,follows,toggleFollow,goBack,current,playing,artistOf,isAdmin,adminResetImage,openFollowList,followVer} = ctx;
+  const [confirmReset,setConfirmReset] = useState(null);
+  const [fsum,setFsum] = useState(null);   // フォロー中の人数（持ち主がフォローしている公開アーティスト）
+  useEffect(()=>{ if(!sb||!isUuid(artistId)) return; let alive=true; followApi.summary(artistId).then(s=>{ if(alive) setFsum(s); }).catch(()=>{}); return ()=>{ alive=false; }; },[artistId,followVer]);
   const a = artists.find(x=>x.id===artistId); if(!a) return null;
   const list = songs.filter(s=>s.artistId===a.id).sort((x,y)=>y.plays-x.plays);
   const on = follows.has(a.id);
   return html`<div className="screen">
     <header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button></header>
-    <div className="ahead">
+    <${ProfileBanner} url=${a.headerUrl}/>
+    <div className=${"ahead"+(a.headerUrl?" with-banner":"")}>
       <${Cover} item=${a} radius="50%"/>
       <h2>${a.name}</h2>
-      <div style=${{color:"var(--muted)",fontSize:13}}>${fmtNum(a.followers)} フォロワー · ${list.length}曲</div>
-      <p style=${{color:"var(--muted)",fontSize:13.5,maxWidth:320}}>${a.bio}</p>
+      <div className="fstats" style=${{color:"var(--muted)",fontSize:13}}>
+        <button onClick=${()=>openFollowList({artistId:a.id,mode:"followers"})}>${fmtNum(a.followers)} フォロワー</button> · <button onClick=${()=>openFollowList({artistId:a.id,mode:"following"})}>${fsum?fmtNum(fsum.following):"–"} フォロー中</button> · ${list.length}曲
+      </div>
+      ${a.bio && html`<p style=${{color:"var(--muted)",fontSize:13.5,maxWidth:320,whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>${a.bio}</p>`}
       <div style=${{display:"flex",gap:10,alignItems:"center"}}>
         <button className=${"follow"+(on?" on":"")} onClick=${()=>toggleFollow(a.id)}>${on?"フォロー中":"フォローする"}</button>
         ${list.length>0&&html`<button className="play-fab" aria-label="すべて再生" onClick=${()=>play(list[0],list)}><${PlayIcon} size=${18}/></button>`}
       </div>
+      ${isAdmin && (a.imageUrl||a.headerUrl) && html`<div className="btn-row" style=${{marginTop:4}}>
+        ${[["avatar","アイコン",a.imageUrl],["header","背景画像",a.headerUrl]].filter(x=>x[2]).map(([k,l])=> confirmReset===k
+          ? html`<button key=${k} className="btn sm danger" onClick=${()=>{setConfirmReset(null);adminResetImage(a.id,k);}}>${l}を削除する</button>`
+          : html`<button key=${k} className="btn sm ghost" onClick=${()=>setConfirmReset(k)}>管理者：${l}を初期化</button>`)}
+      </div>`}
     </div>
     <section className="sec"><${SecHead} en="POPULAR" title="人気の曲"/>
       <div className="list">${list.map((s,i)=>html`<${SongRow} key=${s.id} song=${s} artist=${a} rank=${i+1} cur=${current?.id===s.id} playing=${playing} fav=${favs.has(s.id)} onPlay=${()=>play(s,list)} onFav=${()=>toggleFav(s.id)}/>`)}</div>
@@ -1065,6 +1320,7 @@ function Admin({ctx}){
       <button className=${tab==="review"?"on":""} onClick=${()=>setT("review")}>投稿審査${pending.length?html`<span className="badge-count">${pending.length}</span>`:""}</button>
       <button className=${tab==="reports"?"on":""} onClick=${()=>setT("reports")}>通報${openReports.length?html`<span className="badge-count">${openReports.length}</span>`:""}</button>
       <button className=${tab==="songs"?"on":""} onClick=${()=>setT("songs")}>楽曲管理</button>
+      <button className=${tab==="names"?"on":""} onClick=${()=>setT("names")}>名義変更</button>
     </div>
 
     ${tab==="review" && html`<div style=${{display:"flex",flexDirection:"column",gap:12,marginTop:14}}>
@@ -1092,6 +1348,7 @@ function Admin({ctx}){
       </div>`})}
     </div>`}
 
+    ${tab==="names" && html`<${AdminNameHistory} ctx=${ctx}/>`}
     ${tab==="songs" && html`<div className="list" style=${{marginTop:8}}>
       ${allSongs.map(s=>html`<div key=${s.id} className="row norank" style=${{opacity:s.status==="public"?1:.55}}>
         <${Cover} item=${s} radius=${10}/>
@@ -1143,7 +1400,7 @@ function FullPlayer({ctx}){
           : html`<${Cover} item=${song} title=${song.title} radius=${22} style=${{width:"min(100%,360px)"}}/>`}
       </div>
       <div className="pt">
-        <div style=${{flex:1,minWidth:0}}><div className="t">${song.title}</div><button className="a" onClick=${()=>{close();openArtist(artist.id)}}>${artist.name}</button>
+        <div style=${{flex:1,minWidth:0}}><div className="t">${song.title}</div><button className="a" onClick=${()=>{close();openArtist(artist.id)}}>${artist.imageUrl&&html`<span className="a-ic" style=${{backgroundImage:`url("${artist.imageUrl}")`}} aria-hidden="true"></span>`}${artist.name}</button>
           <div style=${{display:"flex",gap:6,marginTop:6}}><${ToolTag} tool=${song.tool}/><span className="tag" style=${{color:"#ddd"}}>${song.genre}</span></div></div>
         <button className="icon-btn" aria-label=${fav?"お気に入りから削除":"お気に入りに追加"} onClick=${()=>toggleFav(song.id)}><${Icon} n="heart" size=${28} fill=${fav} style=${{color:fav?"#ff6fae":"#fff"}}/></button>
       </div>
@@ -1224,7 +1481,7 @@ function AuthPanel({ctx}){
     <button className="btn primary" onClick=${go} disabled=${busy}>${busy?"処理中…":mode==="login"?"ログイン":mode==="signup"?"会員登録（無料）":"再設定メールを送る"}</button>
     ${mode==="login" && html`<button className="link" onClick=${()=>{setMode("reset");setErr(null)}}>パスワードを忘れた場合</button>`}
     ${mode==="reset" && html`<button className="link" onClick=${()=>{setMode("login");setErr(null)}}>ログインに戻る</button>`}
-    <${LegalLinks} openLegal=${ctx.openLegal}/>
+    <${LegalLinks} openLegal=${ctx.openLegal} openGuide=${ctx.openGuide}/>
   </div>`;
 }
 function NewPasswordPanel({ctx}){
@@ -1245,6 +1502,692 @@ function NewPasswordPanel({ctx}){
       <input id="a-newpw" className="input" type="password" value=${pw} onInput=${e=>setPw(e.target.value)} autoComplete="new-password" placeholder="6文字以上"/></div>
     ${err && html`<span className="err" role="alert">${err}</span>`}
     <button className="btn primary" onClick=${go} disabled=${busy}>${busy?"処理中…":"パスワードを変更する"}</button>
+  </div>`;
+}
+
+/* ---------- PROFILE（プロフィール編集：v1.6） ----------
+   ・アイコン／背景画像は端末内で切り抜き・縮小し、JPEGに変換してから保存（位置情報などの撮影情報は残らない）
+   ・保存の順番：新しい画像を保存 → プロフィールに設定（サーバー側で本人・保存済みを確認）→ 成功後に古い画像を削除
+     途中で失敗しても、それまでの画像はそのまま残る
+   ・表示名は本人と運営だけに表示。他の人に見えるのはアーティスト名・アイコン・背景・自己紹介
+   ・v1.6 のSQLが未実行でも、既存機能は従来どおり動く（プロフィールの画像が表示されないだけ） */
+const PROFILE_IMAGE = {
+  avatar:{label:"アイコン", w:512, h:512, round:true, quality:.9},
+  header:{label:"背景画像", w:1500, h:500, round:false, quality:.85}
+};
+const PROFILE_PHOTO_ACCEPT = "image/*";
+const PROFILE_FILE_ACCEPT = ".jpg,.jpeg,.png,.webp,.heic,.heif,image/jpeg,image/png,image/webp,image/heic,image/heif";
+const PROFILE_INPUT_MAX_MB = 20;      // 選べる元画像の大きさ（保存するのは縮小後の画像）
+const PROFILE_SAVE_MAX = 1900000;     // 保存する画像の上限（保存場所の上限 2MB より少し小さく）
+// ランダムなID（HTTPS以外の画面や古い端末では crypto.randomUUID が無いため、同じ形式で作る）
+const uuid4 = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+  : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+const avatarUrl = p => (p && sb) ? sb.storage.from("avatars").getPublicUrl(p).data.publicUrl : null;
+const profileErr = (e,fallback) => { const m=(e&&e.message)||""; return /[ぁ-んァ-ヶ一-龠]/.test(m) ? m.replace(/^.*?ERROR:\s*/,"") : fallback; };
+
+const profileApi = {
+  // 公開中のアーティストのアイコン・背景・自己紹介（未ログインでも取得可。SQL未実行でも失敗せず空で返す）
+  async artistCards(ids){
+    const out = new Map(); if(!sb||!ids.length) return out;
+    const [b,r] = await Promise.all([
+      sb.from("artists").select("id,bio").in("id",ids),
+      sb.rpc("public_artist_profiles",{p_artist_ids:ids})
+    ]);
+    if(!b.error) b.data.forEach(x=>out.set(x.id,{bio:x.bio||""}));
+    if(!r.error) r.data.forEach(x=>{ const o=out.get(x.artist_id)||{bio:""}; o.avatarUrl=avatarUrl(x.avatar_path); o.headerUrl=avatarUrl(x.header_path); out.set(x.artist_id,o); });
+    return out;
+  },
+  async myArtists(uid){
+    const {data,error} = await sb.from("artists").select("id,name,bio").eq("user_id",uid).order("created_at",{ascending:true});
+    if(error) throw error; return data||[];
+  },
+  // 本人の「使われていない画像」を片付ける（前回の削除失敗などで残ったもの）
+  //  一覧に出るのは、保存場所のルールにより本人の画像だけ
+  async cleanup(uid, keep){
+    try{
+      const {data,error} = await sb.storage.from("avatars").list("",{limit:100});
+      if(error||!data) return;
+      const stale = data.map(f=>f.name).filter(n=>/^(avatar|header)-/.test(n) && !keep.includes(n));
+      if(stale.length) await sb.storage.from("avatars").remove(stale);
+    }catch(e){}
+  },
+  async upload(uid, kind, blob){
+    const path = `${kind}-${uuid4()}.jpg`;   // 会員IDを含めない（公開URLから会員IDが分からないように）
+    const {error} = await sb.storage.from("avatars").upload(path, blob, {contentType:"image/jpeg", upsert:false, cacheControl:"31536000"});
+    if(error) throw error;
+    return path;
+  },
+  async setImage(kind, path){
+    const {data,error} = await sb.rpc("set_my_profile_image",{p_kind:kind, p_path:path});
+    if(error) throw error; return data||null;   // それまで使っていた画像の場所
+  },
+  async removeFile(path){ if(!path) return; try{ await sb.storage.from("avatars").remove([path]); }catch(e){} },
+  async setDisplayName(uid, name){
+    const {data,error} = await sb.from("profiles").update({display_name:name||null}).eq("id",uid).select("id");
+    if(error) throw error; if(!data||!data.length) throw deniedError();
+  },
+  async renameArtist(id, name){
+    const {data,error} = await sb.rpc("rename_my_artist",{p_artist:id, p_name:name});
+    if(error) throw error; return data;
+  },
+  async setBio(id, bio){
+    const {data,error} = await sb.from("artists").update({bio}).eq("id",id).select("id");
+    if(error) throw error; if(!data||!data.length) throw deniedError();
+  }
+};
+
+// 画像を読み込み、作業用に縮小（最大2048px）した canvas を返す。HEICなど読み込めない形式はエラー
+async function loadProfileImage(file){
+  const ext = (file.name||"").split(".").pop().toLowerCase();
+  const type = (file.type||"").toLowerCase();
+  if(!(type.startsWith("image/") || ["jpg","jpeg","png","webp","heic","heif"].includes(ext))) throw new Error("画像ファイル（JPEG・PNG・WebP・HEIC）を選んでください");
+  if(type==="image/svg+xml"||ext==="svg"||type==="image/gif"||ext==="gif") throw new Error("この形式の画像は使えません。JPEG・PNG・WebPの画像を選んでください");
+  if(!file.size) throw new Error("ファイルが空です。iCloudの写真はダウンロード完了後にもう一度選んでください");
+  if(file.size > PROFILE_INPUT_MAX_MB*1048576) throw new Error(`画像が大きすぎます（${PROFILE_INPUT_MAX_MB}MBまで）`);
+  const url = URL.createObjectURL(file);
+  let src;
+  try{
+    // <img> で読み込む（多くの端末で写真の向き情報が正しく反映される）
+    src = await new Promise((res,rej)=>{ const i=new Image(); i.decoding="async"; i.onload=()=>res(i); i.onerror=rej; i.src=url; });
+  }catch(e){
+    try{ src = await createImageBitmap(file); }catch(e2){ src=null; }
+  }finally{ URL.revokeObjectURL(url); }
+  const w = src && (src.naturalWidth||src.width), h = src && (src.naturalHeight||src.height);
+  if(!w||!h) throw new Error(/heic|heif/.test(type+ext)
+    ? "この端末ではHEIC画像を読み込めませんでした。写真をJPEGで保存し直すか、別の写真を選んでください"
+    : "画像を読み込めませんでした。別の画像を選んでください");
+  const k = Math.min(1, 2048/Math.max(w,h));
+  const c = document.createElement("canvas"); c.width=Math.max(1,Math.round(w*k)); c.height=Math.max(1,Math.round(h*k));
+  c.getContext("2d").drawImage(src,0,0,c.width,c.height);
+  if(src.close) src.close();
+  return c;
+}
+const canvasBlob = (c,q) => new Promise(res=>c.toBlob(b=>res(b),"image/jpeg",q));
+
+// 切り抜き画面：ドラッグで位置、2本指（またはスライダー・ホイール）で拡大・縮小
+function ProfileCropper({kind, source, onCancel, onDone}){
+  const spec = PROFILE_IMAGE[kind];
+  const vw = Math.min(window.innerWidth||390, 520);
+  const W = spec.round ? Math.min(280, vw-80) : Math.min(480, vw-40);
+  const H = Math.round(W*spec.h/spec.w);
+  const nw = source.width, nh = source.height;
+  const s0 = Math.max(W/nw, H/nh);
+  const [view,setView] = useState(()=>({z:1, x:(W-nw*s0)/2, y:(H-nh*s0)/2}));
+  const [busy,setBusy] = useState(false);
+  const [url,setUrl] = useState(null);
+  const ptrs = useRef(new Map()), gesture = useRef(null);
+  useEffect(()=>{ let u; source.toBlob(b=>{ if(b){ u=URL.createObjectURL(b); setUrl(u); } },"image/jpeg",.92); return ()=>{ if(u) URL.revokeObjectURL(u); }; },[source]);
+  const clamp = v => { const s=s0*v.z; return {z:v.z, x:Math.min(0,Math.max(W-nw*s,v.x)), y:Math.min(0,Math.max(H-nh*s,v.y))}; };
+  // (px,py) を中心に拡大率を z に変える
+  const zoomAt = (v,z,px,py) => { z=Math.min(4,Math.max(1,z)); const s=s0*v.z, s2=s0*z; return clamp({z, x:px-(px-v.x)*s2/s, y:py-(py-v.y)*s2/s}); };
+  const local = e => { const r=e.currentTarget.getBoundingClientRect(); return {x:e.clientX-r.left, y:e.clientY-r.top}; };
+  const down = e => { e.currentTarget.setPointerCapture&&e.currentTarget.setPointerCapture(e.pointerId); ptrs.current.set(e.pointerId,local(e)); gesture.current=null; };
+  const move = e => {
+    if(!ptrs.current.has(e.pointerId)) return;
+    const prev = ptrs.current.get(e.pointerId), p = local(e);
+    ptrs.current.set(e.pointerId,p);
+    const pts = [...ptrs.current.values()];
+    if(pts.length>=2){
+      const [a,b]=pts, d=Math.hypot(a.x-b.x,a.y-b.y), mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
+      const g = gesture.current;
+      if(g&&g.d>0) setView(v=>{ const z=zoomAt(v, v.z*d/g.d, mx, my); return clamp({...z, x:z.x+mx-g.mx, y:z.y+my-g.my}); });
+      gesture.current={d,mx,my};
+    } else {
+      setView(v=>clamp({...v, x:v.x+p.x-prev.x, y:v.y+p.y-prev.y}));
+    }
+  };
+  const up = e => { ptrs.current.delete(e.pointerId); gesture.current=null; };
+  const wheel = e => { e.preventDefault(); const p=local(e); setView(v=>zoomAt(v, v.z*(e.deltaY<0?1.08:1/1.08), p.x, p.y)); };
+  const done = async () => {
+    setBusy(true);
+    const s=s0*view.z, out=document.createElement("canvas"); out.width=spec.w; out.height=spec.h;
+    const ctx2=out.getContext("2d"); ctx2.imageSmoothingQuality="high";
+    ctx2.fillStyle=(getComputedStyle(document.documentElement).getPropertyValue("--surface")||"#15121f").trim()||"#15121f"; ctx2.fillRect(0,0,spec.w,spec.h);   // 透明部分（PNG）は背景色で塗る
+    ctx2.drawImage(source, -view.x/s, -view.y/s, W/s, H/s, 0, 0, spec.w, spec.h);
+    let q=spec.quality, blob=await canvasBlob(out,q);
+    while(blob && blob.size>PROFILE_SAVE_MAX && q>.5){ q-=.1; blob=await canvasBlob(out,q); }
+    setBusy(false);
+    if(!blob){ onCancel("画像を作成できませんでした。別の画像でお試しください"); return; }
+    onDone({blob, url:URL.createObjectURL(blob)});
+  };
+  const s=s0*view.z;
+  return html`<div className="scrim crop-scrim" role="dialog" aria-modal="true" aria-label=${spec.label+"の範囲を調整"}>
+    <div className="sheet crop-sheet" onClick=${e=>e.stopPropagation()}>
+      <h3>${spec.label}の範囲を調整</h3>
+      <div className=${"crop-stage"+(spec.round?" round":"")} style=${{width:W,height:H}}
+        onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up} onWheel=${wheel}>
+        ${url && html`<img src=${url} alt="" draggable="false" style=${{width:nw,height:nh,transform:`translate(${view.x}px,${view.y}px) scale(${s})`}}/>`}
+        <div className="crop-mask"></div>
+      </div>
+      <input className="crop-zoom" type="range" min="1" max="4" step="0.01" value=${view.z} aria-label="拡大・縮小"
+        onInput=${e=>{ const z=+e.target.value; setView(v=>zoomAt(v,z,W/2,H/2)); }}/>
+      <p className="hint" style=${{textAlign:"center"}}>ドラッグで位置を調整・2本指またはスライダーで拡大／縮小</p>
+      <div className="btn-row"><button className="btn ghost" onClick=${()=>onCancel()} disabled=${busy}>キャンセル</button><button className="btn primary" onClick=${done} disabled=${busy||!url}>${busy?"処理中…":"この範囲を使う"}</button></div>
+    </div>
+  </div>`;
+}
+
+// アイコンの丸（画像がなければ従来どおり頭文字）
+function AvatarCircle({url, name, size}){
+  return html`<div className="avatar" style=${size?{width:size,height:size}:null}><div style=${url?{background:`center/cover no-repeat url("${url}")`}:null}>${url?"":([...(name||"")][0]?.toUpperCase()||"A")}</div></div>`;
+}
+// 背景画像（なければ何も表示しない＝従来のデザイン）
+const ProfileBanner = ({url}) => url ? html`<div className="pbanner" style=${{backgroundImage:`url("${url}")`}}></div>` : null;
+
+function ProfileImageField({kind, current, draft, onPick, onReset, onUndo}){
+  const spec = PROFILE_IMAGE[kind];
+  const photoRef=useRef(null), fileRef=useRef(null);
+  const change=e=>{const f=e.target.files&&e.target.files[0]; e.target.value=""; if(f) onPick(f);};
+  const shown = draft ? draft.url : (draft===null ? null : current);
+  const status = draft ? "新しい画像（未保存）" : draft===null ? "初期画像に戻します（未保存）" : current ? "設定中" : "初期画像";
+  return html`<div className="field">
+    <span className="fl">${spec.label}</span>
+    <input ref=${photoRef} type="file" accept=${PROFILE_PHOTO_ACCEPT} className="vh" onChange=${change} tabIndex="-1" aria-hidden="true"/>
+    <input ref=${fileRef} type="file" accept=${PROFILE_FILE_ACCEPT} className="vh" onChange=${change} tabIndex="-1" aria-hidden="true"/>
+    <div className="pe-img">
+      <div className=${"pe-thumb"+(spec.round?" round":"")} style=${shown?{backgroundImage:`url("${shown}")`}:null}>${shown?"":html`<${Icon} n="image" size=${20}/>`}</div>
+      <span className="hint">${status}</span>
+    </div>
+    <div className="pick-grid">
+      <button className="drop small" onClick=${()=>photoRef.current.click()}><span className="drop-ic"><${Icon} n="image" size=${22}/></span><b>写真から選ぶ</b><span>写真ライブラリ</span></button>
+      <button className="drop small" onClick=${()=>fileRef.current.click()}><span className="drop-ic"><${Icon} n="folder" size=${22}/></span><b>ファイルから選ぶ</b><span>「ファイル」アプリ</span></button>
+    </div>
+    <div className="pe-links">
+      ${draft!==undefined && html`<button className="link" onClick=${onUndo}>変更を取り消す</button>`}
+      ${(current||draft) && draft!==null && html`<button className="link" onClick=${onReset}>初期画像に戻す</button>`}
+    </div>
+    <span className="hint">JPEG・PNG・WebP・HEIC（${PROFILE_INPUT_MAX_MB}MBまで）。保存時に縮小し、撮影場所などの情報は取り除きます。</span>
+  </div>`;
+}
+
+function ProfileEdit({ctx}){
+  const {user,profile,goBack,say,afterProfileSave} = ctx;
+  const uid = user&&user.id;
+  const curAvatar = avatarUrl(profile&&profile.avatar_path), curHeader = avatarUrl(profile&&profile.header_path);
+  // draft：undefined＝変更なし / null＝初期画像に戻す / {blob,url}＝新しい画像
+  const [draft,setDraft] = useState({avatar:undefined, header:undefined});
+  const [crop,setCrop] = useState(null);           // {kind, source}
+  const [name,setName] = useState((profile&&profile.display_name)||"");
+  const [arts,setArts] = useState(null);           // 自分のアーティスト一覧
+  const [aid,setAid] = useState(null);
+  const [aname,setAname] = useState(""), [bio,setBio] = useState("");
+  const [busy,setBusy] = useState(false), [errs,setErrs] = useState([]), [loadErr,setLoadErr] = useState(null);
+  useEffect(()=>{ if(!uid) return; profileApi.myArtists(uid).then(a=>{ setArts(a); if(a[0]){ setAid(a[0].id); setAname(a[0].name); setBio(a[0].bio||""); } }).catch(()=>{ setArts([]); setLoadErr("アーティスト情報を読み込めませんでした"); }); },[uid]);
+  useEffect(()=>()=>{ ["avatar","header"].forEach(k=>{ const d=draft[k]; if(d&&d.url) URL.revokeObjectURL(d.url); }); },[]);
+  if(!user) return html`<div className="screen"><header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>プロフィールを編集</h1></header><div className="empty">ログインすると編集できます</div></div>`;
+  const art = arts && arts.find(a=>a.id===aid);
+  const selectArtist = id => { const a=arts.find(x=>x.id===id); setAid(id); setAname(a?a.name:""); setBio(a?(a.bio||""):""); };
+  const setD = (k,v) => setDraft(d=>{ const o=d[k]; if(o&&o.url&&o!==v) URL.revokeObjectURL(o.url); return {...d,[k]:v}; });
+  const pick = async (kind,file) => { try{ setCrop({kind, source:await loadProfileImage(file)}); }catch(e){ say(e.message); } };
+  const nameChanged = (name.trim()) !== ((profile&&profile.display_name)||"");
+  const aChanged = art && aname.trim() && aname.trim()!==art.name;
+  const bioChanged = art && bio!==(art.bio||"");
+  const dirty = draft.avatar!==undefined || draft.header!==undefined || nameChanged || aChanged || bioChanged;
+  const tooLong = [...name.trim()].length>40 || [...aname.trim()].length>40 || [...bio].length>500;
+  const save = async () => {
+    if(busy||!dirty) return;
+    if(tooLong){ setErrs(["文字数が上限を超えています"]); return; }
+    if(art && !aname.trim()){ setErrs(["アーティスト名を入力してください"]); return; }
+    setBusy(true); setErrs([]);
+    const fail=[], keep={avatar:profile&&profile.avatar_path, header:profile&&profile.header_path};
+    // 1) 画像：使われていない古いファイルを片付けてから、新しい画像を保存→設定→古い画像を削除
+    if(draft.avatar||draft.header) await profileApi.cleanup(uid,[keep.avatar,keep.header].filter(Boolean));
+    for(const kind of ["avatar","header"]){
+      const d = draft[kind]; if(d===undefined) continue;
+      const label = PROFILE_IMAGE[kind].label;
+      let newPath=null;
+      try{
+        if(d){ newPath = await profileApi.upload(uid,kind,d.blob); }
+        const old = await profileApi.setImage(kind,newPath);
+        keep[kind]=newPath;
+        if(old && old!==newPath) await profileApi.removeFile(old);   // 失敗しても次回の保存時に片付く
+        setD(kind,undefined);
+      }catch(e){
+        if(newPath) await profileApi.removeFile(newPath);           // 設定できなかった新しい画像は消す（既存の画像はそのまま）
+        fail.push(`${label}：${profileErr(e,"保存できませんでした")}`);
+      }
+    }
+    // 2) 表示名（本人と運営だけに表示）
+    if(nameChanged){ try{ await profileApi.setDisplayName(uid,name.trim()); }catch(e){ fail.push("表示名："+profileErr(e,"保存できませんでした")); } }
+    // 3) アーティスト名（禁止語・なりすまし・回数制限はサーバー側で確認）と自己紹介
+    if(aChanged){ try{ const n=await profileApi.renameArtist(art.id,aname.trim()); setArts(a=>a.map(x=>x.id===art.id?{...x,name:n}:x)); setAname(n); }catch(e){ fail.push("アーティスト名："+profileErr(e,"変更できませんでした")); } }
+    if(bioChanged){ try{ await profileApi.setBio(art.id,bio); setArts(a=>a.map(x=>x.id===art.id?{...x,bio}:x)); }catch(e){ fail.push("自己紹介："+profileErr(e,"保存できませんでした")); } }
+    await afterProfileSave();
+    setBusy(false); setErrs(fail);
+    say(fail.length ? "一部を保存できませんでした" : "プロフィールを保存しました");
+  };
+  // プレビュー（他の人のアーティストページでの見え方）
+  const pv = {avatar: draft.avatar ? draft.avatar.url : draft.avatar===null ? null : curAvatar,
+              header: draft.header ? draft.header.url : draft.header===null ? null : curHeader};
+  return html`<div className="screen">
+    <header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>プロフィールを編集</h1></header>
+    <div className="label" style=${{marginTop:4}}>プレビュー（アーティストページでの見え方）</div>
+    <div className="pe-preview">
+      <${ProfileBanner} url=${pv.header}/>
+      <div className=${"ahead"+(pv.header?" with-banner":"")}>
+        <${Cover} item=${{id:aid||uid, hues:[270,230], pattern:0, imageUrl:pv.avatar}} radius="50%"/>
+        <h2>${art ? (aname.trim()||art.name) : "アーティスト名"}</h2>
+        ${art && bio && html`<p style=${{color:"var(--muted)",fontSize:13.5,maxWidth:320,whiteSpace:"pre-wrap"}}>${bio}</p>`}
+      </div>
+    </div>
+    <div className="form" style=${{marginTop:18}}>
+      <${ProfileImageField} kind="avatar" current=${curAvatar} draft=${draft.avatar} onPick=${f=>pick("avatar",f)} onReset=${()=>setD("avatar",null)} onUndo=${()=>setD("avatar",undefined)}/>
+      <${ProfileImageField} kind="header" current=${curHeader} draft=${draft.header} onPick=${f=>pick("header",f)} onReset=${()=>setD("header",null)} onUndo=${()=>setD("header",undefined)}/>
+      <div className="field"><label htmlFor="pe-name">表示名<span className="opt-l">任意</span></label>
+        <input id="pe-name" className="input" value=${name} onInput=${e=>setName(e.target.value)} maxLength="40" autoComplete="nickname"/>
+        <span className="hint">マイページに表示されます。他の会員には表示されません（あなたと運営のみ）。</span></div>
+      ${arts===null ? html`<div className="hint">アーティスト情報を読み込み中…</div>`
+        : loadErr ? html`<span className="err">${loadErr}</span>`
+        : arts.length===0 ? html`<div className="demo-note"><${Icon} n="info" size=${18}/><span>楽曲を投稿すると、アーティスト名と自己紹介を設定できます。</span></div>`
+        : html`
+          ${arts.length>1 && html`<div className="field"><label htmlFor="pe-art">編集するアーティスト</label>
+            <select id="pe-art" className="input" value=${aid} onChange=${e=>selectArtist(e.target.value)}>${arts.map(a=>html`<option key=${a.id} value=${a.id}>${a.name}</option>`)}</select></div>`}
+          <div className="field"><label htmlFor="pe-aname">アーティスト名</label>
+            <input id="pe-aname" className="input" value=${aname} onInput=${e=>setAname(e.target.value)} maxLength="40"/>
+            <span className="hint">他の会員に表示される名前です。変更は24時間に3回まで。他の会員と同じ名前、運営と誤解される名前、実在のアーティストになりすます名前は使えません。変更内容は記録され、運営が確認します。</span></div>
+          <div className="field"><label htmlFor="pe-bio">自己紹介<span className="opt-l">任意</span></label>
+            <textarea id="pe-bio" className="input" value=${bio} onInput=${e=>setBio(e.target.value)} maxLength="500" rows="4"></textarea>
+            <span className="hint">アーティストページに表示されます（${[...bio].length}/500文字）</span></div>`}
+      ${errs.length>0 && html`<div className="err" role="alert">${errs.map((m,i)=>html`<div key=${i}>${m}</div>`)}</div>`}
+      <button className="btn primary" onClick=${save} disabled=${busy||!dirty||tooLong}>${busy?"保存中…":"保存する"}</button>
+      <button className="btn ghost" onClick=${goBack} disabled=${busy}>${dirty?"保存せずに戻る":"戻る"}</button>
+    </div>
+    ${crop && html`<${ProfileCropper} kind=${crop.kind} source=${crop.source}
+      onCancel=${m=>{ setCrop(null); if(m) say(m); }}
+      onDone=${r=>{ setD(crop.kind,r); setCrop(null); }}/>`}
+  </div>`;
+}
+
+// 管理者用：アーティスト名の変更履歴
+function AdminNameHistory({ctx}){
+  const {artists,openArtist,say} = ctx;
+  const [rows,setRows] = useState(null), [err,setErr] = useState(null), [confirm,setConfirm] = useState(null);
+  const load = () => sb.rpc("admin_artist_name_history",{p_limit:100}).then(r=>{ if(r.error){ setErr("履歴を読み込めませんでした（プロフィール編集のSQLが未実行の可能性があります）"); setRows([]); } else setRows(r.data||[]); });
+  useEffect(()=>{ load(); },[]);
+  const revert = async r => {
+    const {error} = await sb.rpc("admin_set_artist_name",{p_artist:r.artist_id, p_name:r.old_name});
+    setConfirm(null);
+    if(error){ say(profileErr(error,"変更できませんでした")); return; }
+    say(`「${r.old_name}」に戻しました`); repo.refresh(); load();
+  };
+  if(rows===null) return html`<div className="empty">読み込み中…</div>`;
+  return html`<div style=${{display:"flex",flexDirection:"column",gap:12,marginTop:14}}>
+    ${err && html`<span className="err">${err}</span>`}
+    ${rows.length===0 && !err && html`<div className="empty">アーティスト名の変更はまだありません</div>`}
+    ${rows.map((r,i)=>{ const a=artists.find(x=>x.id===r.artist_id); return html`<div key=${i} className="panel">
+      <div style=${{fontSize:12,color:"var(--muted)"}} className="mono">${new Date(r.changed_at).toLocaleString("ja-JP")}${r.by_admin?" · 運営が変更":""}</div>
+      <div style=${{fontSize:14.5,fontWeight:700,overflowWrap:"anywhere"}}>${r.old_name} → ${r.new_name}</div>
+      <div style=${{fontSize:12.5,color:"var(--muted)"}}>現在の名前：${r.current_name}</div>
+      <div className="btn-row">
+        ${a && html`<button className="btn sm ghost" onClick=${()=>openArtist(a.id)}>アーティストページ</button>`}
+        ${r.current_name!==r.old_name && (confirm===i
+          ? html`<button className="btn sm danger" onClick=${()=>revert(r)}>「${r.old_name}」に戻す</button>`
+          : html`<button className="btn sm ghost" onClick=${()=>setConfirm(i)}>変更前の名前に戻す</button>`)}
+      </div>
+    </div>`; })}
+  </div>`;
+}
+
+/* ---------- FOLLOW LISTS（フォロワー・フォロー中一覧：v1.7） ----------
+   ・一覧に名前・アイコンが出るのは「公開中の曲があるアーティスト」だけ。聴くだけの会員（リスナー）は人数のみ
+   ・未ログインでも閲覧可。フォロー操作はログインが必要（既存の toggleFollow と同じ）
+   ・30件ずつ取り出し、「さらに表示」で続きを読み込む */
+const FOLLOW_PAGE = 30;
+const followApi = {
+  async summary(artistId){
+    const {data,error} = await sb.rpc("public_artist_follow_summary",{p_artist:artistId});
+    if(error) throw error; return (data&&data[0])||null;
+  },
+  async page(kind, artistId, cursor){
+    const args = {p_before_at:cursor?cursor.at:null, p_before:cursor?cursor.id:null, p_limit:FOLLOW_PAGE};
+    const {data,error} = kind==="mine"
+      ? await sb.rpc("my_following",args)
+      : await sb.rpc(kind==="followers"?"public_artist_followers":"public_artist_following",{p_artist:artistId,...args});
+    if(error) throw error;
+    const rows = (data||[]).map(r=>({id:r.artist_id, name:r.name, imageUrl:avatarUrl(r.avatar_path), isPublic:r.is_public!==false, at:r.followed_at, cur:r.cursor}));
+    const last = rows[rows.length-1];
+    return {rows, next: rows.length===FOLLOW_PAGE&&last ? {at:last.at, id:last.cur} : null};
+  }
+};
+
+function FollowList({ctx}){
+  const {followView,goBack,openArtist,follows,toggleFollow,user,artists,followVer,myArtistIds,say} = ctx;
+  const v = followView||{};
+  // 自分のアーティストが複数ある場合は、上で切り替えられる
+  const myPublicArtists = v.mine ? artists.filter(a=>(myArtistIds||[]).includes(a.id)) : [];
+  const [artistId,setArtistId] = useState(v.artistId || (myPublicArtists[0]&&myPublicArtists[0].id) || null);
+  const [mode,setMode] = useState(v.mode||"followers");     // followers | following
+  const [sum,setSum] = useState(null);
+  const [rows,setRows] = useState([]), [next,setNext] = useState(null);
+  const [loading,setLoading] = useState(false), [err,setErr] = useState(null);
+  const reqRef = useRef(0);
+  const kind = mode==="following" && v.mine ? "mine" : mode;   // 自分のフォロー中は「公開されていない」ものも含めて本人だけに表示
+  const target = artists.find(a=>a.id===artistId);
+  const load = async reset => {
+    if(kind!=="mine" && !artistId){ setRows([]); setNext(null); return; }
+    const id = ++reqRef.current; setLoading(true); setErr(null);
+    try{
+      const r = await followApi.page(kind, artistId, reset?null:next);
+      if(id!==reqRef.current) return;                      // 途中で切り替えた場合は古い結果を捨てる
+      setRows(p=>reset ? r.rows : [...p, ...r.rows.filter(x=>!p.some(y=>y.id===x.id))]);
+      setNext(r.next);
+    }catch(e){ if(id===reqRef.current) setErr("一覧を読み込めませんでした。通信状態を確認してください"); }
+    if(id===reqRef.current) setLoading(false);
+  };
+  useEffect(()=>{ setRows([]); setNext(null); load(true); },[kind,artistId]);
+  useEffect(()=>{ if(!artistId){ setSum(null); return; } let alive=true; followApi.summary(artistId).then(s=>{ if(alive) setSum(s); }).catch(()=>{}); return ()=>{ alive=false; }; },[artistId,followVer]);
+  const mineFollowing = v.mine ? follows.size : null;
+  const minePublic = v.mine ? artists.filter(a=>follows.has(a.id)).length : 0;
+  const tabs = [["followers",`フォロワー ${sum?fmtNum(sum.followers):(v.mine&&!artistId?"0":"–")}`],
+                ["following",`フォロー中 ${v.mine?fmtNum(mineFollowing):(sum?fmtNum(sum.following):"–")}`]];
+  const title = v.mine ? "あなたのフォロー" : (target ? target.name : "フォロー");
+  const own = id => v.mine ? (myArtistIds||[]).includes(id) : false;
+  return html`<div className="screen">
+    <header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1 className="fl-title">${title}</h1></header>
+    ${v.mine && myPublicArtists.length>1 && mode==="followers" && html`<div className="field" style=${{marginBottom:10}}>
+      <label htmlFor="fl-art" className="hint">表示するアーティスト</label>
+      <select id="fl-art" className="input" value=${artistId} onChange=${e=>setArtistId(e.target.value)}>${myPublicArtists.map(a=>html`<option key=${a.id} value=${a.id}>${a.name}</option>`)}</select></div>`}
+    ${v.mine && mode==="following" && follows.size>0 && html`<p className="hint fl-breakdown">フォロー中 ${fmtNum(follows.size)}件（公開中 ${fmtNum(minePublic)}件${follows.size-minePublic>0?`・現在公開中の曲がない ${fmtNum(follows.size-minePublic)}件`:""}）</p>`}
+    <div className="seg" role="tablist">${tabs.map(([k,l])=>html`<button key=${k} role="tab" aria-selected=${mode===k} className=${mode===k?"on":""} onClick=${()=>setMode(k)}>${l}</button>`)}</div>
+    ${kind!=="mine" && !artistId ? html`<div className="empty">公開中の曲があるアーティストになると、フォロワーの一覧が表示されます</div>` : html`
+      <div className="list" style=${{marginTop:8}}>
+        ${rows.map(a=>html`<div key=${a.id} className="row norank fl-row">
+          <button className="fl-main" disabled=${!a.isPublic} onClick=${()=>a.isPublic&&openArtist(a.id)}>
+            <${Cover} item=${{id:a.id, hues:[270,230], pattern:0, imageUrl:a.isPublic?a.imageUrl:null}} radius="50%"/>
+            <div style=${{minWidth:0}}><div className="t">${a.isPublic ? a.name : "公開されていないアーティスト"}</div>
+              ${!a.isPublic && html`<div className="sub"><span className="n">現在、公開中の曲がありません</span></div>`}</div>
+          </button>
+          ${!own(a.id) && html`<button className=${"follow sm"+(follows.has(a.id)?" on":"")} aria-pressed=${follows.has(a.id)} onClick=${()=>toggleFollow(a.id)}>${follows.has(a.id)?"フォロー中":"フォローする"}</button>`}
+        </div>`)}
+      </div>
+      ${loading && html`<div className="empty" style=${{padding:"18px 0"}}>読み込み中…</div>`}
+      ${err && html`<div className="empty"><span className="err">${err}</span><br/><button className="btn sm ghost" style=${{margin:"10px auto 0"}} onClick=${()=>load(rows.length===0)}>再読み込み</button></div>`}
+      ${!loading && !err && next && html`<button className="btn ghost" style=${{marginTop:12}} onClick=${()=>load(false)}>さらに表示</button>`}
+      ${!loading && !err && rows.length===0 && html`<div className="empty">${mode==="followers" ? "まだ公開アーティストのフォロワーはいません" : "まだフォローしているアーティストはいません"}</div>`}
+      ${mode==="followers" && sum && sum.listeners>0 && !next && html`<div className="fl-listeners"><${Icon} n="user" size=${18}/><span>ほか ${fmtNum(sum.listeners)}人のリスナーがフォローしています（リスナーの名前は公開されません）</span></div>`}
+    `}
+  </div>`;
+}
+
+/* ---------- ONBOARDING（初めての方への案内・使い方：第3段階） ----------
+   ・ホームの案内は「ログインしていない」かつ「閉じていない」人だけに表示
+   ・閉じた／一度ログインした端末では、次から表示しない（端末内に記録。記録できない端末ではその間だけ非表示）
+   ・使い方ページはログイン不要。URL末尾 #guide で直接開ける */
+const WELCOME_KEY = "aimuse.welcome.dismissed";
+const welcomeStore = {
+  get(){ try{ return localStorage.getItem(WELCOME_KEY)==="1"; }catch(e){ return false; } },
+  set(){ try{ localStorage.setItem(WELCOME_KEY,"1"); }catch(e){} }
+};
+
+function WelcomeCard({ctx}){
+  const {openGuide,openSignup,dismissWelcome} = ctx;
+  return html`<section className="welcome" aria-labelledby="welcome-h">
+    <button className="icon-btn welcome-x" aria-label="案内を閉じる" onClick=${dismissWelcome}><${Icon} n="x" size=${18}/></button>
+    <h2 id="welcome-h">AIMUSEへようこそ！</h2>
+    <p className="welcome-lead">AI音楽を、もっと自由に。</p>
+    <p>音楽を聴くだけなら会員登録は不要。気になる曲をタップして、すぐに楽しめます。</p>
+    <p className="welcome-sub">楽曲を投稿するには無料会員登録が必要です。</p>
+    <div className="btn-row">
+      <button className="btn ghost sm" onClick=${openGuide}>使い方を見る</button>
+      <button className="btn primary sm" onClick=${openSignup}>無料で会員登録</button>
+    </div>
+  </section>`;
+}
+
+const GUIDE_STEPS = [
+  {ic:"music", h:"聴く", tag:"登録不要", body:[
+    "曲をタップすると、すぐに再生が始まります。",
+    "画面下のプレーヤーをタップすると、大きな再生画面が開きます。歌詞の表示、次の曲・前の曲、リピートができます。"]},
+  {ic:"search", h:"探す", tag:"登録不要", body:[
+    "「検索」から、曲名・アーティスト名で探せます。AI制作ツールやジャンルでも絞り込めます。",
+    "アーティスト名をタップすると、そのアーティストの曲やフォロワーを見られます。"]},
+  {ic:"heart", h:"お気に入り・フォロー", tag:"無料会員", body:[
+    "ハートを押すとお気に入りに、アーティストページの「フォローする」でフォローできます。",
+    "お気に入りとフォローは、マイページにまとまります。"]},
+  {ic:"plus", h:"投稿する", tag:"無料会員", body:[
+    "下の「投稿」から、AIで制作した楽曲を投稿できます。音源（MP3・WAV・M4A）とジャケット画像を選び、権利についての確認にチェックして申請します。",
+    "運営が内容を確認し、承認された曲だけが公開されます。審査の結果はマイページで確認できます。",
+    "投稿の前に「楽曲投稿・著作権ガイドライン」をお読みください。"]},
+  {ic:"user", h:"プロフィール", tag:"無料会員", body:[
+    "マイページの「プロフィールを編集」で、アイコン・背景画像・アーティスト名・自己紹介を設定できます。",
+    "他の人に表示されるのはアーティスト名などの公開情報だけです。メールアドレスや表示名は表示されません。"]},
+  {ic:"home", h:"ホーム画面に追加（おすすめ）", tag:null, body:[
+    "iPhone（Safari）：画面下の共有ボタン →「ホーム画面に追加」",
+    "Android（Chrome）：右上のメニュー →「アプリをインストール」または「ホーム画面に追加」",
+    "ホーム画面の AIMUSE アイコンから開くと、アプリのように全画面で使えます。ログインは、ホーム画面のアプリで改めて必要になる場合があります（特に iPhone）。"]}
+];
+
+function GuidePage({ctx}){
+  const {goBack,user,openSignup,openLegal} = ctx;
+  return html`<div className="screen">
+    <header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>使い方</h1></header>
+    <p className="guide-lead">AIMUSEは、AIで制作された楽曲を聴いて、投稿できる音楽サービスです。聴くだけなら会員登録はいりません。</p>
+    <ol className="guide">
+      ${GUIDE_STEPS.map((s,i)=>html`<li key=${i} className="guide-step">
+        <span className="drop-ic guide-ic" aria-hidden="true"><${Icon} n=${s.ic} size=${20}/></span>
+        <div style=${{minWidth:0}}>
+          <h2>${s.h}${s.tag && html`<span className=${"tag "+(s.tag==="登録不要"?"ok":"")}>${s.tag}</span>`}</h2>
+          ${s.body.map((b,j)=>html`<p key=${j}>${b}</p>`)}
+        </div>
+      </li>`)}
+    </ol>
+    ${!user && html`<div className="welcome" style=${{marginTop:20}}>
+      <h2>無料で会員登録</h2>
+      <p>投稿・お気に入り・フォローを使うには、メールアドレスで会員登録してください（無料）。</p>
+      <button className="btn primary" onClick=${openSignup}>会員登録へ進む</button>
+    </div>`}
+    <${LegalLinks} openLegal=${openLegal}/>
+  </div>`;
+}
+
+/* ---------- SETTINGS（設定：カラーテーマ） ----------
+   ・選んだ色はすぐ画面全体に反映（リアルタイムプレビュー）。「保存する」まで記録しない。保存せずに戻ると元に戻る
+   ・ログイン中：Supabase（本人のプロフィール）に保存 / ゲスト：この端末に保存
+   ・「標準に戻す」はワンタップで標準テーマにして保存 */
+function SettingsPage({ctx}){
+  const {goBack,user,activeTheme,saveTheme,say} = ctx;
+  const [draft,setDraft] = useState(()=>activeTheme);
+  const [busy,setBusy] = useState(false);
+  const savedRef = useRef(activeTheme);
+  savedRef.current = activeTheme;
+  // 保存せずに画面を離れたら、保存済みのテーマに戻す
+  useEffect(()=>()=>themeApply(savedRef.current),[]);
+  useEffect(()=>{ themeApply(draft); },[draft]);
+  const notes = themeSame(draft,THEME_STANDARD) ? [] : themeDerive(draft).notes;
+  const dirty = !themeSame(draft,activeTheme);
+  const pick = id => setDraft(themeOfPreset(id));
+  const setColor = (k,v) => { if(HEX6.test(v)) setDraft(d=>({...d,[k]:v.toLowerCase(),preset:"custom"})); };
+  const save = async t => { setBusy(true); const ok = await saveTheme(t); setBusy(false); if(ok) setDraft(t); };
+  const isSel = id => draft.preset===id;
+  return html`<div className="screen">
+    <header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>設定</h1></header>
+    <section className="sec" style=${{marginTop:4}}>
+      <div className="sec-h"><div><span className="en">THEME</span><h2>カラーテーマ</h2></div></div>
+      <p className="hint">選ぶとすぐに画面全体へ反映されます（プレビュー）。「保存する」を押すまで記録されません。${user?"ログイン中は、どの端末でも同じテーマになります。":"ログインしていない間は、この端末にだけ保存されます。"}</p>
+      <div className="th-grid" role="radiogroup" aria-label="プリセットテーマ">
+        ${THEME_PRESETS.map(p=>html`<button key=${p.id} role="radio" aria-checked=${isSel(p.id)} className=${"th-card"+(isSel(p.id)?" on":"")} onClick=${()=>pick(p.id)}>
+          <span className="th-sw" style=${{background:p.bg}} aria-hidden="true"><i style=${{background:p.accent}}></i><i style=${{background:p.button}}></i></span>
+          <b>${p.name}</b><span>${p.sub}</span>
+          ${isSel(p.id) && html`<span className="th-check"><${Icon} n="check" size=${14} sw=${3}/>選択中</span>`}
+        </button>`)}
+      </div>
+      <div className="label">オリジナルカラー${draft.preset==="custom" && html`<span className="th-check inline"><${Icon} n="check" size=${12} sw=${3}/>使用中</span>`}</div>
+      <div className="th-custom">
+        ${[["accent","アクセントカラー","選択中の印・アイコン・リンクなど"],["bg","背景カラー","画面の背景（現在は暗い色のみ）"],["button","ボタンカラー","ボタン・タブの下線など"]].map(([k,l,h])=>html`<label key=${k} className="th-color">
+          <input type="color" value=${draft[k]} onInput=${e=>setColor(k,e.target.value)} onChange=${e=>setColor(k,e.target.value)} aria-label=${l}/>
+          <span><b>${l}</b><small>${h}</small></span><code>${draft[k].toUpperCase()}</code>
+        </label>`)}
+      </div>
+      ${notes.length>0 && html`<div className="warn-line" style=${{marginTop:10}}><${Icon} n="info" size=${15}/><span>${notes.join(" / ")}</span></div>`}
+      <div className="th-preview" aria-label="プレビュー">
+        <div className="tabs" style=${{marginTop:0}}><button className="on">選択中のタブ</button><button>ほかのタブ</button></div>
+        <div className="row norank" style=${{marginTop:6}}><${Cover} item=${{id:"p",hues:[270,230],pattern:1}} radius=${10}/><div style=${{minWidth:0}}><div className="t" style=${{color:"var(--accent-soft,#c9a8ff)"}}>再生中の曲</div><div className="sub"><span className="n">アーティスト名</span></div></div><span className="tag ok">公開中</span></div>
+        <button className="btn primary sm" tabIndex="-1">ボタンの見え方</button>
+      </div>
+      <div className="form" style=${{marginTop:14}}>
+        <button className="btn primary" onClick=${()=>save(draft)} disabled=${busy||!dirty}>${busy?"保存中…":"保存する"}</button>
+        <button className="btn ghost" onClick=${()=>save(themeOfPreset("standard"))} disabled=${busy||themeSame(activeTheme,THEME_STANDARD)&&themeSame(draft,THEME_STANDARD)}>標準に戻す（AIMUSE標準で保存）</button>
+        ${dirty && html`<button className="link" onClick=${()=>setDraft(activeTheme)}>変更を取り消す</button>`}
+      </div>
+    </section>
+    ${user && showAccountDeletion && html`<section className="sec">
+      <div className="sec-h"><div><span className="en">ACCOUNT</span><h2>アカウント</h2></div></div>
+      <p className="hint">退会を申請すると、30日間の取り消し期間のあとにアカウントと投稿したデータを削除します。</p>
+      <button className="btn danger" style=${{marginTop:10}} onClick=${ctx.openAccountDelete}>アカウントを削除（退会）</button>
+    </section>`}
+  </div>`;
+}
+
+/* ---------- 楽曲の削除（投稿者本人）・退会（第5段階） ----------
+   ・楽曲の削除：サーバーの delete_my_track で、本人の曲だけを1回の処理で削除（途中で失敗しても半分だけ消えない。再試行しても安全）
+   ・退会：パスワードをサーバーで照合して本人確認 → 申請（すぐに非公開・30日間は取り消し可）→ 30日後にサーバー側で完全削除
+   ・管理用の秘密キーはブラウザでは一切使いません */
+const fmtDateTime = s => { const d=new Date(s); if(isNaN(d)) return ""; const p=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 ${p(d.getHours())}:${p(d.getMinutes())}`; };
+const accountApi = {
+  async status(){
+    if(!sb||!auth.user) return null;
+    const {data,error} = await sb.rpc("my_account_deletion");
+    if(error) return null;                      // v1.9 SQL 未実行時は「申請なし」として扱う
+    return (data&&data[0])||null;
+  },
+  // 退会の申請：パスワードをサーバー（Edge Function「account-delete-request」）へ送り、
+  // サーバーが Supabase の正式なログイン機能で照合してから申請する（ブラウザ側の判定には頼らない）
+  async requestDeletion(password){
+    if(!password) throw new Error("パスワードを入力してください");
+    let res;
+    try{ res = await sb.functions.invoke("account-delete-request",{body:{password}}); }
+    catch(e){ throw new Error("申請できませんでした。通信状態を確認して、もう一度お試しください"); }
+    const {data,error} = res||{};
+    if(!error) return data||null;
+    let body=null, status=0;
+    try{ status = error.context&&error.context.status||0; body = error.context&&await error.context.json(); }catch(e){}
+    const code = body&&body.code;
+    throw new Error(code==="WRONG_PASSWORD" ? "パスワードが正しくありません"
+      : code==="TOO_MANY_ATTEMPTS" ? "パスワードの確認に続けて失敗したため、1時間ほど時間をおいてからお試しください"
+      : code==="ADMIN_ACCOUNT" ? "管理者アカウントは退会できません"
+      : (code==="DELETION_DISABLED"||code==="NOT_ALLOWED") ? "アカウントの削除（退会）は、現在準備中です"
+      : code==="LOGIN_REQUIRED" ? "ログインし直してから、もう一度お試しください"
+      : (status===404||code==="NOT_CONFIGURED") ? "現在、退会の申請を受け付けられません（準備中）。時間をおいてお試しください"
+      : "申請できませんでした。通信状態を確認して、もう一度お試しください");
+  },
+  async cancel(){
+    const {data,error} = await sb.rpc("cancel_my_account_deletion");
+    if(error){
+      const m = error.message||"";
+      throw new Error(/期限/.test(m) ? "取り消しの期限（申請から30日）を過ぎたため、取り消せません"
+        : /取り消せません/.test(m) ? "完全削除の処理がすでに始まっているため、取り消せません"
+        : /取り消せる退会申請がありません/.test(m) ? "取り消せる退会申請がありません"
+        : "取り消せませんでした。通信状態を確認して、もう一度お試しください");
+    }
+    return (data&&data[0])||{restored:0,kept_hidden:0};
+  },
+  async deleteTrack(id){
+    const {data,error} = await sb.rpc("delete_my_track",{p_track:id});
+    if(error){
+      const m = error.message||"";
+      throw new Error(/見つかりません/.test(m) ? "楽曲が見つかりません（すでに削除されたか、ご自身の曲ではありません）"
+        : /削除できません/.test(m) ? "現在、楽曲を削除できません（ログイン状態・利用状況を確認してください）"
+        : /function|schema cache/i.test(m) ? "現在、楽曲を削除できません（準備中）。時間をおいてお試しください"
+        : "削除できませんでした。通信状態を確認して、もう一度お試しください");
+    }
+    return data;   // "deleted" | "already_deleted"
+  }
+};
+
+const statusLabel = st => st==="pending"?"審査待ち":st==="public"?"公開中":st==="hidden"?"非公開":"却下";
+// 楽曲の削除の確認画面
+function TrackDeleteSheet({song,onClose,onDeleted,say}){
+  const [busy,setBusy] = useState(false);
+  const [err,setErr] = useState("");
+  const del = async () => {
+    setBusy(true); setErr("");
+    try{ await accountApi.deleteTrack(song.id); onDeleted(song); }
+    catch(e){ setErr(e.message); setBusy(false); }
+  };
+  return html`<div className="scrim" onClick=${()=>!busy&&onClose()}><div className="sheet" role="dialog" aria-modal="true" aria-labelledby="td-h" onClick=${e=>e.stopPropagation()}>
+    <h3 id="td-h">この曲を削除しますか？</h3>
+    <div className="row norank" style=${{padding:"6px 0"}}><${Cover} item=${song} radius=${10}/><div style=${{minWidth:0}}><div className="t">${song.title}</div><div className="sub"><span className="n">${statusLabel(song.status)}</span></div></div></div>
+    <ul className="del-notes">
+      <li>公開一覧・検索・アーティストページから<b>すぐに消えます</b>${song.status==="pending"?"（審査も取り消されます）":""}。</li>
+      <li>この曲の再生数・お気に入り・レビューも削除されます。</li>
+      <li>誤って削除した場合は、30日以内にお問い合わせいただければ復元できることがあります（復元後は非公開）。30日を過ぎると音源・ジャケットも削除されます。</li>
+    </ul>
+    ${err && html`<div className="warn-line" role="alert"><${Icon} n="info" size=${15}/><span>${err}</span></div>`}
+    <button className="btn danger" onClick=${del} disabled=${busy}>${busy?"削除しています…":"削除する"}</button>
+    <button className="btn ghost" onClick=${onClose} disabled=${busy}>キャンセル</button>
+  </div></div>`;
+}
+
+// 退会手続き中の表示（マイページ・退会画面で共通）
+function DeletionStatus({ctx}){
+  const {profile,say,refreshAccount} = ctx;
+  const d = profile&&profile.deletion;
+  const [busy,setBusy] = useState(false);
+  if(!d) return null;
+  const cancel = async () => {
+    setBusy(true);
+    try{
+      const r = await accountApi.cancel();
+      await refreshAccount();
+      say(r.kept_hidden>0 ? `退会を取り消しました。通報の確認中の曲（${r.kept_hidden}曲）は非公開のままです` : "退会を取り消しました。元の公開状態に戻しました");
+    }catch(e){ say(e.message); await refreshAccount(); }
+    setBusy(false);
+  };
+  return html`<div className="del-status" role="status">
+    <div className="del-status-h"><${Icon} n="info" size=${18}/><b>${d.status==="pending"?"退会手続き中です":"アカウントの削除処理中です"}</b></div>
+    ${d.status==="pending" ? html`<p>公開プロフィールと投稿した曲は非公開になっています。投稿・お気に入り・フォローなどの操作はできません。</p>
+      <p><b>${fmtDateTime(d.purge_after)}</b> までは取り消せます。この日時を過ぎると、アカウントと投稿したデータの完全削除を始めます。</p>
+      ${d.can_cancel ? html`<button className="btn primary" onClick=${cancel} disabled=${busy}>${busy?"取り消しています…":"退会を取り消す"}</button>`
+        : html`<p>取り消しの期限を過ぎました。削除処理の開始をお待ちください。</p>`}`
+    : html`<p>削除処理が完了するまで、数日かかる場合があります。処理中は取り消しできません。</p><p>完了するまで、この画面に「完了」とは表示されません（完了するとログインできなくなります）。</p>`}
+  </div>`;
+}
+
+// 退会（アカウント削除）の画面
+function AccountDeletePage({ctx}){
+  const {goBack,user,profile,isAdmin,say,refreshAccount} = ctx;
+  const [agree,setAgree] = useState(false);
+  const [pw,setPw] = useState("");
+  const [busy,setBusy] = useState(false);
+  const [err,setErr] = useState("");
+  const head = html`<header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>アカウントの削除</h1></header>`;
+  if(!user) return html`<div className="screen">${head}<div className="demo-note"><${Icon} n="info" size=${18}/><span>アカウントを削除するには、ログインしてください。</span></div></div>`;
+  if(profile&&profile.deletion) return html`<div className="screen">${head}<${DeletionStatus} ctx=${ctx}/></div>`;
+  if(!showAccountDeletion) return html`<div className="screen">${head}<div className="demo-note"><${Icon} n="info" size=${18}/><span>アカウントの削除（退会）は、現在準備中です。お急ぎの場合はお問い合わせ窓口へご連絡ください。</span></div></div>`;
+  const submit = async () => {
+    setBusy(true); setErr("");
+    try{
+      const r = await accountApi.requestDeletion(pw);   // サーバーがパスワードを照合し、ほかの端末のログインも終了する
+      setPw("");
+      await refreshAccount();
+      say(r ? `退会を申請しました。${fmtDateTime(r.purge_after)} まで取り消せます` : "退会を申請しました");
+    }catch(e){ setErr(e.message||"申請できませんでした"); }
+    setBusy(false);
+  };
+  return html`<div className="screen">${head}
+    <section className="sec" style=${{marginTop:4}}>
+      <p className="hint">退会を申請すると、次のように進みます。</p>
+      <ol className="del-steps">
+        <li><b>申請するとすぐ</b>：公開プロフィールと投稿した曲が非公開になり、投稿・お気に入り・フォローなどの操作ができなくなります。ほかの端末のログインも終了します。</li>
+        <li><b>30日間</b>：ログインして「退会を取り消す」を押せば、元の状態（公開中だった曲は公開中）に戻せます。</li>
+        <li><b>30日後</b>：アカウント、投稿した曲（音源・ジャケット）、アイコン・背景画像、お気に入り、フォロー、レビュー、通報の記録の削除を始めます。すべて終わるまで数日かかる場合があります。</li>
+      </ol>
+      <ul className="del-notes">
+        <li>完全削除の後は、アプリから元に戻すことはできません。</li>
+        <li>システムのバックアップや外部サービスの記録に、一定期間データが残る可能性があります（公開されることはありません）。</li>
+        <li>同じメールアドレスで、あらためて会員登録することはできます（以前のデータは戻りません）。</li>
+      </ul>
+      ${isAdmin ? html`<div className="warn-line" style=${{marginTop:12}}><${Icon} n="info" size=${15}/><span>管理者アカウントは退会できません。</span></div>` : html`
+      <button className=${"check"+(agree?" on":"")} role="checkbox" aria-checked=${agree} onClick=${()=>setAgree(!agree)} style=${{marginTop:10}}>
+        <span className="box">${agree&&html`<${Icon} n="check" size=${14} sw=${3}/>`}</span><span>上記の内容を確認しました</span></button>
+      <div className="field" style=${{marginTop:8}}><label htmlFor="del-pw">本人確認のため、パスワードを入力してください</label>
+        <input id="del-pw" className="input" type="password" value=${pw} onInput=${e=>setPw(e.target.value)} autoComplete="current-password"/></div>
+      ${err && html`<div className="warn-line" role="alert" style=${{marginTop:8}}><${Icon} n="info" size=${15}/><span>${err}</span></div>`}
+      <div className="form" style=${{marginTop:14}}>
+        <button className="btn danger" onClick=${submit} disabled=${busy||!agree||!pw}>${busy?"確認しています…":"退会を申請する"}</button>
+        <button className="btn ghost" onClick=${goBack} disabled=${busy}>やめる</button>
+      </div>`}
+    </section>
   </div>`;
 }
 
@@ -1280,8 +2223,12 @@ const LEGAL_DOCS = [
       "パスワードは利用者自身の責任で管理し、第三者に使わせたり教えたりしないでください。",
       "アカウントの不正利用に気づいた場合は、すぐにお問い合わせ窓口へご連絡ください。",
       "表示名・アーティスト名に「AIMUSE」「運営」「公式」「管理者」など、運営者や公式アカウントと誤解される名称は使用できません。",
-      "退会（アカウントの削除）を希望する場合は、お問い合わせ窓口から申請してください。現在、アプリ内に退会の機能はありません。【要確認：アプリ内に退会機能を追加した場合は記載を更新】",
-      "退会すると、会員情報、投稿した楽曲、お気に入り、フォローなどの情報は削除され、元に戻すことはできません。保存期間の詳細はプライバシーポリシーに定めます。"
+      "アーティスト名は、他の会員がすでに使用している名前には変更できません。また、アーティスト名の変更は24時間に3回までです。運営者は、なりすまし防止のため、アーティスト名の変更履歴（変更前後の名前・日時）を記録・確認します。",
+      "表示名は、本人と運営者だけに表示されます。他の利用者に表示されるのは、アーティスト名、アイコン、背景画像、自己紹介です。レビューを投稿した場合も、表示名は表示されず、公開中の楽曲があるアーティストの方はアーティスト名、それ以外の方は「リスナー」と表示されます。",
+      "退会（アカウントの削除）は、マイページの「設定」→「アカウントを削除（退会）」から、パスワードを再入力して申請できます。",
+      "退会を申請すると、公開プロフィールと投稿した楽曲はすぐに非公開になり、投稿・お気に入り・フォローなどの操作はできなくなります。申請から30日間は、本人がログインして退会を取り消すことができ、取り消すと元の公開状態に戻ります（申請後に通報を受けて確認中の楽曲など、一部は非公開のままとなる場合があります）。",
+      "申請から30日を過ぎると、会員情報、投稿した楽曲（音源・ジャケット）、アイコン・背景画像、お気に入り、フォローなどの情報を順次削除し、アプリから元に戻すことはできなくなります。保存期間の詳細はプライバシーポリシーに定めます。",
+      "投稿した楽曲は、マイページから個別に削除できます。削除した楽曲は、公開一覧や検索からすぐに表示されなくなります。"
     ]]},
     {h:"第5条（禁止行為）", blocks:[
       "利用者は、本サービスの利用にあたり、次の行為をしてはいけません。",
@@ -1292,7 +2239,7 @@ const LEGAL_DOCS = [
         "実在の歌手・アーティスト・人物の声や名前を無断で模倣し、本人の作品・本人の歌唱であると誤解させる行為",
         "運営者、他の利用者、実在の人物・団体になりすます行為",
         "投稿時の権利に関する申告に、事実と異なる内容を申告する行為",
-        "わいせつ、暴力的、差別的な内容、他人を誹謗中傷する内容、違法行為を助長する内容を、楽曲・歌詞・ジャケット画像などに含める行為",
+        "わいせつ、暴力的、差別的な内容、他人を誹謗中傷する内容、違法行為を助長する内容を、楽曲・歌詞・ジャケット画像・プロフィール画像・自己紹介などに含める行為",
         "再生数その他の数値を、不正な方法で増やしたり操作したりする行為",
         "不正アクセス、サーバーやネットワークへの過度な負荷、不具合の悪用など、本サービスの運営を妨げる行為",
         "他の利用者の個人情報を収集する行為",
@@ -1316,6 +2263,7 @@ const LEGAL_DOCS = [
     {h:"第7条（審査・投稿の削除・利用停止）", blocks:[[
       "運営者は、投稿された楽曲を審査し、承認または却下します。却下の理由を個別にお知らせしない場合があります。",
       "運営者は、公開後の楽曲であっても、本規約やガイドラインへの違反、権利侵害の申し立て、その他必要と判断した場合には、事前に通知することなく非公開にし、または削除することがあります。",
+      "プロフィール画像（アイコン・背景画像）と自己紹介は、審査を経ずにすぐ公開されます。運営者は、本規約・ガイドラインに違反する画像を事前に通知することなく初期画像に戻し、違反するアーティスト名・自己紹介を変更することがあります。",
       "運営者は、本規約に違反した利用者、または違反のおそれがある利用者のアカウントを利用停止にすることがあります。利用停止中は、楽曲の投稿、お気に入り、フォロー、通報などの機能を利用できません。運営者は、必要に応じてその利用者の投稿を非公開または削除します。",
       "投稿者が自分の投稿の非公開・削除を希望する場合は、お問い合わせ窓口から依頼してください。【要確認：アプリ内に投稿の削除機能を追加した場合は記載を更新】",
       "運営者は、この条に基づく対応によって利用者に生じた損害について、運営者に故意または重大な過失がある場合を除き、責任を負いません。"
@@ -1354,7 +2302,9 @@ const LEGAL_DOCS = [
       "本サービスでは、次の情報を取得します。",
       [
         "会員登録のとき：メールアドレス、パスワード、表示名（任意）。表示名を入力しなかった場合は、メールアドレスの「@」より前の部分が表示名として自動で設定されます。パスワードは認証サービス（Supabase Auth）が管理しており、運営者がパスワードそのものを閲覧する機能はありません。",
+        "プロフィールを編集するとき：アイコン画像、背景画像、表示名、アーティスト名、自己紹介。アイコン・背景画像は、端末の中で切り抜き・縮小してから保存するため、撮影場所などの撮影情報（Exif）は保存されません。アーティスト名を変更した場合は、変更前と変更後の名前、日時、変更した人の記録を保存します。",
         "楽曲を投稿するとき：楽曲名、アーティスト名、ジャンル、使用したAIツール名、音源ファイル、ジャケット画像（任意）、歌詞（任意）、それぞれのファイルの元のファイル名・サイズ・形式、再生時間、権利に関する申告の内容、投稿日時。",
+        "カラーテーマを保存するとき（ログイン中）：選んだテーマの種類と色。本人のアカウントに保存し、公開されません。",
         "サービスを利用するとき：お気に入り・フォローの登録内容、通報の内容（対象の楽曲、理由、通報した会員のIDと表示名、日時）。",
         "再生数を数えるとき：ログイン中の方は会員ID、ログインしていない方はIPアドレスを元に戻せない形に変換（ハッシュ化）した値を、再生した楽曲と時間帯とともに記録します。IPアドレスそのものは、この記録には保存しません。",
         "通信の際に自動的に送られる情報：本サービスの表示や利用の際、IPアドレス、ブラウザの種類などの情報が、本サービスを動かすために運営者が利用している外部サービス（4.に記載）に送られます。",
@@ -1387,8 +2337,11 @@ const LEGAL_DOCS = [
     {h:"5. 他の利用者に公開される情報", blocks:[
       [
         "公開中の楽曲の情報（楽曲名、アーティスト名、ジャンル、使用したAIツール名、ジャケット画像、歌詞、音源、再生数）と、アーティストのフォロワー数（人数のみ）は、会員でない方を含め誰でも見ることができます。",
+        "公開中の楽曲があるアーティストのアイコン、背景画像、自己紹介は、会員でない方を含め誰でも見ることができます。アイコン・背景画像は、表示のために公開の保存領域に保存しており、画像のURLを知っている人は誰でも表示できます（ファイル名は推測できないランダムな名前です）。",
         "公開中の楽曲については、投稿時の元のファイル名を技術的な方法で取得できる場合があります。",
-        "メールアドレス、表示名、お気に入り・フォローの内容、通報の内容、審査中・非公開の楽曲は、他の利用者には公開されません。",
+        "フォロー・フォロワーの一覧には、公開中の曲があるアーティストの名前とアイコンだけが表示されます。公開中の曲がない会員（リスナー）がフォローしている場合は、人数だけが表示され、名前などは表示されません。公開中の曲があるアーティストがフォローしているアーティストは、フォロー中の一覧として公開されます。",
+        "レビューを投稿した場合、評価とコメントは、公開中の楽曲の閲覧者に公開されます。投稿者名は、公開中の楽曲があるアーティストの方はアーティスト名、それ以外の方は「リスナー」と表示し、表示名は表示しません。",
+        "メールアドレス、表示名、お気に入りの内容、リスナーとしてのフォローの内容、通報の内容、審査中・非公開の楽曲、アーティスト名の変更履歴は、他の利用者には公開されません。",
         "運営者（管理者）は、審査や問い合わせ対応などのため、会員のメールアドレス・表示名、審査中・非公開の楽曲、通報の内容を閲覧できます。"
       ]
     ]},
@@ -1396,6 +2349,8 @@ const LEGAL_DOCS = [
       [
         "本サービスは、ログイン状態を保つため、ブラウザの保存領域（localStorage）にログイン情報（認証用の情報）を保存します。ログアウトすると削除されます。",
         "本サービスを最新の状態に更新するため、ブラウザの一時的な保存領域（sessionStorage）に、本サービスの版の情報を保存することがあります。",
+        "画面の表示に関する設定（はじめての方向けの案内を閉じたかどうか、ログインしていない間のカラーテーマ、前回表示したカラーテーマ）を、ブラウザの保存領域（localStorage）に保存します。ブラウザのデータを消去すると削除されます。",
+        "ホーム画面に追加して使えるよう、オフライン時の案内ページ・アイコン・アプリの情報を、ブラウザの保存領域（Service Worker のキャッシュ）に保存します。音源・画像・会員情報・画面の内容は保存しません。",
         "本サービスは、広告や閲覧履歴の追跡を目的としたCookieやアクセス解析ツールを使用していません。",
         "4.に記載した外部サービスが、サービスの提供や安全確保のために、独自にCookieなどを使用する場合があります。"
       ]
@@ -1403,9 +2358,11 @@ const LEGAL_DOCS = [
     {h:"7. 保存期間と削除", blocks:[
       [
         "会員情報と投稿の情報は、原則として退会（アカウントの削除）まで保存します。",
-        "退会すると、会員情報、投稿した楽曲の情報、お気に入り、フォロー、通報の記録はデータベースから削除されます。音源・画像ファイルは自動では削除されないため、運営者が別途削除します。【要確認：ファイルを削除するまでの期間】",
+        "退会を申請すると、公開プロフィールと投稿した楽曲を非公開にし、申請から30日間は情報を保存します（この間は本人が取り消せます）。30日を過ぎると、会員情報、投稿した楽曲の情報と音源・ジャケット画像、アイコン・背景画像、お気に入り、フォロー、レビュー、通報の記録を、サーバー側の処理で順次削除します。削除の対象と進み具合は、処理が終わるまで記録します。削除がすべて終わったことは、会員情報が削除されたことを確認して記録します（記録には会員IDのみを残し、メールアドレスは残しません）。",
         "削除された楽曲の情報は、誤って削除した場合に復元できるよう、削除時点の内容を約30日間保存し、その後順次削除します。音源・画像ファイルも少なくともこの期間は保存されます。",
         "再生数を数えるための記録は、約2日を過ぎたものから順次削除します。",
+        "アイコン・背景画像を変更した場合、それまでの画像は新しい画像の設定が完了した後に削除します（削除に失敗した画像は、次にプロフィールを保存したときに削除します）。",
+        "アーティスト名の変更履歴は、そのアーティストが削除されるまで保存します。【要確認：変更履歴の保存期間】",
         "外部サービスの記録やバックアップに、一定期間情報が残る場合があります。"
       ]
     ]},
@@ -1485,7 +2442,17 @@ const LEGAL_DOCS = [
       "不適切な内容：わいせつ、暴力的、差別的な内容、他人を誹謗中傷する内容、違法行為を助長する内容",
       "虚偽の申告：投稿時の権利に関する申告に、事実と異なる内容を申告すること"
     ]]},
-    {h:"6. 審査について", blocks:[
+    {h:"6. プロフィール（アイコン・背景画像・アーティスト名・自己紹介）", blocks:[
+      "アイコン、背景画像、アーティスト名、自己紹介にも、このガイドラインの4.と5.が同じように適用されます。特に、次のことはしないでください。",
+      [
+        "実在の人物の写真、他人が描いたイラスト、他社のロゴ・キャラクターを、許可なくアイコンや背景画像に使うこと",
+        "実在の歌手・アーティスト、ほかのAIMUSEの会員、運営者と誤解されるアーティスト名・画像・自己紹介にすること",
+        "見えない文字や紛らわしい文字を使って、ほかの名前に似せること"
+      ],
+      "アイコン・背景画像・自己紹介は、審査を経ずにすぐ公開されます。運営者は、不適切な画像を初期画像に戻し、不適切なアーティスト名を変更することがあります。",
+      "アーティスト名は、他の会員がすでに使っている名前（全角・半角、大文字・小文字の違いを含む）や、運営と誤解される名前には変更できません。変更は24時間に3回までで、変更前後の名前は記録され、運営者が確認します。"
+    ]},
+    {h:"7. 審査について", blocks:[
       "楽曲を投稿するときは、次の4項目を確認して申告していただきます。",
       [
         "この楽曲は自分がAIサービスで生成したものです",
@@ -1497,7 +2464,7 @@ const LEGAL_DOCS = [
       "審査の結果はマイページの投稿曲の一覧に表示されます。現在、却下の理由はアプリ上には表示されません。理由を確認したい場合はお問い合わせ窓口へご連絡ください。",
       "審査は、楽曲が第三者の権利を侵害していないことを保証するものではありません。投稿した楽曲についての責任は投稿者にあります。"
     ]},
-    {h:"7. 権利侵害の通報と削除の手続き", blocks:[
+    {h:"8. 権利侵害の通報と削除の手続き", blocks:[
       "会員の方は、楽曲の再生画面にある通報の機能から、問題のある楽曲を運営者に知らせることができます（理由：既存曲に酷似している／不適切なジャケット画像／不適切な歌詞／なりすまし・名義の問題）。",
       "権利者の方（会員でない方を含みます）は、お問い合わせ窓口から、次の内容をお知らせください。",
       [
@@ -1514,7 +2481,7 @@ const LEGAL_DOCS = [
       "権利侵害を繰り返す利用者は、アカウントを利用停止にすることがあります。また、事実と異なる申し立てはしないでください。",
       "お問い合わせ窓口："+LEGAL_CONTACT
     ]},
-    {h:"8. 投稿者の権利と、本サービスへの利用許諾", blocks:[
+    {h:"9. 投稿者の権利と、本サービスへの利用許諾", blocks:[
       "投稿した楽曲、歌詞、ジャケット画像などについて投稿者が持つ権利は、投稿者に残ります。投稿によって運営者に移ることはありません。",
       "なお、日本では、AIが自律的に生成したものは著作物と認められず、人がどの程度創作的に関わったかによって判断されるとの考え方が示されています（文化審議会著作権分科会法制度小委員会「AIと著作権に関する考え方について」）。運営者は、投稿された楽曲に著作権が発生するかどうかを判断・保証しません。",
       "投稿者は、運営者に対し、本サービスを提供するために必要な範囲で、投稿した楽曲などを無償で利用することを許諾するものとします。この許諾は独占的なものではなく、投稿者は同じ楽曲をほかのサービスでも自由に公開できます（使用したAIツールの規約が認める範囲に限ります）。運営者が行う利用は、次のとおりです。",
@@ -1529,7 +2496,7 @@ const LEGAL_DOCS = [
       "この許諾は、楽曲が本サービス上に存在する間に限ります。楽曲の削除や退会のあとは新たに利用しません。ただし、復元に備えた保存（約30日間）や外部サービスのバックアップにより、一定期間データが残る場合があります。",
       "本サービスは、楽曲のダウンロードの機能を提供していません。公開楽曲を無断で録音・保存して、本サービスの外で配布・公開することは禁止です。"
     ]},
-    {h:"9. このガイドラインの変更", blocks:[
+    {h:"10. このガイドラインの変更", blocks:[
       "運営者は、必要に応じてこのガイドラインを変更することがあります。重要な変更をする場合は、本サービス上でお知らせします。"
     ]}
   ]
@@ -1537,8 +2504,10 @@ const LEGAL_DOCS = [
 ];
 const legalText = s => String(s).split(/(【要確認[^】]*】)/).map((part,i)=> i%2 ? html`<mark key=${i} className="todo">${part}</mark>` : part);
 // 規約などへのリンク（ログイン画面・マイページで使用）
-function LegalLinks({openLegal}){
-  return html`<div className="legal-links" aria-label="規約とポリシー">${LEGAL_DOCS.map(d=>html`<button key=${d.id} className="link" onClick=${()=>openLegal(d.id)}>${d.title}</button>`)}</div>`;
+function LegalLinks({openLegal, openGuide}){
+  return html`<div className="legal-links" aria-label="使い方・規約とポリシー">
+    ${openGuide && html`<button className="link" onClick=${openGuide}>使い方</button>`}
+    ${LEGAL_DOCS.map(d=>html`<button key=${d.id} className="link" onClick=${()=>openLegal(d.id)}>${d.title}</button>`)}</div>`;
 }
 function LegalPage({ctx}){
   const {legalDoc,openLegal,goBack} = ctx;
@@ -1567,6 +2536,8 @@ function App(){
   const [history,setHistory] = useState([]);
   const [artistId,setArtistId] = useState(null);
   const [legalDoc,setLegalDoc] = useState("terms");
+  const [welcomeHidden,setWelcomeHidden] = useState(()=>welcomeStore.get());
+  const [guestTheme,setGuestTheme] = useState(()=>themeStore.guest());
   const [tracks,setTracks] = useState([]);
   const [reportsRaw,setReports] = useState([]);
   const [repoMode,setRepoMode] = useState("pending");
@@ -1576,6 +2547,10 @@ function App(){
   const [favs,setFavs] = useState(()=>new Set());
   const [follows,setFollows] = useState(()=>new Set());
   const [followerCounts,setFollowerCounts] = useState(()=>new Map());
+  const [artistCards,setArtistCards] = useState(()=>new Map());
+  const [followView,setFollowView] = useState(null);   // フォロー一覧で表示する対象 {artistId, mode, mine}
+  const [followVer,setFollowVer] = useState(0);         // フォロー操作のたびに増やし、一覧の人数を取り直す   // アーティストのアイコン・背景・自己紹介
+  const [cardsVer,setCardsVer] = useState(0);
   const uidRef = useRef(null);
   const socialBusy = useRef(new Set());
   const [queue,setQueue] = useState([]);
@@ -1602,10 +2577,13 @@ function App(){
     return ()=>{ un(); ua(); };
   },[]);
   const user = authState.user, profile = authState.profile, isAdmin = !!(profile&&profile.is_admin);
+  const withdrawing = !!(user && profile && profile.deletion);   // 退会手続き中（操作はサーバー側でも拒否される）
   useEffect(()=>{ if(authState.recovery){ setHistory([]); setTab("me"); } },[authState.recovery]);
 
   // ログイン・ログアウト・アカウント切り替えのたびに、まず空にしてから本人の分だけ読み込み直す
   const uid = user ? user.id : null;
+  // 一度ログインした端末では、ログアウト後も「はじめての方」向けの案内を出さない
+  useEffect(()=>{ if(uid && !welcomeHidden){ welcomeStore.set(); setWelcomeHidden(true); } },[uid]);
   useEffect(()=>{
     uidRef.current = uid;
     socialBusy.current.clear();
@@ -1621,13 +2599,26 @@ function App(){
   // （ログイン・ログアウト時と、アプリの画面に戻ってきたときに確認）
   const playingRef = useRef(false);
   playingRef.current = playing;
+  const currentIdRef = useRef(null);
+  currentIdRef.current = currentId;
   const firstUid = useRef(true);
   const reloadIfNewer = () => { if(playingRef.current) return; newerBuildAvailable().then(n=>{ if(n && !playingRef.current) location.reload(); }); };
   useEffect(()=>{ if(firstUid.current){ firstUid.current=false; return; } reloadIfNewer(); },[uid]);
   useEffect(()=>{
-    const onVis = () => { if(document.visibilityState==="visible") reloadIfNewer(); };
+    const onVis = () => { if(document.visibilityState==="visible"){ reloadIfNewer(); swUpdate(); } };
     document.addEventListener("visibilitychange",onVis);
-    return ()=>document.removeEventListener("visibilitychange",onVis);
+    // 戻るボタン・アプリの切り替えで、前の画面がそのまま復元されたとき（bfcache）は、最新の状態を読み直す
+    const onShow = e => { if(e.persisted){ repo.refresh(); reloadIfNewer(); } };
+    window.addEventListener("pageshow",onShow);
+    return ()=>{ document.removeEventListener("visibilitychange",onVis); window.removeEventListener("pageshow",onShow); };
+  },[]);
+  // オフラインの案内（つながったら自動で読み直す）
+  const [online,setOnline] = useState(()=>navigator.onLine!==false);
+  useEffect(()=>{
+    const on = () => { setOnline(true); repo.refresh(); };
+    const off = () => setOnline(false);
+    window.addEventListener("online",on); window.addEventListener("offline",off);
+    return ()=>{ window.removeEventListener("online",on); window.removeEventListener("offline",off); };
   },[]);
 
   const toSong = t => { const lyr=Array.isArray(t.lyrics)&&t.lyrics.length?t.lyrics:null; return {
@@ -1638,7 +2629,7 @@ function App(){
 
   const allSongs = useMemo(()=>tracks.filter(t=>t.status==="public"||t.status==="hidden").sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(toSong),[tracks,user]);
   const songs = useMemo(()=>allSongs.filter(s=>s.status==="public").sort((a,b)=>b.date.localeCompare(a.date)),[allSongs]);
-  const artists = useMemo(()=>{ const m=new Map(); songs.forEach(s=>{ if(!m.has(s.artistId)) m.set(s.artistId,{id:s.artistId,name:s.artistName,hues:s.hues,pattern:s.pattern,followers:0,bio:""}); }); return [...m.values()].map(a=>({...a,followers:followerCounts.get(a.id)||0})); },[songs,followerCounts]);
+  const artists = useMemo(()=>{ const m=new Map(); songs.forEach(s=>{ if(!m.has(s.artistId)) m.set(s.artistId,{id:s.artistId,name:s.artistName,hues:s.hues,pattern:s.pattern,followers:0,bio:""}); }); return [...m.values()].map(a=>{ const c=artistCards.get(a.id)||{}; return {...a,followers:followerCounts.get(a.id)||0,imageUrl:c.avatarUrl||null,headerUrl:c.headerUrl||null,bio:c.bio||""}; }); },[songs,followerCounts,artistCards]);
   // 自分の投稿曲に紐づくアーティスト（マイページのフォロワー数に使う）
   const myArtistIds = useMemo(()=>[...new Set(tracks.filter(t=>user&&t.userId===user.id).map(t=>t.artistId))].filter(isUuid),[tracks,user]);
   // 公開中アーティストと自分のアーティストのフォロワー数（全会員の合計人数）を取得
@@ -1651,6 +2642,22 @@ function App(){
     return ()=>{ alive=false; };
   },[artistIdsKey,uid,repoLoadedAt]);
   const myFollowers = myArtistIds.reduce((n,id)=>n+(followerCounts.get(id)||0),0);
+  // 公開中アーティストのアイコン・背景・自己紹介（ログイン切替・データ再読み込み・プロフィール保存のたびに取り直す）
+  useEffect(()=>{
+    if(!sb||!artistIdsKey) return;
+    let alive = true;
+    profileApi.artistCards(artistIdsKey.split(",")).then(m=>{ if(alive) setArtistCards(m); }).catch(()=>{});
+    return ()=>{ alive=false; };
+  },[artistIdsKey,uid,repoLoadedAt,cardsVer]);
+  const afterProfileSave = async () => { await auth.loadProfile(); auth.emit(); await repo.refresh(); setCardsVer(v=>v+1); };
+  // 管理者：不適切なアイコン・背景を初期画像に戻す（設定を外してから、その画像ファイルを削除）
+  const adminResetImage = async (artistId,kind) => {
+    const {data,error} = await sb.rpc("admin_reset_profile_image",{p_artist:artistId,p_kind:kind});
+    if(error){ say(profileErr(error,"初期画像に戻せませんでした")); return; }
+    if(data) await profileApi.removeFile(data);
+    setCardsVer(v=>v+1);
+    say((kind==="avatar"?"アイコン":"背景画像")+"を初期画像に戻しました");
+  };
   const submissions = useMemo(()=>tracks.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(t=>({...t,tool:t.toolName||t.tool,mine:!!(user&&t.userId===user.id),lyrics:t.lyrics||null,checks:t.checks||[]})),[tracks,user]);
   const reports = useMemo(()=>reportsRaw.filter(r=>tracks.some(t=>t.id===r.songId)).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)),[reportsRaw,tracks]);
   const current = allSongs.find(s=>s.id===currentId)||null;
@@ -1661,14 +2668,43 @@ function App(){
   const navTo = t => { setHistory([]); setTab(t); window.scrollTo(0,0); };
   // 規約・ポリシー：inPage=true はページ内のタブ切り替え（履歴を増やさない）
   const openLegal = (id,inPage) => { setLegalDoc(id); if(!inPage) go("legal"); };
-  // URL末尾が #terms / #privacy / #guidelines なら、その文書を直接開く
-  useEffect(()=>{ const m=location.hash.match(/^#(terms|privacy|guidelines)$/); if(m){ setLegalDoc(m[1]); setTab("legal"); } },[]);
+  // URL末尾が #terms / #privacy / #guidelines なら、その文書を直接開く（#guide は使い方）
+  useEffect(()=>{ const m=location.hash.match(/^#(terms|privacy|guidelines)$/); if(m){ setLegalDoc(m[1]); setTab("legal"); } else if(location.hash==="#guide") setTab("guide"); },[]);
   const openArtist = id => { setArtistId(id); go("artist"); };
+  const openFollowList = view => { setFollowView(view); go("follows"); };
+  // 初めての方への案内：ログインしたことがある端末・閉じた端末では表示しない
+  const dismissWelcome = () => { welcomeStore.set(); setWelcomeHidden(true); };
+  // カラーテーマ：ログイン中は本人の保存済みテーマ（未保存ならこの端末のテーマ）、ログアウト後はこの端末のゲスト用テーマ
+  const userTheme = user && profile && themeValid(profile.theme) ? profile.theme : null;
+  const activeTheme = userTheme || guestTheme;
+  const themeKey = JSON.stringify(activeTheme);
+  useEffect(()=>{
+    if(!authState.ready || (user && !profile)) return;          // ログイン情報の確認が終わるまでは、起動時に反映したテーマのまま
+    if(tab!=="settings") themeApply(activeTheme);             // 設定画面ではプレビュー中の色を優先
+    themeStore.set("aimuse.theme.last", user ? {uid:user.id, theme:activeTheme} : null);
+  },[themeKey, authState.ready, uid, !!profile]);
+  const saveTheme = async t => {
+    if(!themeValid(t)){ say("テーマの形式が正しくありません"); return false; }
+    if(user){
+      const {error} = await sb.rpc("set_my_theme",{p_theme:t});
+      if(error){ say("テーマを保存できませんでした。通信状態を確認して、もう一度お試しください"); return false; }
+      auth.profile = {...auth.profile, theme:t}; auth.emit();
+      say("テーマを保存しました（どの端末でも同じテーマになります）");
+    } else {
+      themeStore.set("aimuse.theme.guest", t); setGuestTheme(t);
+      say("この端末にテーマを保存しました");
+    }
+    return true;
+  };
+  const openGuide = () => go("guide");
+  const openSignup = () => { authDraft.mode = "signup"; go("me"); };
 
   // お気に入り・フォロー：ログイン中の会員IDでSupabaseに保存（失敗したら画面を元に戻す）
   const setIn = (setter,id,on) => setter(p=>{ const n=new Set(p); on?n.add(id):n.delete(id); return n; });
+  const blockedByDeletion = () => { if(!withdrawing) return false; say("退会手続き中のため、この操作はできません（マイページから取り消せます）"); return true; };
   const toggleFav = id => {
-    if(!uid||!sb){ say("お気に入りにはログインが必要です"); return; }
+    if(!uid||!sb){ say("お気に入りにはログインが必要です（会員登録は無料）"); return; }
+    if(blockedByDeletion()) return;
     const key="fav:"+id; if(socialBusy.current.has(key)) return; socialBusy.current.add(key);
     const on = !favs.has(id), me = uid;
     setIn(setFavs,id,on);
@@ -1679,7 +2715,8 @@ function App(){
     }).finally(()=>socialBusy.current.delete(key));
   };
   const toggleFollow = id => {
-    if(!uid||!sb){ say("フォローにはログインが必要です"); return; }
+    if(!uid||!sb){ say("フォローにはログインが必要です（会員登録は無料）"); return; }
+    if(blockedByDeletion()) return;
     if(!isUuid(id)){ say("このアーティストは現在フォローできません"); return; }
     const key="follow:"+id; if(socialBusy.current.has(key)) return; socialBusy.current.add(key);
     const on = !follows.has(id), me = uid;
@@ -1689,6 +2726,7 @@ function App(){
     social.setFollow(me,id,on).then(()=>{
       // 保存できたら、DBの実際のフォロワー数で上書き（取得に失敗しても保存済みのフォローは戻さない）
       social.followerCount(id).then(c=>setFollowerCounts(p=>{ const n=new Map(p); n.set(id,c); return n; })).catch(()=>{});
+      setFollowVer(v=>v+1);
     },e=>{
       console.warn("follow",e);
       if(uidRef.current===me){ setIn(setFollows,id,!on); bump(on?-1:1); say("保存できませんでした。通信状態を確認して、もう一度お試しください"); }
@@ -1705,22 +2743,55 @@ function App(){
   const toggle = () => { if(!current) return; if(!current.audioUrl){ say(NO_AUDIO); return; } setPlaying(p=>!p); };
   const seek = v => { setPos(v); if(current?.audioUrl&&audioRef.current) audioRef.current.currentTime=v; };
   const songById = id => allSongs.find(s=>s.id===id);
+  // 同じ曲を最初から再生し直す（1曲リピート・1曲だけの全曲リピート）
+  //   以前は「再生中」の状態が変わらないため再生の指示が出ず、曲の終わりで止まっていた。ここで直接再生する
+  const replayCurrent = () => {
+    const a = audioRef.current; setPos(0);
+    if(!a || !current || !current.audioUrl){ setPlaying(false); return; }
+    try{ a.currentTime = 0; }catch(e){}
+    const pr = a.play(); if(pr && pr.catch) pr.catch(()=>{ setPlaying(false); say("再生を開始できませんでした"); });
+    setPlaying(true);
+  };
+  // シャッフルの再生順：今の曲を先頭に、残りを並べ替えた順番。全曲を1回ずつ再生する
+  const shuffleRef = useRef({key:"", order:[]});
+  const shuffleOrder = (fresh=false) => {
+    const key = queue.join(",");
+    if(fresh || shuffleRef.current.key!==key || !shuffleRef.current.order.includes(currentId)){
+      const rest = queue.filter(id=>id!==currentId);
+      for(let k=rest.length-1;k>0;k--){ const r=Math.floor(Math.random()*(k+1)); [rest[k],rest[r]]=[rest[r],rest[k]]; }
+      shuffleRef.current = {key, order: queue.includes(currentId) ? [currentId,...rest] : rest};
+    }
+    return shuffleRef.current.order;
+  };
+  useEffect(()=>{ if(shuffle) shuffleOrder(true); },[shuffle]);
   const next = (auto=false) => {
-    if(!queue.length||!current) return;
-    if(auto && repeat==="one"){ seek(0); setPlaying(true); return; }
-    const i = queue.indexOf(currentId);
-    let ni;
-    if(shuffle && queue.length>1){ do{ ni=Math.floor(Math.random()*queue.length) }while(ni===i); }
-    else ni = i+1;
-    if(ni>=queue.length){ if(repeat==="all"||!auto) ni=0; else { setPlaying(false); seek(0); return; } }
-    const s = songById(queue[ni]); if(s) startSong(s);
+    if(!current) return;
+    if(auto && repeat==="one"){ replayCurrent(); return; }
+    if(!queue.length){ if(auto){ setPlaying(false); seek(0); } return; }
+    const order = shuffle && queue.length>1 ? shuffleOrder() : queue;
+    const i = order.indexOf(currentId);
+    let ni = i+1;
+    if(ni>=order.length){
+      if(repeat==="all"||!auto){
+        ni = 0;
+        // シャッフルの全曲リピート：一巡したら並べ直す（同じ曲が続かないように）
+        if(shuffle && queue.length>1){ const o=shuffleOrder(true).filter(id=>id!==currentId); shuffleRef.current.order=[currentId,...o]; ni=1; }
+      } else { setPlaying(false); seek(0); return; }   // リピートなし：最後の曲で止まる
+    }
+    const id = (shuffle && queue.length>1 ? shuffleRef.current.order : order)[ni];
+    if(id===currentId){ replayCurrent(); return; }       // 1曲だけの全曲リピートなど
+    const s = songById(id); if(s) startSong(s); else if(auto){ setPlaying(false); }
   };
   nextRef.current = next;
   const prev = () => {
     if(pos>3||!queue.length){ seek(0); return; }
-    const i = queue.indexOf(currentId);
-    const s = songById(queue[(i-1+queue.length)%queue.length]); if(s) startSong(s);
+    const order = shuffle && queue.length>1 ? shuffleOrder() : queue;
+    const i = order.indexOf(currentId);
+    const id = order[(i-1+order.length)%order.length];
+    if(id===currentId){ seek(0); return; }
+    const s = songById(id); if(s) startSong(s);
   };
+  useEffect(()=>{ if(audioRef.current) audioRef.current.loop = (repeat==="one"); },[repeat,currentId]);
   const cycleRepeat = () => setRepeat(r=>{const n=r==="off"?"all":r==="all"?"one":"off"; say({off:"リピート：オフ",all:"リピート：全曲",one:"リピート：1曲"}[n]); return n;});
 
   // 再生数：音源のある曲を再生し始めたときに1回数える
@@ -1749,6 +2820,7 @@ function App(){
 
   const submit = async f => {
     if(!user){ say("投稿にはログインが必要です"); return false; }
+    if(blockedByDeletion()) return false;
     const id = crypto.randomUUID();
     let audioPath=null, imagePath=null;
     try{
@@ -1786,7 +2858,7 @@ function App(){
       .then(()=>say(action==="hide"?"楽曲を非公開にしました":"問題なしとして対応済みにしました"))
       .catch(fail);
   };
-  const report = (songId,reason) => { if(!user){ say("通報にはログインが必要です"); return; } repo.insertReport({song_id:songId,reason,reporter_id:user.id,reporter_name:(profile&&profile.display_name)||"会員",at:nowStr(),status:"open"}).then(()=>say("通報を受け付けました")).catch(fail); };
+  const report = (songId,reason) => { if(!user){ say("通報にはログインが必要です"); return; } if(blockedByDeletion()) return; repo.insertReport({song_id:songId,reason,reporter_id:user.id,reporter_name:(profile&&profile.display_name)||"会員",at:nowStr(),status:"open"}).then(()=>say("通報を受け付けました")).catch(fail); };
   const setVisibility = (id,status) => repo.put("tracks",id,{status}).then(()=>say(status==="public"?"公開しました":"非公開にしました")).catch(fail);
   // 楽曲の削除（安全な2段階方式）
   //  ・公開中の曲は削除できない。先に「非公開」にしてから削除する
@@ -1800,18 +2872,27 @@ function App(){
     }).catch(e=>say(/公開中の楽曲は削除できません/.test((e&&e.message)||"") ? "公開中の楽曲は削除できません。先に非公開にしてください" : e&&e.denied ? "権限がないため削除できませんでした" : "削除できませんでした。通信状態を確認して、もう一度お試しください"));
   };
 
+  // 投稿者本人による削除のあと：一覧・再生キューから外す（サーバーで削除済み）
+  const afterTrackDeleted = s => {
+    repo.tracks.delete(s.id); repo.emit();
+    setQueue(q=>q.filter(x=>x!==s.id)); if(currentId===s.id){ setCurrentId(null); setPlaying(false); setPlayerOpen(false); }
+    say(`「${s.title}」を削除しました`);
+  };
+  // 退会の申請・取り消しのあと：状況と曲の一覧を読み直す
+  const refreshAccount = async () => { await auth.loadProfile(); auth.emit(); await repo.refresh(); };
   const signOut = () => auth.signOut().then(()=>{ say("ログアウトしました"); navTo("home"); });
-  const ctx = {legalDoc,openLegal,user,profile,isAdmin,myFollowers,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
+  const ctx = {withdrawing,refreshAccount,afterTrackDeleted,openAccountDelete:()=>go("account"),activeTheme,saveTheme,openSettings:()=>go("settings"),showWelcome:!user&&!welcomeHidden&&authState.ready,dismissWelcome,openGuide,openSignup,followView,openFollowList,followVer,myArtistIds,legalDoc,openLegal,afterProfileSave,adminResetImage,user,profile,isAdmin,myFollowers,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
     current,playing,toggle,pos,seek,next,prev,repeat,cycleRepeat,shuffle,setShuffle,close:()=>setPlayerOpen(false),showLyrics,setShowLyrics,queueLabel};
 
   useEffect(()=>{ document.body.style.overflow = playerOpen?"hidden":""; },[playerOpen]);
 
   const navItems = [["home","ホーム","home"],["search","検索","search"],["upload","投稿","plus"],["me","マイページ","user"]];
-  const navActive = tab==="artist"?(history[0]||"home"):(tab==="admin"||tab==="legal")?"me":tab;
-  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin,legal:LegalPage}[tab];
+  const navActive = (tab==="artist"||tab==="follows")?(history[0]||"home"):(tab==="admin"||tab==="legal"||tab==="profile"||tab==="settings"||tab==="account")?"me":tab==="guide"?(history[0]||"home"):tab;
+  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin,legal:LegalPage,profile:ProfileEdit,follows:FollowList,guide:GuidePage,settings:SettingsPage,account:AccountDeletePage}[tab];
 
   return html`<div className="app">
-    <${Screen} key=${tab+(tab==="artist"?artistId:"")} ctx=${ctx}/>
+    ${!online && html`<div className="offline-bar" role="status"><${Icon} n="info" size=${15}/><span>オフラインです。曲の再生・検索・投稿にはインターネット接続が必要です（つながると自動で更新します）</span></div>`}
+    <${Screen} key=${tab+(tab==="artist"?artistId:tab==="follows"?JSON.stringify(followView):"")} ctx=${ctx}/>
     ${current && !playerOpen && html`<${MiniPlayer} song=${current} artist=${artistOf(current)} playing=${playing} pos=${pos} toggle=${toggle} open=${()=>setPlayerOpen(true)} fav=${favs.has(current.id)} onFav=${()=>toggleFav(current.id)}/>`}
     <nav className="nav" aria-label="メインナビゲーション"><div className="nav-in">
       ${navItems.map(([k,l,ic])=>html`<button key=${k} className=${navActive===k?"on":""} onClick=${()=>navTo(k)} aria-current=${navActive===k?"page":undefined}>
@@ -1820,6 +2901,8 @@ function App(){
     ${current && playerOpen && html`<${FullPlayer} ctx=${ctx}/>`}
     ${toast && html`<div className="toast" role="status">${toast}</div>`}
     <audio ref=${audioRef} preload="auto" playsInline onTimeUpdate=${e=>setPos(e.target.currentTime)} onEnded=${()=>nextRef.current(true)}
+      onPlay=${()=>{ if(!playingRef.current) setPlaying(true); }}
+      onPause=${e=>{ const a=e.target; setTimeout(()=>{ if(a.paused && !a.ended && playingRef.current && a.dataset.tid===currentIdRef.current) setPlaying(false); },0); }}
       onError=${e=>{ const a=e.target; if(current&&current.audioUrl&&a.dataset.tid===current.id&&a.dataset.src!==current.audioUrl){ const t=a.currentTime; a.src=current.audioUrl; a.dataset.src=current.audioUrl; a.addEventListener("loadedmetadata",()=>{ try{ a.currentTime=t; }catch(_){} if(playing) a.play().catch(()=>{}); },{once:true}); } }}
       onLoadedMetadata=${e=>{const d=Math.round(e.target.duration); const t=current&&tracks.find(x=>x.id===current.id); if(t&&isFinite(d)&&d>0&&!t.duration) repo.setDuration(t.id,d,!!(user&&(t.userId===user.id||isAdmin))).catch(()=>{});}}></audio>
   </div>`;

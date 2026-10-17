@@ -1,7 +1,8 @@
 -- =====================================================================
--- AIMUSE 本番環境チェック r6（読み取り専用。何も変更しません）
--- 構築SQL（v1.5）・プロフィール編集（v1.6）・フォロー一覧（v1.7）・カラーテーマ（v1.8）を実行した後に、SQL Editor で実行してください。
--- 結果は24行。「結果」列がすべて OK なら正常です。
+-- AIMUSE 本番環境チェック r7（読み取り専用。何も変更しません）
+-- 構築SQL（v1.5）・プロフィール編集（v1.6）・フォロー一覧（v1.7）・カラーテーマ（v1.8）・削除と退会（v1.9）を実行した後に、SQL Editor で実行してください。
+-- 結果は27行。「結果」列がすべて OK なら正常です。
+-- r7：v1.9（楽曲の削除・退会）の関数10個・確認25〜27を追加
 -- r6：v1.8（カラーテーマ）の関数1個・確認24を追加
 -- r5：v1.7（フォロワー・フォロー中一覧）の関数7個・索引2個（確認23）を追加
 -- r4：v1.6（プロフィール編集）の関数10個・avatars のルール4件・確認3項目（20〜22）を追加
@@ -26,7 +27,11 @@ with aimuse_fn(name) as (
          ('is_visible_member'),('is_public_artist'),('public_artist_of_user'),('public_artist_follow_summary'),
          ('public_artist_followers'),('public_artist_following'),('my_following'),
          -- v1.8 カラーテーマ
-         ('set_my_theme')
+         ('set_my_theme'),
+         -- v1.9 楽曲の削除・退会
+         ('delete_my_track'),('request_my_account_deletion'),('cancel_my_account_deletion'),('my_account_deletion'),
+         ('account_purge_claim'),('account_purge_pending_files'),('account_purge_mark_files'),('account_purge_db'),
+         ('account_purge_finish'),('account_purge_fail')
 ),
 pubfn as (
   select p.oid, p.proname::text as name, p.prosecdef, p.proconfig
@@ -68,12 +73,12 @@ checks(no, item, ok, detail) as (
                 and policyname in ('aimuse select own or admin','aimuse update own')),
     null
   union all
-  select 7, 'AIMUSEの関数46個がそろい、権限の強い関数は search_path 固定',
-    (select count(*) from pubfn where name in (select name from aimuse_fn)) = 46
+  select 7, 'AIMUSEの関数56個がそろい、権限の強い関数は search_path 固定',
+    (select count(*) from pubfn where name in (select name from aimuse_fn)) = 56
     and not exists (select 1 from pubfn
                     where name in (select name from aimuse_fn) and prosecdef
                       and not coalesce(proconfig @> array['search_path=""'], false)),
-    (select count(*)::text || '/46個' from pubfn where name in (select name from aimuse_fn))
+    (select count(*)::text || '/56個' from pubfn where name in (select name from aimuse_fn))
       || coalesce(' 要確認:' || (select string_agg(name, ', ') from pubfn
                                  where name in (select name from aimuse_fn) and prosecdef
                                    and not coalesce(proconfig @> array['search_path=""'], false)), '')
@@ -170,6 +175,29 @@ checks(no, item, ok, detail) as (
     and not has_column_privilege('authenticated', 'public.profiles', 'theme', 'UPDATE')
     and not has_column_privilege('anon', 'public.profiles', 'theme', 'UPDATE'),
     null
+  union all
+  select 25, 'v1.9：退会の記録がアプリから見えない場所にあり、退会手続き中の保護が有効',
+    to_regclass('aimuse_private.account_deletions') is not null
+    and to_regclass('aimuse_private.account_deletion_files') is not null
+    and to_regclass('aimuse_private.account_deletions_active_key') is not null
+    and exists (select 1 from pg_trigger where tgname = 'tracks_block_withdrawing' and not tgisinternal)
+    and exists (select 1 from pg_trigger where tgname = 'profiles_block_withdrawing' and not tgisinternal)
+    and not has_function_privilege('anon', 'public.delete_my_track(uuid)', 'execute')
+    and not has_function_privilege('anon', 'public.request_my_account_deletion()', 'execute'),
+    null
+  union all
+  select 26, 'v1.9：完全削除の関数はサーバー側（service_role）だけが実行できる',
+    (select bool_and(not has_function_privilege('anon', p.oid, 'execute')
+                     and not has_function_privilege('authenticated', p.oid, 'execute')
+                     and has_function_privilege('service_role', p.oid, 'execute'))
+     from pubfn p where p.name like 'account_purge_%')
+    and (select count(*) from pubfn where name like 'account_purge_%') = 6,
+    (select count(*)::text || '/6個' from pubfn where name like 'account_purge_%')
+  union all
+  select 27, 'v1.9：失敗が続いて止まった退会処理がない（あれば運営の確認が必要）',
+    not exists (select 1 from aimuse_private.account_deletions where status = 'failed'),
+    coalesce((select string_agg(status || ' ' || n, ' / ' order by status)
+              from (select status, count(*) as n from aimuse_private.account_deletions group by status) x), '申請なし')
   union all
   select 15, '（参考）現在のデータ件数',
     true,

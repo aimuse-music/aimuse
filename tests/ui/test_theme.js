@@ -21,7 +21,7 @@ const MEASURE = () => {
   const bg = hex(v('--bg')), surface = hex(v('--surface'));
   const body = getComputedStyle(document.body);
   const btn = document.querySelector('.btn.primary');
-  const grad = v('--grad'), stops = (grad.match(/#[0-9a-f]{6}/gi) || []).map(hex);
+  const grad = v('--btn-grad'), stops = (grad.match(/#[0-9a-f]{6}/gi) || []).map(hex);
   const onBtn = btn ? getComputedStyle(btn).color : null;
   return {
     bg: v('--bg'), fg: cr(body.color, bg), muted: cr(hex(v('--muted')), surface), faint: cr(hex(v('--faint')), bg),
@@ -40,10 +40,10 @@ const MEASURE = () => {
   const m = () => p.evaluate(MEASURE);
   const card = name => p.locator('.th-card', { hasText: name });
   const goSettingsGuest = async () => { await nav('マイページ'); await w(300); await p.locator('button', { hasText: 'カラーテーマを変更' }).click(); await w(400); };
-  const goSettingsUser = async () => { await nav('マイページ'); await w(300); await p.locator('button', { hasText: '設定（カラーテーマ）' }).click(); await w(400); };
+  const goSettingsUser = async () => { await nav('マイページ'); await w(300); await p.locator('button', { hasText: '設定（カラーテーマ' }).click(); await w(400); };
   const login = async e => { await nav('マイページ'); await w(300); await p.fill('#a-email', e); await p.fill('#a-pw', 'password'); await p.locator('.form button.btn.primary').click(); await p.locator('text=ログアウト').waitFor(); await w(700); };
   const logout = async () => { await nav('マイページ'); await w(300); await p.locator('button', { hasText: 'ログアウト' }).click(); await w(800); };
-  const goodContrast = x => x.fg >= 7 && x.muted >= 4.5 && x.faint >= 3 && x.accent >= 3 && (x.btn === null || x.btn >= 4.5);
+  const goodContrast = x => x.fg >= 7 && x.muted >= 4.5 && x.faint >= 4.5 && x.accent >= 3 && (x.btn === null || x.btn >= 4.5);
 
   // ---- 0. 起動直後は標準テーマ（従来と同じ見た目）。初回はようこそ案内だけで紹介文は重ならない
   await p.goto('http://aimuse.test/'); await w(1200);
@@ -60,6 +60,8 @@ const MEASURE = () => {
   ok('1 設定画面が開く（6種類のプリセット）', (await p.locator('.top h1').innerText()) === '設定' && await p.locator('.th-card').count() === 6);
   const names = await p.locator('.th-card b').allInnerTexts();
   ok('1 プリセット名', JSON.stringify(names) === JSON.stringify(['AIMUSE標準', 'オーシャン', 'ローズ', 'エメラルド', 'ゴールド', 'モノクロ']), names);
+  const ms = await m();
+  ok('1 標準テーマ：ボタン文字のコントラスト4.5以上（第4段階の修正）・本文/補足/アクセントも基準以上', ms.btn >= 4.5 && goodContrast(ms), { btn: +ms.btn.toFixed(2), fg: +ms.fg.toFixed(2), muted: +ms.muted.toFixed(2), faint: +ms.faint.toFixed(2), accent: +ms.accent.toFixed(2) });
   ok('1 標準が「選択中」（チェック印＋文字・aria-checked）', await card('AIMUSE標準').locator('.th-check').innerText() === '選択中' && await card('AIMUSE標準').getAttribute('aria-checked') === 'true');
   const contr = {};
   for (const n of ['オーシャン', 'ローズ', 'エメラルド', 'ゴールド', 'モノクロ']) {

@@ -38,13 +38,15 @@
   }
   const blobs = window.__blobs = window.__blobs || {};
   const save = () => sessionStorage.setItem("fakedb2", JSON.stringify(db));
+  db.deletions = db.deletions || []; db.trackDeletions = db.trackDeletions || [];
   window.__db = db; window.__fail = window.__fail || {}; window.__log = [];
   const delay = () => new Promise(r=>setTimeout(r, 5 + Math.random()*40));
   let session = (()=>{ try{ return JSON.parse(localStorage.getItem("fake-session")) }catch(e){ return null } })();
   const listeners = new Set();
   const uid = () => session ? session.user.id : null;
   const isAdmin = () => !!db.profiles.find(p=>p.id===uid()&&p.is_admin);
-  const active = () => { const p=db.profiles.find(p=>p.id===uid()); return !!p && !p.is_banned; };
+  const withdrawing = u => db.deletions.some(d=>d.user_id===u && ["pending","processing","failed"].includes(d.status));
+  const active = () => { const p=db.profiles.find(p=>p.id===uid()); return !!p && !p.is_banned && !withdrawing(uid()); };
   const fire = ev => listeners.forEach(cb=>cb(ev, session));
   const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
   const key = n => (n||"").normalize("NFKC").replace(/[\s​-‏‪-‮⁠-⁤﻿]+/g,"").toLowerCase();
@@ -105,20 +107,63 @@
     if(q.table==="favorites"||q.table==="follows"){
       const rows=db[q.table];
       if(q.op==="select") return { data: rows.filter(r=>r.user_id===me&&match(r)).map(r=>({...r})), error:null };
-      if(q.op==="insert"){ const row={user_id:me,created_at:new Date().toISOString(),...q.row}; if(row.user_id!==me) return E("rls"); rows.push(row); save(); return {data:null,error:null}; }
+      if(q.op==="insert"){ const row={user_id:me,created_at:new Date().toISOString(),...q.row}; if(row.user_id!==me||!active()) return E("new row violates row-level security policy"); rows.push(row); save(); return {data:null,error:null}; }
       if(q.op==="delete"){ db[q.table]=rows.filter(r=>!(r.user_id===me&&match(r))); save(); return {data:null,error:null}; }
     }
     return { data:[], error:null };
   }
 
-  const visible = u => { const p=db.profiles.find(x=>x.id===u); return !!p && !p.is_banned; };
+  const visible = u => { const p=db.profiles.find(x=>x.id===u); return !!p && !p.is_banned && !withdrawing(u); };
   const isPubArtist = id => { const a=db.artists.find(x=>x.id===id); return !!a && visible(a.user_id) && db.tracks.some(t=>t.artist_id===id&&t.status==="public"); };
   const pubOf = u => db.artists.filter(a=>a.user_id===u && isPubArtist(a.id))[0]||null;
   const page = (rows,{p_before_at,p_before,p_limit},key) => rows
     .sort((x,y)=> y.created_at.localeCompare(x.created_at) || (y[key]>x[key]?1:-1))
     .filter(f=>!p_before_at||!p_before|| f.created_at<p_before_at || (f.created_at===p_before_at && f[key]<p_before))
     .slice(0, Math.min(Math.max(p_limit||30,1),100));
+  const ACTIVE = ["pending","processing","failed"];
   const rpcs = {
+    // v1.9（migration_v1_9_delete.sql と同じ規則。規則そのものは test_v19.py で実際の PostgreSQL に対して検証済み）
+    delete_my_track({p_track}){
+      if(window.__noV19) return E("Could not find the function public.delete_my_track");
+      if(window.__fail.deleteTrack) return E("ネットワークエラー");
+      const me=uid(); if(!me) return E("ログインしてください");
+      if(!active()) return E("楽曲を削除できません（ログイン状態・メール確認・利用状況を確認してください）");
+      const t=db.tracks.find(x=>x.id===p_track);
+      if(!t){ return db.trackDeletions.some(d=>d.track.id===p_track&&d.track.user_id===me) ? {data:"already_deleted",error:null} : E("楽曲が見つかりません"); }
+      if(t.user_id!==me) return E("楽曲が見つかりません");
+      db.trackDeletions.push({track:{...t},reason:"owner",at:Date.now()});
+      db.tracks=db.tracks.filter(x=>x!==t); db.favorites=db.favorites.filter(f=>f.track_id!==p_track); save();
+      return {data:"deleted",error:null};
+    },
+    my_account_deletion(){
+      if(window.__noV19) return E("Could not find the function public.my_account_deletion");
+      const d=db.deletions.find(x=>x.user_id===uid()&&ACTIVE.includes(x.status));
+      return {data: d ? [{status:d.status,requested_at:d.requested_at,purge_after:d.purge_after,can_cancel:d.status==="pending"&&Date.parse(d.purge_after)>Date.now()}] : [], error:null};
+    },
+    request_my_account_deletion(){
+      if(window.__noV19) return E("Could not find the function public.request_my_account_deletion");
+      const me=uid(); if(!me) return E("ログインしてください");
+      if(!session.reauthAt || Date.now()-session.reauthAt > 10*60*1000 || window.__staleAuth) return E("本人確認のため、パスワードをもう一度入力してください（REAUTH_REQUIRED）");
+      if(isAdmin()) return E("管理者アカウントは退会できません。先に管理者権限を外してください");
+      let d=db.deletions.find(x=>x.user_id===me&&ACTIVE.includes(x.status));
+      if(!d){
+        const now=new Date();
+        d={user_id:me,status:"pending",requested_at:now.toISOString(),purge_after:new Date(now.getTime()+30*86400000).toISOString(),
+           hidden:db.tracks.filter(t=>t.user_id===me&&["public","pending"].includes(t.status)).map(t=>({id:t.id,status:t.status}))};
+        db.deletions.push(d); db.tracks.forEach(t=>{ if(t.user_id===me&&["public","pending"].includes(t.status)) t.status="hidden"; }); save();
+      }
+      return {data:[{status:d.status,requested_at:d.requested_at,purge_after:d.purge_after}],error:null};
+    },
+    cancel_my_account_deletion(){
+      if(window.__fail.cancel) return E("ネットワークエラー");
+      const me=uid(); if(!me) return E("ログインしてください");
+      const d=db.deletions.find(x=>x.user_id===me&&ACTIVE.includes(x.status));
+      if(!d) return E("取り消せる退会申請がありません");
+      if(d.status!=="pending"||Date.parse(d.purge_after)<=Date.now()) return E("完全削除の処理がすでに始まっているため、取り消せません");
+      d.status="canceled"; let n=0;
+      d.hidden.forEach(h=>{ const t=db.tracks.find(x=>x.id===h.id&&x.status==="hidden"); if(t){ t.status=h.status; n++; } }); save();
+      return {data:[{status:"canceled",restored:n,kept_hidden:0}],error:null};
+    },
     artist_follower_count: ({aid}) => ({data: db.follows.filter(f=>f.artist_id===aid&&visible(f.user_id)).length, error:null}),
     public_artist_follow_summary({p_artist}){
       if(!isPubArtist(p_artist)) return {data:[],error:null};
@@ -232,9 +277,9 @@
     auth:{
       async getSession(){ await delay(); return { data:{ session } }; },
       onAuthStateChange(cb){ listeners.add(cb); setTimeout(()=>cb("INITIAL_SESSION", session),0); return { data:{ subscription:{ unsubscribe(){ listeners.delete(cb) } } } }; },
-      async signInWithPassword({email}){ await delay(); const u=USERS[email]; if(!u) return {error:{message:"Invalid login credentials"}};
-        session = { user:{ id:u.id, email }, access_token:"jwt-"+u.id }; localStorage.setItem("fake-session", JSON.stringify(session)); fire("SIGNED_IN"); return { data:{ session, user:session.user }, error:null }; },
-      async signOut(){ await delay(); session=null; localStorage.removeItem("fake-session"); fire("SIGNED_OUT"); return { error:null }; },
+      async signInWithPassword({email,password}){ await delay(); const u=USERS[email]; if(!u||password==="wrong") return {data:{user:null,session:null},error:{message:"Invalid login credentials"}};
+        session = { user:{ id:u.id, email }, access_token:"jwt-"+u.id, reauthAt:Date.now() }; localStorage.setItem("fake-session", JSON.stringify(session)); fire("SIGNED_IN"); return { data:{ session, user:session.user }, error:null }; },
+      async signOut(o){ await delay(); window.__log.push({op:"signOut",scope:o&&o.scope}); if(o&&o.scope==="others") return { error:null }; session=null; localStorage.removeItem("fake-session"); fire("SIGNED_OUT"); return { error:null }; },
       async signUp(){ return { error:{message:"n/a"} }; }, async updateUser(){ return { error:null }; }, async resetPasswordForEmail(){ return { error:null }; }
     },
     from: query,

@@ -1,0 +1,490 @@
+<title>AIMUSE 公開手順書</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: 1カラムの運用手順書。上部に段階の一覧（タップで移動）→ 監査結果 → 段階ごとのカード → 復旧・未確認の一覧 */
+:root{
+  --bg:#f6f5f9; --paper:#ffffff; --ink:#1d1a26; --sub:#5b566b; --line:#dedae8; --accent:#5a3fc0; --accent-soft:#ece7fb;
+  --ok:#1f7a52; --ok-bg:#e3f4ea; --warn:#8a5a00; --warn-bg:#fdf1d8; --bad:#b0273e; --bad-bg:#fbe3e7; --code-bg:#f0eef6;
+  --f-body:"Zen Kaku Gothic New","Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#121019; --paper:#1b1824; --ink:#efecf6; --sub:#aaa4bd; --line:#2f2b3d; --accent:#b6a4ff; --accent-soft:#2a2440;
+  --ok:#6fd3a0; --ok-bg:#16301f; --warn:#f2c46b; --warn-bg:#33270f; --bad:#ff8fa2; --bad-bg:#3a1820; --code-bg:#24202f; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#121019; --paper:#1b1824; --ink:#efecf6; --sub:#aaa4bd; --line:#2f2b3d; --accent:#b6a4ff; --accent-soft:#2a2440;
+  --ok:#6fd3a0; --ok-bg:#16301f; --warn:#f2c46b; --warn-bg:#33270f; --bad:#ff8fa2; --bad-bg:#3a1820; --code-bg:#24202f; color-scheme:dark }
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.75;-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 64px;display:flex;flex-direction:column;gap:28px}
+h1,h2,h3{text-wrap:balance;line-height:1.35;margin:0}
+h1{font-size:26px;font-weight:900;letter-spacing:.02em}
+h2{font-size:20px;font-weight:900;padding-top:6px}
+h3{font-size:16px;font-weight:700}
+p{margin:0}
+.eyebrow{font-size:11.5px;letter-spacing:.14em;font-weight:700;color:var(--accent);text-transform:uppercase}
+.muted{color:var(--sub)}
+section{display:flex;flex-direction:column;gap:14px;scroll-margin-top:calc(env(safe-area-inset-top,0px) + 70px)}
+.head{display:flex;flex-direction:column;gap:10px}
+.status{display:inline-flex;align-items:center;gap:6px;width:fit-content;font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--warn-bg);color:var(--warn)}
+.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);margin-inline:calc(-1*max(16px,env(safe-area-inset-left,0px)));padding:8px max(16px,env(safe-area-inset-right,0px)) 8px max(16px,env(safe-area-inset-left,0px));border-bottom:1px solid var(--line)}
+.nav-in{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none}
+.nav a{flex:none;font-size:13px;font-weight:700;text-decoration:none;color:var(--ink);padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--paper);white-space:nowrap;font-variant-numeric:tabular-nums}
+.nav a:focus-visible,button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.box{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.verdict{border-left:4px solid var(--accent)}
+ul,ol{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:6px}
+li{padding-left:2px}
+code,.mono{font-family:var(--f-mono);font-size:12.5px;background:var(--code-bg);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
+pre{margin:0;background:var(--code-bg);border-radius:10px;padding:12px;overflow-x:auto;font-family:var(--f-mono);font-size:12px;line-height:1.6;white-space:pre}
+.pill{display:inline-block;font-size:11.5px;font-weight:700;padding:1px 8px;border-radius:999px;vertical-align:1px;white-space:nowrap}
+.p-ok{background:var(--ok-bg);color:var(--ok)} .p-warn{background:var(--warn-bg);color:var(--warn)} .p-bad{background:var(--bad-bg);color:var(--bad)} .p-acc{background:var(--accent-soft);color:var(--accent)}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--paper)}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:13.5px}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{font-size:12px;color:var(--sub);font-weight:700;background:var(--bg)}
+tr:last-child td{border-bottom:0}
+td .mono{font-size:12px}
+.flow{display:flex;flex-direction:column;gap:0;counter-reset:none}
+.flow li{list-style:none}
+.flow{padding:0}
+.flow-item{display:grid;grid-template-columns:44px 1fr;gap:10px;align-items:start;padding:8px 0;border-bottom:1px dashed var(--line)}
+.flow-item:last-child{border-bottom:0}
+.flow-no{font-family:var(--f-mono);font-weight:500;font-size:13px;color:var(--accent);padding-top:2px}
+.flow-item b{display:block}
+.stage{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.stage-h{display:flex;gap:12px;align-items:flex-start}
+.stage-no{flex:none;width:40px;height:40px;border-radius:10px;display:grid;place-items:center;font-family:var(--f-mono);font-weight:500;font-size:15px;background:var(--accent-soft);color:var(--accent)}
+.stage-h .t{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field>h4,.go>h4,.stop>h4{margin:0;font-size:12px;letter-spacing:.08em;color:var(--sub);font-weight:700}
+.chk{list-style:none;padding:0}
+.chk li{display:flex;gap:10px;align-items:flex-start;padding:0}
+.chk input{flex:none;width:20px;height:20px;margin:3px 0 0;accent-color:var(--accent)}
+.chk label{flex:1;min-width:0}
+.stop{background:var(--bad-bg);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.stop>h4{color:var(--bad)}
+.go{background:var(--ok-bg);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.go>h4{color:var(--ok)}
+.note{font-size:13.5px;color:var(--sub)}
+details{border-top:1px solid var(--line);padding-top:10px}
+summary{cursor:pointer;font-weight:700;font-size:14px}
+details[open] summary{margin-bottom:8px}
+.foot{font-size:12.5px;color:var(--sub)}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}}
+html{scroll-behavior:smooth}
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <span class="eyebrow">AIMUSE 第1〜6段階 ・ 2026年10月17日</span>
+    <h1>AIMUSE 公開手順書</h1>
+    <span class="status">監査完了 ・ 本番作業は未実施 ・ 運営者の承認待ち</span>
+    <p class="muted">本番の Supabase・GitHub・Cloudflare・Edge Functions・Cron・BOOST には、この監査では一切触れていません。下の手順は、承認をいただいた段階から1つずつ進めるための計画です。</p>
+  </header>
+
+  <nav class="nav" aria-label="目次"><div class="nav-in">
+    <a href="#verdict">結論</a><a href="#audit">最終監査</a><a href="#fix">公開前の修正</a><a href="#plan">段階の一覧</a>
+    <a href="#s0">0</a><a href="#s1">1</a><a href="#s2">2</a><a href="#s3">3</a><a href="#s4">4</a><a href="#s5">5</a><a href="#s6">6</a><a href="#s7">7</a><a href="#s8">8</a><a href="#s9">9</a>
+    <a href="#recover">復旧方法</a><a href="#unverified">未確認</a><a href="#files">ファイル</a>
+  </div></nav>
+
+  <section id="verdict">
+    <div class="box verdict">
+      <span class="eyebrow">結論</span>
+      <h2>段階的に公開できる状態。ただし退会機能の前に3つの小さな修正が必要</h2>
+      <ul>
+        <li><b>SQL（v1.6〜v1.10）</b>：本番に近いデータ（会員300人・曲1,190曲ほか）で、既存データを1件も変えずに適用でき、元に戻す用SQLで適用前と同じ状態に戻せることを確認しました <span class="pill p-ok">22/22 合格</span></li>
+        <li><b>今の公開中の画面との両立</b>：SQL を先に入れても、今の画面（main）が使う機能は従来どおり動きます（v1.5 の権限テスト 63/63）。そのため「SQL を先に入れ、画面は後から」の順で進められます</li>
+        <li><b>重要な発見</b>：本番は新しい形式のキー（<code>sb_publishable_…</code>）を使っています。Edge Functions は旧形式のキーを読む作りのため、退会機能を動かす前に対応が必要です（修正 C2）</li>
+        <li><b>退会機能</b>は、テスト用アカウントだけが使える状態で実環境の検証を終えるまで、一般の利用者には表示しない計画です（修正 C1・C3）</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="audit">
+    <span class="eyebrow">最終監査</span>
+    <h2>1. SQL による既存部分への変更（v1.6〜v1.10）</h2>
+    <p class="note">本番に近いデータベースに1本ずつ適用し、関数・アクセスルール・トリガー・権限・列・制約・索引を前後で機械的に比較した結果です。「追加」は新しく作るだけで、既存の動きは変えません。</p>
+    <div class="tbl"><table>
+      <thead><tr><th>版</th><th>既存部分の変更</th><th>追加のみ</th></tr></thead>
+      <tbody>
+        <tr><td><b>v1.6</b><br>プロフィール</td><td>なし</td><td>関数10個／アクセスルール4件（保存場所 avatars 用）／profiles に列3つ（画像の場所）と形式チェック2つ／名前の変更履歴の表（非公開の場所）／保存場所 avatars（公開・2MB）</td></tr>
+        <tr><td><b>v1.7</b><br>フォロー一覧</td><td><span class="mono">artist_follower_count</span>：利用停止中の会員を数えないように変更（フォロワー数が少し減る場合があります）</td><td>関数7個／follows の索引2つ</td></tr>
+        <tr><td><b>v1.8</b><br>カラーテーマ</td><td>なし</td><td>関数1個／profiles に列 theme と形式チェック</td></tr>
+        <tr><td><b>v1.9 r2</b><br>削除・退会</td><td><span class="mono">is_active_member</span>（書き込みできる会員か）・<span class="mono">track_reviews</span>・<span class="mono">track_rating_summary</span>：「退会手続き中」を除く条件を追加。退会申請が1件も無い間は、結果は従来と同じ<br>削除記録の表に列2つ（理由・通報内容）を追加</td><td>関数17個（うち6個は完全削除専用、3個は申請専用で、どちらもサーバーの秘密キーでしか実行不可）／トリガー2つ（tracks・profiles）／表3つ（非公開の場所）</td></tr>
+        <tr><td><b>v1.10</b><br>レビュー名</td><td><span class="mono">track_reviews</span>：投稿者名を表示名からアーティスト名または「リスナー」に変更（戻り値の形は同じ）</td><td>なし</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">RLS（データの読み書きのルール）は、既存の表のものを1件も変更していません。BOOST が使う <span class="mono">is_admin</span>・<span class="mono">profiles.is_admin</span>・<span class="mono">protect_profile_flags</span>・<span class="mono">admin_stats</span>・covers の設定も変更していません。</p>
+
+    <h2>2. 既存データを壊さずに適用できるか</h2>
+    <div class="box">
+      <ul>
+        <li><b>データ</b>：会員・曲・お気に入り・フォロー・レビュー・通報・再生記録・ファイル・削除記録の全行を、適用前後で比べて変化なし <span class="pill p-ok">確認済み</span></li>
+        <li><b>やり直し</b>：同じSQLを2回実行しても壊れない／前提の版が無ければ何も変更せずに中止 <span class="pill p-ok">確認済み</span></li>
+        <li><b>途中で失敗した場合</b>：各SQLは1回の実行が1つのまとまり（途中で失敗すると全体が取り消される）になるよう書いています。SQL Editor が1回の実行をまとめて扱うことは PostgreSQL の仕様に基づく判断で、本番の画面では <span class="pill p-warn">未確認</span></li>
+        <li><b>止まる時間</b>：列の追加は既定値なし・チェックは空の列だけなので一瞬です。follows の索引作成の間だけ、フォローの登録が数秒待たされる可能性があります（今の件数なら1秒未満の見込み）</li>
+        <li><b>本番特有の違い</b>：保存場所 avatars がすでにある場合や、同じ名前の関数が既にある場合に備え、読み取り専用の事前確認SQL（<code>release_preflight.sql</code>）で先に確かめます</li>
+      </ul>
+    </div>
+
+    <h2>3. GitHub の Revert だけでは戻せないもの</h2>
+    <p class="note">詳しい手順は下の「<a href="#recover">復旧方法</a>」にまとめました。要点は次のとおりです。</p>
+    <ul>
+      <li><b>データベース</b>：版ごとの「元に戻す用SQL」を新しい順に実行します（ローカルで適用前と完全に同じに戻ることを確認済み）。追加した列・表・データは消さずに残します</li>
+      <li><b>Service Worker（PWA）</b>：Revert するだけでは、利用者の端末に入った Service Worker は残ります。緊急停止用の <code>sw.js</code> に差し替えて公開します（動作確認済み）</li>
+      <li><b>Edge Functions・Cron</b>：GitHub とは別に Supabase 側で止めます（関数の削除・合言葉の削除・Cron の停止）</li>
+      <li><b>完了した完全削除</b>：元に戻せません。そのため、実環境の検証はテスト用アカウントだけで行います</li>
+    </ul>
+
+    <h2>4. 退会処理の再確認</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>項目</th><th>結果</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td>パスワード照合</td><td><span class="pill p-ok">OK</span></td><td>サーバーが Supabase の正式なログイン機能で照合。照合するメールアドレスは必ずログイン中の本人のもの。1時間に5回まで</td></tr>
+        <tr><td>認証セッション</td><td><span class="pill p-ok">OK</span><br><span class="pill p-warn">注意</span></td><td>照合用のログインはすぐ終了し、ほかの端末のログインも終了。ほかの端末に残った短時間のログイン（最長1時間程度）では表示はできますが、書き込みはデータベースが拒否します</td></tr>
+        <tr><td>削除対象ファイル</td><td><span class="pill p-ok">OK</span></td><td>音源・ジャケット・アイコン・背景・削除済み曲・使われていないファイル・申請後に増えたファイル。実際に Storage から消えたことを確かめてから記録</td></tr>
+        <tr><td>途中失敗と再試行</td><td><span class="pill p-ok">OK</span></td><td>処理番号で二重実行を防止。失敗したら1時間後に続きから。10回で運営の確認待ち</td></tr>
+        <tr><td>管理用秘密キー</td><td><span class="pill p-ok">OK</span><br><span class="pill p-bad">要修正</span></td><td>全ブランチを検索し、秘密キーの混入は0件。ブラウザ用の設定（config.js）は公開用キーだけ。<b>ただし本番は新しい形式のキーのため、Edge Functions の読み込み方を変更する必要があります（C2）</b></td></tr>
+        <tr><td>BOOST 側の記録</td><td><span class="pill p-warn">注意</span></td><td>BOOST の宣伝記録には曲名・アーティスト名の写しが残ります（外部キーは無いため削除処理は止まりません）。BOOST は変更せず、今後の課題として扱います</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2>5. PWA の更新・キャッシュ・ログイン・再生</h2>
+    <ul>
+      <li><b>キャッシュ</b>：保存するのは案内ページ・アイコン・manifest の7ファイルだけ。画面・接続設定・音源・会員情報は保存しない <span class="pill p-ok">確認済み</span></li>
+      <li><b>更新</b>：新しい版を公開すると古い保存は消え、アプリに戻ったときに再生中でなければ新しい画面に切り替わる <span class="pill p-ok">確認済み</span></li>
+      <li><b>ログイン状態</b>：再読み込みしても維持され、ログアウトで消える <span class="pill p-ok">確認済み</span>。iPhone ではホーム画面のアプリと Safari で保存領域が分かれ、もう一度ログインが必要になる場合があります <span class="pill p-warn">未確認</span></li>
+      <li><b>音楽再生</b>：Service Worker は音源に一切関わりません。画面を切り替えても再生は続きます <span class="pill p-ok">確認済み</span>。画面ロック中に再生が続くかは <span class="pill p-warn">実機で未確認</span></li>
+    </ul>
+
+    <h2>6. AIMUSE BOOST との互換性</h2>
+    <ul>
+      <li>BOOST の事前確認SQLの結果は、v1.6〜v1.10 の前後で同じ（違いは実行日時だけ）<span class="pill p-ok">確認済み</span></li>
+      <li>BOOST が使う「公開中の曲だけ読む」「管理者の判定」「ジャケットの表示」は変更なし。削除・退会で非公開になった曲は、BOOST の共有ページで「この曲は現在公開されていません」と表示されます（BOOST の既存の動き）</li>
+      <li>管理者アカウントは退会できない作りのため、BOOST の管理者がいなくなることはありません</li>
+      <li>BOOST のコード・設定・公開先には一切変更を加えていません</li>
+    </ul>
+  </section>
+
+  <section id="fix">
+    <span class="eyebrow">公開前に必要な修正 ・ 未実装（ご承認後に実装）</span>
+    <h2>退会機能の前に入れる3つの修正</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>記号</th><th>内容</th><th>必要になる段階</th></tr></thead>
+      <tbody>
+        <tr><td><b>C1</b></td><td>機能の切り替えスイッチ：<code>config.js</code> に「PWA」「退会」のオン・オフを追加。退会がオフの間は、設定画面に退会の入口を出しません（検証者だけ特別なURLで表示）。手続き中の表示と取り消しは常に有効</td><td>段階5</td></tr>
+        <tr><td><b>C2</b></td><td>Edge Functions を新しい形式のキーに対応：<code>SUPABASE_SECRET_KEYS</code> と <code>SUPABASE_PUBLISHABLE_KEYS</code> を読み、旧形式は予備として扱う。退会申請の関数は「Verify JWT」をオフにし、関数の中で本人確認（すでに実装済みの <code>getUser</code>）だけに頼る</td><td>段階7</td></tr>
+        <tr><td><b>C3</b></td><td>サーバー側の許可リスト：<code>AIMUSE_DELETE_ALLOWED_USERS</code> に書いた会員IDだけが退会を申請できるようにする。完全削除の処理にも停止スイッチ <code>AIMUSE_PURGE_ENABLED</code> を追加</td><td>段階7</td></tr>
+        <tr><td>C4（小）</td><td>完全削除のときにパスワード照合の失敗記録も消す／同時送信での回数上限を厳密にする</td><td>段階9までに</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="plan">
+    <span class="eyebrow">公開計画</span>
+    <h2>10の段階で、影響範囲を小さく区切って進める</h2>
+    <p class="note">データベースの変更を先に入れ、画面はその後に、1段階ずつ公開します。どの段階でも、問題が出たらその段階だけを戻せば元の状態に戻ります。段階ごとにご承認をいただいてから進めます。</p>
+    <ol class="flow">
+      <li class="flow-item"><span class="flow-no">0</span><div><b>準備と事前確認</b><span class="muted">本番は変更しない</span></div></li>
+      <li class="flow-item"><span class="flow-no">1</span><div><b>SQL v1.6・v1.7</b><span class="muted">画面は今のまま</span></div></li>
+      <li class="flow-item"><span class="flow-no">2</span><div><b>画面：プロフィール編集・フォロー一覧</b><span class="muted">第1・2段階</span></div></li>
+      <li class="flow-item"><span class="flow-no">3</span><div><b>画面：はじめての案内・使い方</b><span class="muted">第3段階（SQLなし）</span></div></li>
+      <li class="flow-item"><span class="flow-no">4</span><div><b>SQL v1.8 と画面：カラーテーマ</b><span class="muted">第4段階</span></div></li>
+      <li class="flow-item"><span class="flow-no">5</span><div><b>SQL v1.9・v1.10 と画面：曲の削除</b><span class="muted">退会・PWA はオフ</span></div></li>
+      <li class="flow-item"><span class="flow-no">6</span><div><b>PWA をオン</b><span class="muted">ホーム画面に追加</span></div></li>
+      <li class="flow-item"><span class="flow-no">7</span><div><b>退会の実環境検証</b><span class="muted">テスト用アカウントだけ</span></div></li>
+      <li class="flow-item"><span class="flow-no">8</span><div><b>定期実行（Cron）の設定</b><span class="muted">テスト用アカウントだけ</span></div></li>
+      <li class="flow-item"><span class="flow-no">9</span><div><b>退会機能を一般公開</b><span class="muted">許可リストを外す</span></div></li>
+    </ol>
+    <div class="box">
+      <h3>iPhone での基本操作（各段階で共通）</h3>
+      <ul>
+        <li><b>Supabase の SQL</b>：Safari で supabase.com にログイン → プロジェクト → 左のメニューの「SQL Editor」→「New query」→ SQLを貼り付け →「Run」。表示が崩れる場合は、アドレスバーの「ぁあ」→「デスクトップ用Webサイトを表示」</li>
+        <li><b>GitHub</b>：Safari で github.com → aimuse-music/aimuse →「Pull requests」→「New pull request」→ base を <code>main</code>、compare を指定のブランチ →「Create pull request」→ 内容を確認して「Merge」</li>
+        <li><b>Cloudflare</b>：Safari で dash.cloudflare.com → Workers &amp; Pages → aimuse → 「Deployments」で公開の成功を確認。前の公開に戻すときは、前の行の「…」→「Rollback」</li>
+        <li><b>結果の保存</b>：SQLの結果画面は、毎回スクリーンショットで保存してください（前後の比較に使います）</li>
+      </ul>
+    </div>
+
+    <!-- 段階0 -->
+    <article class="stage" id="s0">
+      <div class="stage-h"><span class="stage-no">0</span><div class="t"><h3>準備と事前確認（本番は変更しない）</h3><span class="tags"><span class="pill p-acc">読み取りのみ</span></span></div></div>
+      <div class="field"><h4>実施する作業</h4><ul>
+        <li>Cloudflare のプレビュー公開が止まっていることを、運営者が確認する</li>
+        <li>ご承認後、開発ブランチを GitHub に push する（main には反映しない）</li>
+        <li>本番の SQL Editor で、読み取り専用の <code>release_preflight.sql</code> を実行し、結果を保存する</li>
+        <li>テスト用アカウントを2つ用意する（投稿者役・リスナー役。退会の検証で削除しても困らないもの）</li>
+        <li>Supabase のプランで、バックアップが取られているかを確認する</li>
+      </ul></div>
+      <div class="field"><h4>iPhone での操作</h4><p>SQL Editor に <code>release_preflight.sql</code> を貼り付けて「Run」。テスト用アカウントは、AIMUSE の画面から通常どおり会員登録（Gmail の場合は「名前+test1@gmail.com」の形で別アドレスにできます）。</p></div>
+      <div class="field"><h4>実行前の確認</h4><ul><li>第1〜6段階のバックアップファイルが手元に残っていること</li><li>今の本番サイトが正常に動いていること</li></ul></div>
+      <div class="go"><h4>成功の条件</h4><ul class="chk">
+        <li><input type="checkbox" id="c0a"><label for="c0a">事前確認の「結果」がすべて OK（3番は「なし（未適用）」）</label></li>
+        <li><input type="checkbox" id="c0b"><label for="c0b">件数（20〜24番）を保存した</label></li>
+        <li><input type="checkbox" id="c0c"><label for="c0c">テスト用アカウント2つでログインできる</label></li>
+      </ul></div>
+      <div class="stop"><h4>失敗した場合</h4><p>何も変更していないので、止めるだけです。「要確認」が出たら、その画面を送ってください。</p></div>
+      <div class="field"><h4>次へ進んでよい条件</h4><p>すべて OK で、運営者が段階1を承認したとき。</p></div>
+    </article>
+
+    <!-- 段階1 -->
+    <article class="stage" id="s1">
+      <div class="stage-h"><span class="stage-no">1</span><div class="t"><h3>SQL v1.6・v1.7 を入れる（画面は今のまま）</h3><span class="tags"><span class="pill p-warn">データベースの変更</span></span></div></div>
+      <div class="field"><h4>実施する作業</h4><ol>
+        <li><code>migration_v1_6_profile.sql</code> を実行</li>
+        <li><code>release_preflight.sql</code> を実行（件数が変わっていないこと）</li>
+        <li><code>migration_v1_7_follow_lists.sql</code> を実行</li>
+        <li>もう一度 <code>release_preflight.sql</code> を実行</li>
+      </ol></div>
+      <div class="field"><h4>iPhone での操作</h4><p>SQL Editor で1ファイルずつ「New query」に貼り付けて「Run」。1つ終わるごとに結果を保存。</p></div>
+      <div class="field"><h4>実行前の確認</h4><ul><li>段階0がすべて OK</li><li>利用者が少ない時間帯（深夜〜早朝）を選ぶ</li></ul></div>
+      <div class="go"><h4>成功の条件</h4><ul class="chk">
+        <li><input type="checkbox" id="c1a"><label for="c1a">どちらのSQLもエラーなしで終わる</label></li>
+        <li><input type="checkbox" id="c1b"><label for="c1b">事前確認の件数（会員・曲・お気に入り・フォロー・レビュー・通報・ファイル・再生数）が実行前と同じ</label></li>
+        <li><input type="checkbox" id="c1c"><label for="c1c">今の本番サイトで、ログイン・再生・検索・お気に入り・フォロー・投稿（テスト用アカウント）・管理者画面が従来どおり動く</label></li>
+      </ul><p class="note">フォロワー数は、利用停止中の会員の分だけ減る場合があります（意図した変更）。</p></div>
+      <div class="stop"><h4>失敗した場合</h4><ul>
+        <li>SQLがエラーで止まった：全体が取り消されるので、画面を保存して止めます</li>
+        <li>実行後に不具合：<code>rollback_v1_7.sql</code> → <code>rollback_v1_6.sql</code> の順に実行（データは残ります）</li>
+      </ul></div>
+      <div class="field"><h4>次へ進んでよい条件</h4><p>成功の条件をすべて満たし、1日たっても問題がないこと。</p></div>
+    </article>
+
+    <!-- 段階2 -->
+    <article class="stage" id="s2">
+      <div class="stage-h"><span class="stage-no">2</span><div class="t"><h3>画面：プロフィール編集・フォロー一覧（第1・2段階）</h3><span class="tags"><span class="pill p-acc">画面の公開</span></span></div></div>
+      <div class="field"><h4>実施する作業</h4><p>GitHub で <code>follow-lists</code> → <code>main</code> の Pull Request を作ってマージ。Cloudflare が自動で公開します。</p>
+        <p class="note">第1段階だけの版は、最終版の v1.6 SQL と画像の保存名の形が合わないため、第1・2段階をまとめて公開します。</p></div>
+      <div class="field"><h4>iPhone での操作</h4><p>GitHub（上の共通操作）→ Cloudflare の Deployments で「Success」を確認 → 本番サイトを開いて確認。</p></div>
+      <div class="field"><h4>実行前の確認</h4><ul><li>段階1の成功の条件をすべて満たしている</li></ul></div>
+      <div class="go"><h4>成功の条件</h4><ul class="chk">
+        <li><input type="checkbox" id="c2a"><label for="c2a">テスト用アカウントで、アイコン・背景の設定と切り抜き、表示名・アーティスト名・自己紹介の変更ができる</label></li>
+        <li><input type="checkbox" id="c2b"><label for="c2b">フォロワー・フォロー中の一覧が開け、人数と一覧が合っている</label></li>
+        <li><input type="checkbox" id="c2c"><label for="c2c">管理者画面で、画像の初期化と名前の変更履歴が見られる</label></li>
+        <li><input type="checkbox" id="c2d"><label for="c2d">ほかの会員の表示・再生・投稿が従来どおり</label></li>
+      </ul></div>
+      <div class="stop"><h4>失敗した場合</h4><p>Cloudflare の Deployments で前の公開を「Rollback」（最も早い）、または GitHub でマージを「Revert」。データベースはそのままで問題ありません（今の画面と両立することを確認済み）。</p></div>
+      <div class="field"><h4>次へ進んでよい条件</h4><p>1〜2日、問題の報告がないこと。</p></div>
+    </article>
+
+    <!-- 段階3 -->
+    <article class="stage" id="s3">
+      <div class="stage-h"><span class="stage-no">3</span><div class="t"><h3>画面：はじめての案内・使い方（第3段階）</h3><span class="tags"><span class="pill p-acc">画面の公開</span></span></div></div>
+      <div class="field"><h4>実施する作業</h4><p>GitHub で <code>onboarding</code> → <code>main</code> をマージ（SQLの変更なし）。</p></div>
+      <div class="field"><h4>iPhone での操作</h4><p>段階2と同じ。確認はログインしていないプライベートタブで。</p></div>
+      <div class="field"><h4>実行前の確認</h4><ul><li>段階2が安定している</li></ul></div>
+      <div class="go"><h4>成功の条件</h4><ul class="chk">
+        <li><input type="checkbox" id="c3a"><label for="c3a">はじめての訪問で「AIMUSEへようこそ！」が出て、紹介文と重ならない。閉じると出なくなる</label></li>
+        <li><input type="checkbox" id="c3b"><label for="c3b">ログインせずに検索・再生ができる（実際に音が出る）</label></li>
+        <li><input type="checkbox" id="c3c"><label for="c3c">使い方ページ・利用規約などのリンクが開ける</label></li>
+      </ul></div>
+      <div class="stop"><h4>失敗した場合</h4><p>Cloudflare で前の公開に Rollback。データベースは関係しません。</p></div>
+      <div class="field"><h4>次へ進んでよい条件</h4><p>1日、問題がないこと。</p></div>
+    </article>
+
+    <!-- 段階4 -->
+    <article class="stage" id="s4">
+      <div class="stage-h"><span class="stage-no">4</span><div class="t"><h3>SQL v1.8 と画面：カラーテーマ（第4段階）</h3><span class="tags"><span class="pill p-warn">データベースの変更</span> <span class="pill p-acc">画面の公開</span></span></div></div>
+      <div class="field"><h4>実施する作業</h4><ol><li><code>migration_v1_8_theme.sql</code> を実行し、事前確認SQLで件数を比較</li><li>GitHub で <code>color-theme</code> → <code>main</code> をマージ</li></ol></div>
+      <div class="field"><h4>iPhone での操作</h4><p>SQL Editor → GitHub → Cloudflare の順。</p></div>
+      <div class="field"><h4>実行前の確認</h4><ul><li>段階3が安定している</li></ul></div>
+      <div class="go"><h4>成功の条件</h4><ul class="chk">
+        <li><input type="checkbox" id="c4a"><label for="c4a">SQLがエラーなし・件数が同じ</label></li>
+        <li><input type="checkbox" id="c4b"><label for="c4b">テスト用アカウントで色を保存 → 別の端末でログインしても同じ色。ログアウトするとゲスト用の色に戻る</label></li>
+        <li><input type="checkbox" id="c4c"><label for="c4c">ほかの会員の色は変わらない。再生中に色を変えても再生が続く</label></li>
+      </ul></div>
+      <div class="stop"><h4>失敗した場合</h4><p>画面を Rollback。必要なら <code>rollback_v1_8.sql</code>（保存済みの色のデータは残ります）。</p></div>
+      <div class="field"><h4>次へ進んでよい条件</h4><p>1日、問題がないこと。修正 C1 の実装とご承認が済んでいること。</p></div>
+    </article>
+
+    <!-- 段階5 -->
+    <article class="stage" id="s5">
+      <div class="stage-h"><span class="stage-no">5</span><div class="t"><h3>SQL v1.9・v1.10 と画面：曲の削除（退会・PWA はオフ）</h3><span class="tags"><span class="pill p-warn">データベースの変更</span> <span class="pill p-acc">画面の公開</span></span></div></div>
+      <div class="field"><h4>実施する作業</h4><ol>
+        <li><code>migration_v1_9_delete.sql</code> → <code>migration_v1_10_review_names.sql</code> を実行</li>
+        <li>ここで初めて <code>production_checks.sql</code>（r8）を実行し、28行すべて OK を確認</li>
+        <li>修正 C1 を入れた最終版の画面を、<code>config.js</code> の「PWA：オフ・退会：オフ」でマージ</li>
+      </ol><p class="note">Edge Functions はまだ作りません。退会の入口は表示されず、仮に開けても「準備中」と表示されます。</p></div>
+      <div class="field"><h4>iPhone での操作</h4><p>SQL Editor（3本）→ GitHub → Cloudflare。</p></div>
+      <div class="field"><h4>実行前の確認</h4><ul><li>段階4が安定している</li><li>C1 がご承認・実装済みで、手元のテストに合格している</li></ul></div>
+      <div class="go"><h4>成功の条件</h4><ul class="chk">
+        <li><input type="checkbox" id="c5a"><label for="c5a">本番確認SQLが28行すべて OK、件数が同じ</label></li>
+        <li><input type="checkbox" id="c5b"><label for="c5b">テスト用アカウントで、公開中・審査待ちの曲を削除 → 一覧・検索からすぐ消える</label></li>
+        <li><input type="checkbox" id="c5c"><label for="c5c">管理者画面で、削除した曲を30日以内に復元できる（非公開で戻る）</label></li>
+        <li><input type="checkbox" id="c5d"><label for="c5d">設定画面に退会の入口が出ない／ホーム画面に追加の案内が出ない</label></li>
+        <li><input type="checkbox" id="c5e"><label for="c5e">標準テーマのボタンの文字が読みやすくなっている</label></li>
+      </ul></div>
+      <div class="stop"><h4>失敗した場合</h4><p>画面を Rollback（段階4の画面に戻る）。データベースは <code>rollback_v1_10.sql</code> → <code>rollback_v1_9.sql</code>。曲の削除記録は残り、運営による復元はそのまま使えます。</p></div>
+      <div class="field"><h4>次へ進んでよい条件</h4><p>2〜3日、問題がないこと。</p></div>
+    </article>
+
+    <!-- 段階6 -->
+    <article class="stage" id="s6">
+      <div class="stage-h"><span class="stage-no">6</span><div class="t"><h3>PWA をオン（ホーム画面に追加）</h3><span class="tags"><span class="pill p-acc">設定の変更</span></span></div></div>
+      <div class="field"><h4>実施する作業</h4><p>GitHub の画面で <code>public/config.js</code> の「PWA」をオンに書き換えてマージ（1行の変更）。</p></div>
+      <div class="field"><h4>iPhone での操作</h4><p>GitHub でファイルを開き、鉛筆マーク（Edit）→ 書き換え →「Commit changes」→ Pull Request でマージ。確認は iPhone の Safari と、可能なら Android の Chrome で。</p></div>
+      <div class="field"><h4>実行前の確認</h4><ul><li>段階5が安定している</li><li>緊急停止用の <code>sw.js</code> がすぐ使える場所にある</li></ul></div>
+      <div class="go"><h4>成功の条件</h4><ul class="chk">
+        <li><input type="checkbox" id="c6a"><label for="c6a">iPhone：共有 →「ホーム画面に追加」→ AIMUSE のアイコンから全画面で開ける。時計・ノッチ・下のバーに文字が重ならない</label></li>
+        <li><input type="checkbox" id="c6b"><label for="c6b">ホーム画面のアプリでログイン・再生・検索・投稿ができる（ログインし直しが必要かを記録）</label></li>
+        <li><input type="checkbox" id="c6c"><label for="c6c">機内モードで開くと「インターネットに接続されていません」の案内。戻すと自動で元に戻る</label></li>
+        <li><input type="checkbox" id="c6d"><label for="c6d">画面をロックしたとき・ほかのアプリに切り替えたときの再生の続き方を記録</label></li>
+        <li><input type="checkbox" id="c6e"><label for="c6e">Android：「アプリをインストール」ができる</label></li>
+      </ul></div>
+      <div class="stop"><h4>失敗した場合</h4><p><code>config.js</code> の PWA をオフに戻す。すでに入った Service Worker を消すには、<code>public/sw.js</code> の中身を緊急停止用のものに置き換えて公開（ログイン・テーマは消えません）。</p></div>
+      <div class="field"><h4>次へ進んでよい条件</h4><p>数日、問題がないこと。修正 C2・C3 の実装とご承認が済んでいること。</p></div>
+    </article>
+
+    <!-- 段階7 -->
+    <article class="stage" id="s7">
+      <div class="stage-h"><span class="stage-no">7</span><div class="t"><h3>退会の実環境検証（テスト用アカウントだけ）</h3><span class="tags"><span class="pill p-bad">一般には非公開</span></span></div></div>
+      <div class="field"><h4>実施する作業</h4><ol>
+        <li>Edge Function「account-delete-request」を作成（Verify JWT はオフ、関数内で本人確認）。<code>AIMUSE_DELETE_ALLOWED_USERS</code> にテスト用アカウントの会員IDだけを登録</li>
+        <li>Edge Function「account-purge」を作成（合言葉 <code>AIMUSE_PURGE_SECRET</code> を登録。Cron はまだ作らない）</li>
+        <li>テスト用アカウントで、検証者用のURLから退会画面を開き、下の項目を確認</li>
+        <li>確認用のSQLで、テスト用アカウントの申請だけ期限を今にして、account-purge を1回だけ手動で実行</li>
+      </ol>
+<pre>-- テスト用アカウントの会員IDを調べる（読み取り）
+select id, email from auth.users where email = 'テスト用のメールアドレス';
+
+-- 退会の状況を見る（読み取り）
+select status, requested_at, purge_after, attempts, last_error,
+       files_done_at, db_done_at, finished_at
+from aimuse_private.account_deletions order by requested_at desc limit 20;
+
+-- テスト用アカウントだけ、削除の開始を今にする（承認後のみ）
+update aimuse_private.account_deletions set purge_after = now()
+where status = 'pending'
+  and user_id = (select id from auth.users where email = 'テスト用のメールアドレス');</pre></div>
+      <div class="field"><h4>iPhone での操作</h4><p>Supabase の管理画面 → Edge Functions →「Deploy a new function」→ エディタに各フォルダの2ファイルを貼り付け → Secrets に値を登録。手動実行は関数の画面の「Test」で、ヘッダーに合言葉を付けて送ります（管理画面のこの機能は <span class="pill p-warn">要確認</span>）。</p></div>
+      <div class="field"><h4>実行前の確認</h4><ul><li>C2・C3 が手元のテストに合格している</li><li>テスト用アカウントに、テスト用の曲・アイコン・背景がある</li><li>本物の利用者の退会申請が0件（状況のSQLで確認）</li></ul></div>
+      <div class="go"><h4>成功の条件</h4><ul class="chk">
+        <li><input type="checkbox" id="c7a"><label for="c7a">パスワード違いは断られ、5回で1時間止まる</label></li>
+        <li><input type="checkbox" id="c7b"><label for="c7b">正しいパスワードで申請できる。ほかの端末のログインが終了する</label></li>
+        <li><input type="checkbox" id="c7c"><label for="c7c">申請中は公開画面から曲・アーティストが消え、投稿・お気に入り・フォローができない（別のブラウザで再ログインしても同じ）</label></li>
+        <li><input type="checkbox" id="c7d"><label for="c7d">取り消すと元の公開状態に戻る。再申請できる</label></li>
+        <li><input type="checkbox" id="c7e"><label for="c7e">許可リストにない会員（リスナー役）は申請できない</label></li>
+        <li><input type="checkbox" id="c7f"><label for="c7f">手動実行のあと：状況が done、Storage にテスト用アカウントのファイルが無い、Authentication の一覧からテスト用アカウントが消えている</label></li>
+        <li><input type="checkbox" id="c7g"><label for="c7g">ほかの会員の曲・ファイル・フォロワー数に影響がない</label></li>
+      </ul></div>
+      <div class="stop"><h4>失敗した場合</h4><ul>
+        <li>申請の関数を削除（画面には「準備中」と出るだけ）</li>
+        <li>完全削除の関数は合言葉を削除すると止まる</li>
+        <li>テスト用アカウントの申請を運営が取り消す：<code>emergency/admin_cancel_deletion.sql</code>（ファイルの削除が始まる前まで）</li>
+        <li>途中で止まった：状況のSQLで last_error を確認して報告</li>
+      </ul></div>
+      <div class="field"><h4>次へ進んでよい条件</h4><p>成功の条件をすべて満たし、記録を運営者が確認したこと。</p></div>
+    </article>
+
+    <!-- 段階8 -->
+    <article class="stage" id="s8">
+      <div class="stage-h"><span class="stage-no">8</span><div class="t"><h3>定期実行（Cron）の設定（まだテスト用アカウントだけ）</h3><span class="tags"><span class="pill p-bad">一般には非公開</span></span></div></div>
+      <div class="field"><h4>実施する作業</h4><p>Supabase の Cron で、1日1回 account-purge を呼ぶ設定を作ります（合言葉は Vault に保存）。もう1つのテスト用アカウントで申請 → 期限を今にする → 翌朝、自動で完了していることを確認。</p>
+<pre>-- 参考：毎日 3:17（日本時間）に実行（承認後のみ）
+select cron.schedule('aimuse-account-purge', '17 18 * * *', $$
+  select net.http_post(
+    url := 'https://tqtrvjmjfthlrwwligmu.supabase.co/functions/v1/account-purge',
+    headers := jsonb_build_object('Content-Type', 'application/json',
+      'x-aimuse-purge-secret', (select decrypted_secret from vault.decrypted_secrets
+                                where name = 'aimuse_purge_secret')),
+    body := '{}'::jsonb) $$);</pre></div>
+      <div class="field"><h4>iPhone での操作</h4><p>管理画面の Integrations → Cron（または SQL Editor で上のSQL）。Vault は Project Settings → Vault で合言葉を登録。</p></div>
+      <div class="field"><h4>実行前の確認</h4><ul><li>段階7がすべて成功</li><li>拡張機能 pg_cron・pg_net が有効（事前確認SQLの9番）</li></ul></div>
+      <div class="go"><h4>成功の条件</h4><ul class="chk">
+        <li><input type="checkbox" id="c8a"><label for="c8a">Cron の実行履歴が「成功」</label></li>
+        <li><input type="checkbox" id="c8b"><label for="c8b">期限を過ぎたテスト用アカウントだけが done になる。期限前の申請・ほかの会員は変わらない</label></li>
+        <li><input type="checkbox" id="c8c"><label for="c8c">本番確認SQLの27番（止まった処理がない）が OK</label></li>
+      </ul></div>
+      <div class="stop"><h4>失敗した場合</h4><p>Cron を停止（管理画面のスイッチ、または <code>select cron.unschedule('aimuse-account-purge');</code>）。完全削除の関数の合言葉を削除。</p></div>
+      <div class="field"><h4>次へ進んでよい条件</h4><p>3日以上、毎日の実行が成功していること。</p></div>
+    </article>
+
+    <!-- 段階9 -->
+    <article class="stage" id="s9">
+      <div class="stage-h"><span class="stage-no">9</span><div class="t"><h3>退会機能を一般公開</h3><span class="tags"><span class="pill p-acc">設定の変更</span></span></div></div>
+      <div class="field"><h4>実施する作業</h4><ol><li>Edge Function の <code>AIMUSE_DELETE_ALLOWED_USERS</code> を削除（全員が申請可能に）</li><li><code>config.js</code> の「退会」をオンにしてマージ</li></ol></div>
+      <div class="field"><h4>iPhone での操作</h4><p>Supabase の Secrets → GitHub で config.js を編集。</p></div>
+      <div class="field"><h4>実行前の確認</h4><ul><li>段階8が安定している</li><li>C4 が入っている</li><li>利用規約・プライバシーポリシーの退会の記載を運営者が最終確認</li></ul></div>
+      <div class="go"><h4>成功の条件</h4><ul class="chk">
+        <li><input type="checkbox" id="c9a"><label for="c9a">一般の会員の設定画面に退会の入口が出る</label></li>
+        <li><input type="checkbox" id="c9b"><label for="c9b">最初の一般の申請から30日後、本番確認SQLの27番を確認し、止まった処理がない</label></li>
+      </ul></div>
+      <div class="stop"><h4>失敗した場合</h4><p>config.js の「退会」をオフに戻し、許可リストを再設定。手続き中の会員には、取り消し・状況の確認は引き続き表示されます。</p></div>
+      <div class="field"><h4>次へ進んでよい条件</h4><p>ここで全段階の公開が完了です。</p></div>
+    </article>
+  </section>
+
+  <section id="recover">
+    <span class="eyebrow">復旧方法</span>
+    <h2>GitHub の Revert だけでは戻らないものの個別の戻し方</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>対象</th><th>止め方・戻し方</th><th>注意</th></tr></thead>
+      <tbody>
+        <tr><td>画面（Cloudflare）</td><td>Deployments で前の公開に Rollback、または GitHub で Revert</td><td>最も早いのは Rollback</td></tr>
+        <tr><td>SQL v1.6〜v1.10</td><td><code>supabase/rollback/</code> の元に戻す用SQLを、新しい版から順に実行</td><td>順番を間違えると何も変更せずに中止。追加した列・表・データは残す</td></tr>
+        <tr><td>SQL v1.9（退会あり）</td><td>手続き中の会員がいる間は中止される。先に取り消し（本人、または <code>admin_cancel_deletion.sql</code>）か、完了まで待つ</td><td>ファイル削除が始まった申請は取り消せない</td></tr>
+        <tr><td>保存場所 avatars の画像</td><td>v1.6 を戻しても画像は残る（公開のまま）。必要なら Storage 画面で個別に削除</td><td>削除は元に戻せない</td></tr>
+        <tr><td>Service Worker（PWA）</td><td><code>public/sw.js</code> を <code>release/sw_killswitch.js</code> の中身に置き換えて公開</td><td>Revert だけでは端末に残る。ログイン・テーマは消えない</td></tr>
+        <tr><td>Edge Function：退会申請</td><td>関数を削除、または許可リストを空にする</td><td>画面は「準備中」と表示</td></tr>
+        <tr><td>Edge Function：完全削除</td><td>合言葉 <code>AIMUSE_PURGE_SECRET</code> を削除（503 を返して何もしない）</td><td>処理中の申請は、10分後に次回の実行で続きから</td></tr>
+        <tr><td>Cron</td><td>管理画面で停止、または <code>select cron.unschedule('aimuse-account-purge');</code></td><td>止めても手続き中の会員は非公開・操作不可のまま</td></tr>
+        <tr><td>完了した完全削除</td><td>元に戻せない</td><td>実環境の検証はテスト用アカウントだけで行う</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section id="unverified">
+    <span class="eyebrow">未確認</span>
+    <h2>実機・本番でしか確認できないこと</h2>
+    <ul>
+      <li>SQL Editor が1回の実行を1つのまとまりとして扱うこと（途中失敗で全体が取り消されること）</li>
+      <li>新しい形式のキーでの Edge Functions の動作（C2 実装後に段階7で確認）</li>
+      <li>パスワード違いのときの Supabase の応答と、ほかの端末のログイン終了</li>
+      <li>管理画面から Edge Function を手動で実行できるか、2ファイル構成の関数を作れるか</li>
+      <li>iPhone のホーム画面のアプリでのログインのし直し、画面ロック中の再生、ノッチ部分の見え方</li>
+      <li>Android 実機でのインストールの表示</li>
+      <li>Supabase のプランでのバックアップの有無と保存期間</li>
+    </ul>
+  </section>
+
+  <section id="files">
+    <span class="eyebrow">ファイル</span>
+    <h2>この手順で使うファイル（手元のブランチ release-audit）</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>ファイル</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">supabase/release_preflight.sql</td><td>各段階の前後に実行する読み取り専用の確認（どの段階でも実行可）</td></tr>
+        <tr><td class="mono">supabase/migration_v1_6〜v1_10_*.sql</td><td>本番に入れるSQL（各段階で1本ずつ）</td></tr>
+        <tr><td class="mono">supabase/production_checks.sql</td><td>r8・28項目。v1.10 まで入れた後に実行</td></tr>
+        <tr><td class="mono">supabase/rollback/rollback_v1_6〜v1_10.sql</td><td>元に戻す用（緊急時のみ）</td></tr>
+        <tr><td class="mono">supabase/emergency/admin_cancel_deletion.sql</td><td>運営による退会の取り消し（緊急時のみ）</td></tr>
+        <tr><td class="mono">release/sw_killswitch.js</td><td>PWA の緊急停止用</td></tr>
+        <tr><td class="mono">supabase/functions/account-delete-request・account-purge</td><td>Edge Functions（C2・C3 の修正後に使用）</td></tr>
+      </tbody>
+    </table></div>
+    <p class="foot">第1〜6段階のバックアップ（aimuse-dev-backup-2026-10-17-stage6.bundle）は変更せずに維持しています。監査の追加分を含むバックアップは別ファイルにしました。</p>
+  </section>
+</div>
+
+<script>
+// チェックの状態はこの端末だけに保存（使えない環境でも表示はそのまま）
+(function(){
+  var KEY = "aimuse-release-plan-checks";
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { saved = {}; }
+  document.querySelectorAll('.chk input[type=checkbox]').forEach(function(box){
+    if (saved[box.id]) box.checked = true;
+    box.addEventListener('change', function(){
+      saved[box.id] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+})();
+</script>

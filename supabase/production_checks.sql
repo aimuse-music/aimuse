@@ -1,7 +1,8 @@
 -- =====================================================================
--- AIMUSE 本番環境チェック r8（読み取り専用。何も変更しません）
+-- AIMUSE 本番環境チェック r9（読み取り専用。何も変更しません）
 -- 構築SQL（v1.5）・v1.6〜v1.10 をすべて実行した後に、SQL Editor で実行してください。
--- 結果は28行。「結果」列がすべて OK なら正常です。
+-- 結果は29行。「結果」列がすべて OK なら正常です。
+-- r9：v1.9 r3 の退会の受付・完全削除のスイッチ（確認29）を追加
 -- r8：v1.9 r2（退会の申請をサーバーのパスワード照合経由に）の関数・確認28（レビューの投稿者名）を追加
 -- r7：v1.9（楽曲の削除・退会）の関数10個・確認25〜27を追加
 -- r6：v1.8（カラーテーマ）の関数1個・確認24を追加
@@ -205,6 +206,14 @@ checks(no, item, ok, detail) as (
     position('display_name' in pg_get_functiondef('public.track_reviews(uuid)'::regprocedure)) = 0
     and position('public_artist_of_user' in pg_get_functiondef('public.track_reviews(uuid)'::regprocedure)) > 0,
     null
+  union all
+  select 29, 'v1.9 r3：退会の受付・完全削除のスイッチが正しい値（公開前は「受付 off・完全削除 off」）',
+    coalesce((select value from aimuse_private.settings where key = 'account_deletion_mode'), '') in ('off', 'testers', 'all')
+    and coalesce((select value from aimuse_private.settings where key = 'account_purge_enabled'), '') in ('off', 'on')
+    and to_regclass('aimuse_private.deletion_testers') is not null,
+    '受付=' || coalesce((select value from aimuse_private.settings where key = 'account_deletion_mode'), '未設定')
+      || ' / 完全削除=' || coalesce((select value from aimuse_private.settings where key = 'account_purge_enabled'), '未設定')
+      || ' / 検証用の許可 ' || (select count(*) from aimuse_private.deletion_testers) || '人'
   union all
   select 15, '（参考）現在のデータ件数',
     true,

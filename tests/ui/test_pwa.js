@@ -4,16 +4,17 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const [PUB, DEV, OUT] = process.argv.slice(2);
 const R = []; const ok = (n, c, i) => { R.push([n, !!c]); console.log(`[${c ? 'PASS' : 'FAIL'}] ${n}${i !== undefined ? '  → ' + JSON.stringify(i) : ''}`); };
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
-let bump = null, down = false;   // down: サーバーに届かない状態（通信切れ）を再現   // 新しい版の公開を再現（BUILD / VERSION を書き換えて配信）
+let bump = null, down = false;
+const CUR = fs.readFileSync(path.join(PUB, 'sw.js'), 'utf8').match(/const VERSION = "([^"]+)"/)[1], NEXT = CUR + '-next';   // down: サーバーに届かない状態（通信切れ）を再現   // 新しい版の公開を再現（BUILD / VERSION を書き換えて配信）
 const served = [];
 const server = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x'); served.push(u.pathname);
   if (down) return req.socket.destroy();
-  if (u.pathname === '/config.js') { res.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'no-cache' }); return res.end('window.AIMUSE_CONFIG={supabaseUrl:"https://x.supabase.co",supabaseAnonKey:"k"};'); }
+  if (u.pathname === '/config.js') { res.writeHead(200, { 'Content-Type': 'text/javascript', 'Cache-Control': 'no-cache' }); return res.end('window.AIMUSE_CONFIG={supabaseUrl:"https://x.supabase.co",supabaseAnonKey:"k",features:{pwa:true}};'); }
   let f = path.join(PUB, u.pathname === '/' ? 'index.html' : u.pathname);
   if (!f.startsWith(PUB) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end('not found'); }
   let body = fs.readFileSync(f);
-  if (bump && (f.endsWith('index.html') || f.endsWith('sw.js'))) body = Buffer.from(body.toString().replace(/2026-10-17\.6/g, bump));
+  if (bump && (f.endsWith('index.html') || f.endsWith('sw.js'))) body = Buffer.from(body.toString().split(CUR).join(bump));
   res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-cache' }); res.end(body);
 });
 const pngSize = b => [b.readUInt32BE(16), b.readUInt32BE(20)];
@@ -70,7 +71,7 @@ const pngSize = b => [b.readUInt32BE(16), b.readUInt32BE(20)];
   // ---- 2. Service Worker：保存するもの・しないもの
   await p.evaluate(() => navigator.serviceWorker.ready); await p.reload(); await w(1500);
   const sw = await p.evaluate(async () => ({ controlled: !!navigator.serviceWorker.controller, keys: await caches.keys() }));
-  ok('2 Service Worker が有効（再読み込み後に画面を管理）', sw.controlled && sw.keys.length === 1 && sw.keys[0] === 'aimuse-shell-2026-10-17.6', sw);
+  ok('2 Service Worker が有効（再読み込み後に画面を管理）', sw.controlled && sw.keys.length === 1 && sw.keys[0] === 'aimuse-shell-' + CUR, sw);
   await p.locator('.row', { hasText: 'おぼろ月' }).first().click(); await w(800);
   await nav('マイページ'); await w(300); await p.fill('#a-email', 'hamu@test.jp'); await p.fill('#a-pw', 'password'); await p.locator('.form button.btn.primary').click(); await p.locator('text=ログアウト').waitFor(); await w(600);
   const cached = await p.evaluate(async () => { const out = []; for (const k of await caches.keys()) { const c = await caches.open(k); for (const r of await c.keys()) out.push(new URL(r.url).pathname); } return out.sort(); });
@@ -116,15 +117,15 @@ const pngSize = b => [b.readUInt32BE(16), b.readUInt32BE(20)];
 
   // ---- 6. 新しい版の公開 → 更新
   const before = await p.evaluate(async () => (await caches.keys()));
-  bump = '2026-10-17.7';
+  bump = NEXT;
   await p.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); await r.update(); });
   await w(2500);
   const after = await p.evaluate(async () => (await caches.keys()));
-  ok('6 新しい版の Service Worker に入れ替わり、古い保存は削除', before[0] === 'aimuse-shell-2026-10-17.6' && after.length === 1 && after[0] === 'aimuse-shell-2026-10-17.7', { before, after });
+  ok('6 新しい版の Service Worker に入れ替わり、古い保存は削除', before[0] === 'aimuse-shell-' + CUR && after.length === 1 && after[0] === 'aimuse-shell-' + NEXT, { before, after });
   await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' }); document.dispatchEvent(new Event('visibilitychange')); });
   await w(2500);
   const build = await p.evaluate(() => document.documentElement.outerHTML.match(/const BUILD = "([^"]+)"/)[1]);
-  ok('6 アプリに戻ったとき、再生中でなければ新しい版の画面に自動で切り替わる', build === '2026-10-17.7', build);
+  ok('6 アプリに戻ったとき、再生中でなければ新しい版の画面に自動で切り替わる', build === NEXT, build);
 
   // ---- 7. ノッチ・ホームインジケーター（端末の安全領域を再現）
   const inset = await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 47, bottom: 34, left: 0, right: 0 } }).then(() => true).catch(e => e.message);

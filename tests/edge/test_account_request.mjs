@@ -45,7 +45,9 @@ function env({ verifyDown = false } = {}) {
   };
   return { admin, verifyPassword, log };
 }
-const call = async (jwt, password, o) => { const e = env(o); const r = await handleDeletionRequest({ admin: e.admin, verifyPassword: e.verifyPassword, userJwt: jwt, password }); return { ...r, log: e.log }; };
+// このテストは受付スイッチ「全員」の状態で行う（スイッチ自体は test_new_keys.mjs と test_v19.py で確認）
+psql("update aimuse_private.settings set value='all' where key='account_deletion_mode'");
+const call = async (jwt, password, o) => { const e = env(o); const r = await handleDeletionRequest({ admin: e.admin, verifyPassword: e.verifyPassword, userJwt: jwt, password, mode: "all" }); return { ...r, log: e.log }; };
 const HAMU = USERS["jwt-hamu"].id, MIKE = USERS["jwt-mike"].id;
 const active = (u) => q(`select count(*) from aimuse_private.account_deletions where user_id='${u}' and status in ('pending','processing','failed')`);
 

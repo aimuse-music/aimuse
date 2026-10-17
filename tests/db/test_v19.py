@@ -4,7 +4,7 @@ Each call runs in its own committed transaction, so the scenario is stateful (li
 import subprocess, json, time, threading, sys
 DBN = sys.argv[1] if len(sys.argv) > 1 else "v19t"
 BASE = ["psql","-h","/home/pgtest/pg","-p","55432","-U","postgres","-X","-At","-q"]
-U = {"ryo":"11111111-1111-4111-8111-111111111111","hamu":"22222222-2222-4222-8222-222222222222","mike":"33333333-3333-4333-8333-333333333333","neko":"44444444-4444-4444-8444-444444444444"}
+U = {"ryo":"11111111-1111-4111-8111-111111111111","hamu":"22222222-2222-4222-8222-222222222222","mike":"33333333-3333-4333-8333-333333333333","neko":"44444444-4444-4444-8444-444444444444","tom":"66666666-6666-4666-8666-666666666666"}
 T = lambda n: f"aaaaaaaa-0000-4000-8000-00000000000{n}"
 def psql(db, s):
     p = subprocess.run(BASE+["-d",db], input=s, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -13,6 +13,10 @@ def setup():
     psql("postgres", f"drop database if exists {DBN};"); psql("postgres", f"create database {DBN} template v18;")
     for f in ["/home/claude/aimuse/supabase/migration_v1_9_delete.sql", "/home/pgtest/seed_v19.sql"]:
         o, e = psql(DBN, open(f, encoding="utf-8").read()); assert not e, e
+    global DEFAULTS
+    DEFAULTS = psql(DBN, "select string_agg(key||'='||value, ',' order by key) from aimuse_private.settings where key in ('account_deletion_mode','account_purge_enabled')")[0]
+    # 以降のテスト（A〜G）は、受付「全員」・完全削除「オン」の状態で行う（スイッチ自体は H で確認）
+    psql(DBN, "update aimuse_private.settings set value='all' where key='account_deletion_mode'; update aimuse_private.settings set value='on' where key='account_purge_enabled';")
 def run(who, sql, amr_age=60, method="password"):
     if who == "anon": role, c = "anon", {"role":"anon"}
     elif who == "service": role, c = "service_role", {"role":"service_role"}
@@ -284,5 +288,39 @@ o,e = run("neko", "select * from public.cancel_my_account_deletion()")
 ok("G5 運営の確認待ち（failed）の間も取り消せない", "取り消せません" in e, e[:60])
 o,e = run("service", f"select status from public.account_request_deletion('{NEKO}')")
 ok("G6 処理中・確認待ちの間に再申請しても、新しい申請は作られない", o=="failed" and sq(f"select count(*) from aimuse_private.account_deletions where user_id='{NEKO}' and status in ('pending','processing','failed')")=="1", o)
+
+# ===================== H. 受付・完全削除のスイッチと許可リスト（C3） =====================
+ok("H1 初期状態：退会の受付はオフ、完全削除もオフ", DEFAULTS == "account_deletion_mode=off,account_purge_enabled=off", DEFAULTS)
+TOM = "66666666-6666-4666-8666-666666666666"; TEST = "77777777-7777-4777-8777-777777777777"
+run("postgres", f"insert into auth.users (id,email,email_confirmed_at) values ('{TOM}','tom@example.com',now()),('{TEST}','tester@example.com',now())")
+run("postgres", "update aimuse_private.settings set value='off' where key='account_deletion_mode'")
+o,e = run("service", f"select status from public.account_request_deletion('{TOM}')")
+ok("H2 受付オフ：サーバー処理からでも申請できない", "DELETION_DISABLED" in e and sq(f"select count(*) from aimuse_private.account_deletions where user_id='{TOM}'")=="0", e[:60])
+run("postgres", "update aimuse_private.settings set value='testers' where key='account_deletion_mode'")
+o,e = run("service", f"select status from public.account_request_deletion('{TOM}')")
+ok("H3 テスト期間：許可リストにない会員は申請できない", "NOT_ALLOWED" in e and sq(f"select count(*) from aimuse_private.account_deletions where user_id='{TOM}'")=="0", e[:60])
+run("postgres", f"insert into aimuse_private.deletion_testers (user_id, note) values ('{TEST}', 'テスト用')")
+o,e = run("service", f"select status from public.account_request_deletion('{TEST}')")
+ok("H4 テスト期間：許可リストの会員だけ申請できる", o=="pending", (o,e[:60]))
+run("postgres", "update aimuse_private.settings set value='typo' where key='account_deletion_mode'")
+o,e = run("service", f"select status from public.account_request_deletion('{TOM}')")
+ok("H5 書き間違えた値はオフ扱い（誰も申請できない）", "DELETION_DISABLED" in e, e[:60])
+o,e = run("tom", "select count(*) from aimuse_private.settings")
+o2,e2 = run("tom", f"insert into aimuse_private.deletion_testers (user_id) values ('{TOM}')")
+o3,e3 = run("anon", "update aimuse_private.settings set value='all' where key='account_deletion_mode'")
+ok("H6 会員・未ログインはスイッチも許可リストも読めない・書けない", all("permission denied" in x for x in (e,e2,e3)), (e[:40],e2[:40],e3[:40]))
+# 完全削除のスイッチ
+run("postgres", f"update aimuse_private.account_deletions set purge_after=now()-interval '1 minute' where user_id='{TEST}' and status='pending'")
+run("postgres", "update aimuse_private.settings set value='off' where key='account_purge_enabled'")
+o,e = run("service", "select count(*) from public.account_purge_claim()")
+ok("H7 完全削除オフ：期限を過ぎた申請があっても何もしない", o=="0" and sq(f"select status from aimuse_private.account_deletions where user_id='{TEST}'")=="pending", o)
+run("postgres", "update aimuse_private.settings set value='on' where key='account_purge_enabled'")
+o,e = run("service", "select request_id||','||lock_token from public.account_purge_claim()")
+rq, tk = o.split(",")
+run("postgres", "update aimuse_private.settings set value='off' where key='account_purge_enabled'")
+o,e = run("service", f"select * from public.account_purge_pending_files('{rq}','{tk}')")
+ok("H8 処理の途中でオフにすると、次の手順に進まずに止まる（緊急停止）", "PURGE_DISABLED" in e and sq(f"select count(*) from auth.users where id='{TEST}'")=="1", e[:60])
+o,e = run("tom", "select count(*) from public.my_account_deletion()")
+ok("H9 本人の状況確認・取り消しはスイッチに関係なく使える（関数の権限は従来どおり）", not e, e[:60])
 
 f=[r for r in R if not r[1]]; print(f"\n合計 {len(R)} 件 / 不合格 {len(f)} 件"); [print("  FAIL:",x[0]) for x in f]

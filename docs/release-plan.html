@@ -84,7 +84,7 @@ html{scroll-behavior:smooth}
   <header class="head">
     <span class="eyebrow">AIMUSE 第1〜6段階 ・ 2026年10月17日</span>
     <h1>AIMUSE 公開手順書</h1>
-    <span class="status">監査完了 ・ 本番作業は未実施 ・ 運営者の承認待ち</span>
+    <span class="status">監査完了 ・ C1〜C3 とリピート修正は手元で実装・テスト済み ・ 本番作業は未実施 ・ 運営者の承認待ち</span>
     <p class="muted">本番の Supabase・GitHub・Cloudflare・Edge Functions・Cron・BOOST には、この監査では一切触れていません。下の手順は、承認をいただいた段階から1つずつ進めるための計画です。</p>
   </header>
 
@@ -97,12 +97,13 @@ html{scroll-behavior:smooth}
   <section id="verdict">
     <div class="box verdict">
       <span class="eyebrow">結論</span>
-      <h2>段階的に公開できる状態。ただし退会機能の前に3つの小さな修正が必要</h2>
+      <h2>段階的に公開できる状態。必要な修正（C1〜C3・リピート）は手元で実装・テスト済み</h2>
       <ul>
         <li><b>SQL（v1.6〜v1.10）</b>：本番に近いデータ（会員300人・曲1,190曲ほか）で、既存データを1件も変えずに適用でき、元に戻す用SQLで適用前と同じ状態に戻せることを確認しました <span class="pill p-ok">22/22 合格</span></li>
         <li><b>今の公開中の画面との両立</b>：SQL を先に入れても、今の画面（main）が使う機能は従来どおり動きます（v1.5 の権限テスト 63/63）。そのため「SQL を先に入れ、画面は後から」の順で進められます</li>
         <li><b>重要な発見</b>：本番は新しい形式のキー（<code>sb_publishable_…</code>）を使っています。Edge Functions は旧形式のキーを読む作りのため、退会機能を動かす前に対応が必要です（修正 C2）</li>
         <li><b>退会機能</b>は、テスト用アカウントだけが使える状態で実環境の検証を終えるまで、一般の利用者には表示しない計画です（修正 C1・C3）</li>
+        <li><b>1曲リピートの不具合</b>（曲の終わりで止まる）を公開前の必須修正として直しました。段階5の画面から含まれます</li>
       </ul>
     </div>
   </section>
@@ -174,15 +175,16 @@ html{scroll-behavior:smooth}
   </section>
 
   <section id="fix">
-    <span class="eyebrow">公開前に必要な修正 ・ 未実装（ご承認後に実装）</span>
-    <h2>退会機能の前に入れる3つの修正</h2>
+    <span class="eyebrow">公開前に必要な修正 ・ 手元で実装・テスト済み（本番には未適用）</span>
+    <h2>公開前の修正（ブランチ release-fixes）</h2>
     <div class="tbl"><table>
       <thead><tr><th>記号</th><th>内容</th><th>必要になる段階</th></tr></thead>
       <tbody>
-        <tr><td><b>C1</b></td><td>機能の切り替えスイッチ：<code>config.js</code> に「PWA」「退会」のオン・オフを追加。退会がオフの間は、設定画面に退会の入口を出しません（検証者だけ特別なURLで表示）。手続き中の表示と取り消しは常に有効</td><td>段階5</td></tr>
-        <tr><td><b>C2</b></td><td>Edge Functions を新しい形式のキーに対応：<code>SUPABASE_SECRET_KEYS</code> と <code>SUPABASE_PUBLISHABLE_KEYS</code> を読み、旧形式は予備として扱う。退会申請の関数は「Verify JWT」をオフにし、関数の中で本人確認（すでに実装済みの <code>getUser</code>）だけに頼る</td><td>段階7</td></tr>
-        <tr><td><b>C3</b></td><td>サーバー側の許可リスト：<code>AIMUSE_DELETE_ALLOWED_USERS</code> に書いた会員IDだけが退会を申請できるようにする。完全削除の処理にも停止スイッチ <code>AIMUSE_PURGE_ENABLED</code> を追加</td><td>段階7</td></tr>
-        <tr><td>C4（小）</td><td>完全削除のときにパスワード照合の失敗記録も消す／同時送信での回数上限を厳密にする</td><td>段階9までに</td></tr>
+        <tr><td><b>C1</b> <span class="pill p-ok">済</span></td><td>機能スイッチ：<code>config.js</code> の <code>features</code> で「PWA」「退会」を個別にオン・オフ（初期値はどちらもオフ。<code>true</code> 以外はオフ扱い）。退会がオフの間は入口を出さず、検証者は URL の末尾に <code>#account-delete-test</code> を付けて開いた端末だけ入口が見える。PWA をオフにすると端末の Service Worker も解除。手続き中の表示と取り消しは常に有効</td><td>段階5</td></tr>
+        <tr><td><b>C2</b> <span class="pill p-ok">済</span></td><td>新しい形式のキー対応：<code>SUPABASE_SECRET_KEYS</code>・<code>SUPABASE_PUBLISHABLE_KEYS</code> を読み、旧形式は予備。秘密キーは <code>apikey</code> ヘッダーだけで送る。ライブラリを使わず Supabase の公開 API を直接呼ぶ。「Verify JWT」はオフにし、関数の中でログイン情報を認証サーバーに確認＋パスワード照合。公開用キーだけの呼び出しは何もしない</td><td>段階7</td></tr>
+        <tr><td><b>C3</b> <span class="pill p-ok">済</span></td><td>受付スイッチと許可リストを<b>2か所</b>に：関数の設定（<code>AIMUSE_DELETE_MODE</code>・<code>AIMUSE_DELETE_TESTERS</code>）とデータベース（<code>account_deletion_mode</code>・<code>deletion_testers</code>）。両方が許可したときだけ申請できる。初期値は off（誰も申請できない）。完全削除も2か所のスイッチ（<code>AIMUSE_PURGE_ENABLED</code>・<code>account_purge_enabled</code>）で、途中でオフにすると次の手順で止まる</td><td>段階7</td></tr>
+        <tr><td><b>R1</b> <span class="pill p-ok">済</span></td><td>1曲リピートで曲の終わりに止まる不具合：曲の終わりで「再生中」の状態が変わらず、再生の指示が出ていなかった。同じ曲を直接再生し直し、1曲リピートでは端末の繰り返し機能も使う。シャッフルは全曲を1回ずつ、ロック画面などからの一時停止も表示に反映</td><td>段階5</td></tr>
+        <tr><td>C4（小）</td><td>完全削除のときにパスワード照合の失敗記録も消す／同時送信での回数上限を厳密にする</td><td>段階9までに（未実装）</td></tr>
       </tbody>
     </table></div>
   </section>
@@ -219,7 +221,7 @@ html{scroll-behavior:smooth}
       <div class="field"><h4>実施する作業</h4><ul>
         <li>Cloudflare のプレビュー公開が止まっていることを、運営者が確認する</li>
         <li>ご承認後、開発ブランチを GitHub に push する（main には反映しない）</li>
-        <li>本番の SQL Editor で、読み取り専用の <code>release_preflight.sql</code> を実行し、結果を保存する</li>
+        <li>本番の SQL Editor で、読み取り専用の <code>stage0_inventory_readonly.sql</code>（構造・関数・権限・RLS・BOOST の確認）と <code>release_preflight.sql</code> を実行し、結果を保存する</li>
         <li>テスト用アカウントを2つ用意する（投稿者役・リスナー役。退会の検証で削除しても困らないもの）</li>
         <li>Supabase のプランで、バックアップが取られているかを確認する</li>
       </ul></div>
@@ -227,6 +229,7 @@ html{scroll-behavior:smooth}
       <div class="field"><h4>実行前の確認</h4><ul><li>第1〜6段階のバックアップファイルが手元に残っていること</li><li>今の本番サイトが正常に動いていること</li></ul></div>
       <div class="go"><h4>成功の条件</h4><ul class="chk">
         <li><input type="checkbox" id="c0a"><label for="c0a">事前確認の「結果」がすべて OK（3番は「なし（未適用）」）</label></li>
+        <li><input type="checkbox" id="c0d"><label for="c0d">構造の確認（stage0_inventory_readonly.sql）の判定がすべて「一致」「OK」「参考」</label></li>
         <li><input type="checkbox" id="c0b"><label for="c0b">件数（20〜24番）を保存した</label></li>
         <li><input type="checkbox" id="c0c"><label for="c0c">テスト用アカウント2つでログインできる</label></li>
       </ul></div>
@@ -309,17 +312,19 @@ html{scroll-behavior:smooth}
       <div class="stage-h"><span class="stage-no">5</span><div class="t"><h3>SQL v1.9・v1.10 と画面：曲の削除（退会・PWA はオフ）</h3><span class="tags"><span class="pill p-warn">データベースの変更</span> <span class="pill p-acc">画面の公開</span></span></div></div>
       <div class="field"><h4>実施する作業</h4><ol>
         <li><code>migration_v1_9_delete.sql</code> → <code>migration_v1_10_review_names.sql</code> を実行</li>
-        <li>ここで初めて <code>production_checks.sql</code>（r8）を実行し、28行すべて OK を確認</li>
-        <li>修正 C1 を入れた最終版の画面を、<code>config.js</code> の「PWA：オフ・退会：オフ」でマージ</li>
+        <li>ここで初めて <code>production_checks.sql</code>（r9）を実行し、29行すべて OK を確認</li>
+        <li>ブランチ <code>release-fixes</code> の画面をマージ（<code>config.js</code> は初期値の「PWA：オフ・退会：オフ」のまま）</li>
       </ol><p class="note">Edge Functions はまだ作りません。退会の入口は表示されず、仮に開けても「準備中」と表示されます。</p></div>
       <div class="field"><h4>iPhone での操作</h4><p>SQL Editor（3本）→ GitHub → Cloudflare。</p></div>
-      <div class="field"><h4>実行前の確認</h4><ul><li>段階4が安定している</li><li>C1 がご承認・実装済みで、手元のテストに合格している</li></ul></div>
+      <div class="field"><h4>実行前の確認</h4><ul><li>段階4が安定している</li><li>release-fixes の公開をご承認いただいている</li></ul></div>
       <div class="go"><h4>成功の条件</h4><ul class="chk">
-        <li><input type="checkbox" id="c5a"><label for="c5a">本番確認SQLが28行すべて OK、件数が同じ</label></li>
+        <li><input type="checkbox" id="c5a"><label for="c5a">本番確認SQLが29行すべて OK、件数が同じ</label></li>
         <li><input type="checkbox" id="c5b"><label for="c5b">テスト用アカウントで、公開中・審査待ちの曲を削除 → 一覧・検索からすぐ消える</label></li>
         <li><input type="checkbox" id="c5c"><label for="c5c">管理者画面で、削除した曲を30日以内に復元できる（非公開で戻る）</label></li>
         <li><input type="checkbox" id="c5d"><label for="c5d">設定画面に退会の入口が出ない／ホーム画面に追加の案内が出ない</label></li>
         <li><input type="checkbox" id="c5e"><label for="c5e">標準テーマのボタンの文字が読みやすくなっている</label></li>
+        <li><input type="checkbox" id="c5f"><label for="c5f">1曲リピートで、曲の終わりに止まらず繰り返す（全曲リピート・シャッフルも確認）</label></li>
+        <li><input type="checkbox" id="c5g"><label for="c5g">本番確認SQLの29番が「受付=off / 完全削除=off」</label></li>
       </ul></div>
       <div class="stop"><h4>失敗した場合</h4><p>画面を Rollback（段階4の画面に戻る）。データベースは <code>rollback_v1_10.sql</code> → <code>rollback_v1_9.sql</code>。曲の削除記録は残り、運営による復元はそのまま使えます。</p></div>
       <div class="field"><h4>次へ進んでよい条件</h4><p>2〜3日、問題がないこと。</p></div>
@@ -346,8 +351,9 @@ html{scroll-behavior:smooth}
     <article class="stage" id="s7">
       <div class="stage-h"><span class="stage-no">7</span><div class="t"><h3>退会の実環境検証（テスト用アカウントだけ）</h3><span class="tags"><span class="pill p-bad">一般には非公開</span></span></div></div>
       <div class="field"><h4>実施する作業</h4><ol>
-        <li>Edge Function「account-delete-request」を作成（Verify JWT はオフ、関数内で本人確認）。<code>AIMUSE_DELETE_ALLOWED_USERS</code> にテスト用アカウントの会員IDだけを登録</li>
-        <li>Edge Function「account-purge」を作成（合言葉 <code>AIMUSE_PURGE_SECRET</code> を登録。Cron はまだ作らない）</li>
+        <li>Edge Function「account-delete-request」を作成（Verify JWT はオフ）。Secrets：<code>AIMUSE_DELETE_MODE=testers</code>、<code>AIMUSE_DELETE_TESTERS</code>＝テスト用アカウントの会員IDだけ</li>
+        <li>データベース：テスト用アカウントを <code>deletion_testers</code> に登録し、<code>account_deletion_mode</code> を <code>testers</code> に（下のSQL）</li>
+        <li>Edge Function「account-purge」を作成（合言葉 <code>AIMUSE_PURGE_SECRET</code>、手動実行のときだけ <code>AIMUSE_PURGE_ENABLED=true</code> と <code>account_purge_enabled=on</code>。Cron はまだ作らない）</li>
         <li>テスト用アカウントで、検証者用のURLから退会画面を開き、下の項目を確認</li>
         <li>確認用のSQLで、テスト用アカウントの申請だけ期限を今にして、account-purge を1回だけ手動で実行</li>
       </ol>
@@ -358,6 +364,15 @@ select id, email from auth.users where email = 'テスト用のメールアド�
 select status, requested_at, purge_after, attempts, last_error,
        files_done_at, db_done_at, finished_at
 from aimuse_private.account_deletions order by requested_at desc limit 20;
+
+-- テスト用アカウントだけ申請できるようにする（承認後のみ）
+insert into aimuse_private.deletion_testers (user_id, note)
+select id, 'テスト用' from auth.users where email = 'テスト用のメールアドレス';
+update aimuse_private.settings set value = 'testers' where key = 'account_deletion_mode';
+
+-- すぐに止める（受付・完全削除とも）
+update aimuse_private.settings set value = 'off'
+where key in ('account_deletion_mode', 'account_purge_enabled');
 
 -- テスト用アカウントだけ、削除の開始を今にする（承認後のみ）
 update aimuse_private.account_deletions set purge_after = now()
@@ -370,12 +385,13 @@ where status = 'pending'
         <li><input type="checkbox" id="c7b"><label for="c7b">正しいパスワードで申請できる。ほかの端末のログインが終了する</label></li>
         <li><input type="checkbox" id="c7c"><label for="c7c">申請中は公開画面から曲・アーティストが消え、投稿・お気に入り・フォローができない（別のブラウザで再ログインしても同じ）</label></li>
         <li><input type="checkbox" id="c7d"><label for="c7d">取り消すと元の公開状態に戻る。再申請できる</label></li>
-        <li><input type="checkbox" id="c7e"><label for="c7e">許可リストにない会員（リスナー役）は申請できない</label></li>
+        <li><input type="checkbox" id="c7e"><label for="c7e">許可リストにない会員（リスナー役）は申請できない（関数とデータベースの両方で拒否）</label></li>
         <li><input type="checkbox" id="c7f"><label for="c7f">手動実行のあと：状況が done、Storage にテスト用アカウントのファイルが無い、Authentication の一覧からテスト用アカウントが消えている</label></li>
         <li><input type="checkbox" id="c7g"><label for="c7g">ほかの会員の曲・ファイル・フォロワー数に影響がない</label></li>
       </ul></div>
       <div class="stop"><h4>失敗した場合</h4><ul>
-        <li>申請の関数を削除（画面には「準備中」と出るだけ）</li>
+        <li>受付・完全削除のスイッチを off（上のSQL）。画面には「準備中」と出るだけ</li>
+        <li>申請の関数を削除</li>
         <li>完全削除の関数は合言葉を削除すると止まる</li>
         <li>テスト用アカウントの申請を運営が取り消す：<code>emergency/admin_cancel_deletion.sql</code>（ファイルの削除が始まる前まで）</li>
         <li>途中で止まった：状況のSQLで last_error を確認して報告</li>
@@ -409,14 +425,14 @@ select cron.schedule('aimuse-account-purge', '17 18 * * *', $$
     <!-- 段階9 -->
     <article class="stage" id="s9">
       <div class="stage-h"><span class="stage-no">9</span><div class="t"><h3>退会機能を一般公開</h3><span class="tags"><span class="pill p-acc">設定の変更</span></span></div></div>
-      <div class="field"><h4>実施する作業</h4><ol><li>Edge Function の <code>AIMUSE_DELETE_ALLOWED_USERS</code> を削除（全員が申請可能に）</li><li><code>config.js</code> の「退会」をオンにしてマージ</li></ol></div>
+      <div class="field"><h4>実施する作業</h4><ol><li>関数の <code>AIMUSE_DELETE_MODE</code> とデータベースの <code>account_deletion_mode</code> を <code>all</code> に</li><li><code>config.js</code> の「退会」をオンにしてマージ</li></ol></div>
       <div class="field"><h4>iPhone での操作</h4><p>Supabase の Secrets → GitHub で config.js を編集。</p></div>
       <div class="field"><h4>実行前の確認</h4><ul><li>段階8が安定している</li><li>C4 が入っている</li><li>利用規約・プライバシーポリシーの退会の記載を運営者が最終確認</li></ul></div>
       <div class="go"><h4>成功の条件</h4><ul class="chk">
         <li><input type="checkbox" id="c9a"><label for="c9a">一般の会員の設定画面に退会の入口が出る</label></li>
         <li><input type="checkbox" id="c9b"><label for="c9b">最初の一般の申請から30日後、本番確認SQLの27番を確認し、止まった処理がない</label></li>
       </ul></div>
-      <div class="stop"><h4>失敗した場合</h4><p>config.js の「退会」をオフに戻し、許可リストを再設定。手続き中の会員には、取り消し・状況の確認は引き続き表示されます。</p></div>
+      <div class="stop"><h4>失敗した場合</h4><p>受付のスイッチを off、config.js の「退会」をオフに戻す。手続き中の会員には、取り消し・状況の確認は引き続き表示されます。</p></div>
       <div class="field"><h4>次へ進んでよい条件</h4><p>ここで全段階の公開が完了です。</p></div>
     </article>
   </section>
@@ -431,9 +447,9 @@ select cron.schedule('aimuse-account-purge', '17 18 * * *', $$
         <tr><td>SQL v1.6〜v1.10</td><td><code>supabase/rollback/</code> の元に戻す用SQLを、新しい版から順に実行</td><td>順番を間違えると何も変更せずに中止。追加した列・表・データは残す</td></tr>
         <tr><td>SQL v1.9（退会あり）</td><td>手続き中の会員がいる間は中止される。先に取り消し（本人、または <code>admin_cancel_deletion.sql</code>）か、完了まで待つ</td><td>ファイル削除が始まった申請は取り消せない</td></tr>
         <tr><td>保存場所 avatars の画像</td><td>v1.6 を戻しても画像は残る（公開のまま）。必要なら Storage 画面で個別に削除</td><td>削除は元に戻せない</td></tr>
-        <tr><td>Service Worker（PWA）</td><td><code>public/sw.js</code> を <code>release/sw_killswitch.js</code> の中身に置き換えて公開</td><td>Revert だけでは端末に残る。ログイン・テーマは消えない</td></tr>
-        <tr><td>Edge Function：退会申請</td><td>関数を削除、または許可リストを空にする</td><td>画面は「準備中」と表示</td></tr>
-        <tr><td>Edge Function：完全削除</td><td>合言葉 <code>AIMUSE_PURGE_SECRET</code> を削除（503 を返して何もしない）</td><td>処理中の申請は、10分後に次回の実行で続きから</td></tr>
+        <tr><td>Service Worker（PWA）</td><td><code>config.js</code> の pwa を false に戻す（端末の Service Worker も解除）。または <code>public/sw.js</code> を <code>release/sw_killswitch.js</code> の中身に置き換えて公開</td><td>Revert だけでは端末に残る。ログイン・テーマは消えない</td></tr>
+        <tr><td>退会の受付</td><td>データベースの <code>account_deletion_mode</code> を off（最も早い）、関数の <code>AIMUSE_DELETE_MODE</code> を off、または関数を削除</td><td>画面は「準備中」と表示。手続き中の方の取り消しは使える</td></tr>
+        <tr><td>完全削除</td><td>データベースの <code>account_purge_enabled</code> を off（処理の途中でも次の手順で止まる）、関数の <code>AIMUSE_PURGE_ENABLED</code> を外す、合言葉を削除</td><td>止めても手続き中の会員は非公開・操作不可のまま</td></tr>
         <tr><td>Cron</td><td>管理画面で停止、または <code>select cron.unschedule('aimuse-account-purge');</code></td><td>止めても手続き中の会員は非公開・操作不可のまま</td></tr>
         <tr><td>完了した完全削除</td><td>元に戻せない</td><td>実環境の検証はテスト用アカウントだけで行う</td></tr>
       </tbody>
@@ -456,17 +472,18 @@ select cron.schedule('aimuse-account-purge', '17 18 * * *', $$
 
   <section id="files">
     <span class="eyebrow">ファイル</span>
-    <h2>この手順で使うファイル（手元のブランチ release-audit）</h2>
+    <h2>この手順で使うファイル（手元のブランチ release-fixes）</h2>
     <div class="tbl"><table>
       <thead><tr><th>ファイル</th><th>用途</th></tr></thead>
       <tbody>
+        <tr><td class="mono">supabase/stage0_inventory_readonly.sql</td><td>段階0：本番の構造・関数・権限・RLS・BOOST を構築SQLと比べる（読み取り専用・1つの SELECT 文）</td></tr>
         <tr><td class="mono">supabase/release_preflight.sql</td><td>各段階の前後に実行する読み取り専用の確認（どの段階でも実行可）</td></tr>
         <tr><td class="mono">supabase/migration_v1_6〜v1_10_*.sql</td><td>本番に入れるSQL（各段階で1本ずつ）</td></tr>
-        <tr><td class="mono">supabase/production_checks.sql</td><td>r8・28項目。v1.10 まで入れた後に実行</td></tr>
+        <tr><td class="mono">supabase/production_checks.sql</td><td>r9・29項目。v1.10 まで入れた後に実行</td></tr>
         <tr><td class="mono">supabase/rollback/rollback_v1_6〜v1_10.sql</td><td>元に戻す用（緊急時のみ）</td></tr>
         <tr><td class="mono">supabase/emergency/admin_cancel_deletion.sql</td><td>運営による退会の取り消し（緊急時のみ）</td></tr>
         <tr><td class="mono">release/sw_killswitch.js</td><td>PWA の緊急停止用</td></tr>
-        <tr><td class="mono">supabase/functions/account-delete-request・account-purge</td><td>Edge Functions（C2・C3 の修正後に使用）</td></tr>
+        <tr><td class="mono">supabase/functions/account-delete-request・account-purge</td><td>Edge Functions（新しい形式のキー対応済み。各3ファイル）</td></tr>
       </tbody>
     </table></div>
     <p class="foot">第1〜6段階のバックアップ（aimuse-dev-backup-2026-10-17-stage6.bundle）は変更せずに維持しています。監査の追加分を含むバックアップは別ファイルにしました。</p>

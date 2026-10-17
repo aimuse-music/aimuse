@@ -1,13 +1,10 @@
 <!doctype html><html><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="description" content="AIで制作された楽曲だけを集めた音楽配信サービス"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><title>AIMUSE</title>
 <meta name="theme-color" content="#0b0912">
-<link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <meta name="application-name" content="AIMUSE">
 <meta name="apple-mobile-web-app-title" content="AIMUSE">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head><body>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -563,7 +560,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-17.6";
+const BUILD = "2026-10-17.7";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -577,11 +574,32 @@ async function newerBuildAvailable(){
   }catch(e){ return false; }
 }
 
-// ホーム画面のアプリ（PWA）用の Service Worker を登録（https・localhost のときだけ）
+// ---------- 機能スイッチ（config.js の features。true のときだけオン。書き間違い・未設定はすべてオフ） ----------
+//   pwa             … ホーム画面に追加（manifest・Service Worker）
+//   accountDeletion … 退会の申請画面（オフでも、手続き中の方の状況表示と取り消しは常に使える）
+//   ※ 画面のスイッチは表示を変えるだけ。退会の可否はサーバー（Edge Function とデータベース）でも判定する
+const FEATURES = (()=>{ const f=((window.AIMUSE_CONFIG||{}).features)||{}; return { pwa: f.pwa===true, accountDeletion: f.accountDeletion===true }; })();
+// 検証者用：URL の末尾に #account-delete-test を付けて開いたときだけ、この端末で退会画面の入口を表示（申請できるかはサーバーが判定）
+const deleteTestEntry = (()=>{ try{ if(location.hash==="#account-delete-test"){ sessionStorage.setItem("aimuse.deleteTest","1"); history.replaceState(null,"",location.pathname+location.search); } return sessionStorage.getItem("aimuse.deleteTest")==="1"; }catch(e){ return false; } })();
+const showAccountDeletion = FEATURES.accountDeletion || deleteTestEntry;
+
+// ホーム画面のアプリ（PWA）：オンのときだけ manifest を読み込み、Service Worker を登録（https・localhost のときだけ）
 //   保存するのはオフライン時の案内ページとアイコンだけ。画面・音源・会員情報は保存しない（sw.js を参照）
-const swUpdate = () => { try{ navigator.serviceWorker && navigator.serviceWorker.getRegistration().then(r=>r&&r.update()).catch(()=>{}); }catch(e){} };
+//   オフにしたときは、以前に登録された Service Worker と保存を消す（緊急停止を兼ねる。ログイン・テーマは消さない）
+const swUpdate = () => { if(!FEATURES.pwa) return; try{ navigator.serviceWorker && navigator.serviceWorker.getRegistration().then(r=>r&&r.update()).catch(()=>{}); }catch(e){} };
+if(FEATURES.pwa){
+  const add = (tag,attrs) => { const el=document.createElement(tag); Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v)); document.head.appendChild(el); };
+  add("link",{rel:"manifest",href:"/manifest.webmanifest"});
+  add("meta",{name:"apple-mobile-web-app-capable",content:"yes"});
+  add("meta",{name:"mobile-web-app-capable",content:"yes"});
+}
 if("serviceWorker" in navigator && (location.protocol==="https:"||location.hostname==="localhost")){
-  window.addEventListener("load",()=>{ navigator.serviceWorker.register("/sw.js",{updateViaCache:"none"}).catch(()=>{}); });
+  if(FEATURES.pwa){
+    window.addEventListener("load",()=>{ navigator.serviceWorker.register("/sw.js",{updateViaCache:"none"}).catch(()=>{}); });
+  } else {
+    navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{});
+    try{ caches.keys().then(ks=>ks.filter(k=>k.startsWith("aimuse-")).forEach(k=>caches.delete(k))).catch(()=>{}); }catch(e){}
+  }
 }
 
 // 旧版で端末内（全員共通）に保存していたお気に入り・フォローは使わないので削除する
@@ -2012,7 +2030,7 @@ function SettingsPage({ctx}){
         ${dirty && html`<button className="link" onClick=${()=>setDraft(activeTheme)}>変更を取り消す</button>`}
       </div>
     </section>
-    ${user && html`<section className="sec">
+    ${user && showAccountDeletion && html`<section className="sec">
       <div className="sec-h"><div><span className="en">ACCOUNT</span><h2>アカウント</h2></div></div>
       <p className="hint">退会を申請すると、30日間の取り消し期間のあとにアカウントと投稿したデータを削除します。</p>
       <button className="btn danger" style=${{marginTop:10}} onClick=${ctx.openAccountDelete}>アカウントを削除（退会）</button>
@@ -2047,6 +2065,7 @@ const accountApi = {
     throw new Error(code==="WRONG_PASSWORD" ? "パスワードが正しくありません"
       : code==="TOO_MANY_ATTEMPTS" ? "パスワードの確認に続けて失敗したため、1時間ほど時間をおいてからお試しください"
       : code==="ADMIN_ACCOUNT" ? "管理者アカウントは退会できません"
+      : (code==="DELETION_DISABLED"||code==="NOT_ALLOWED") ? "アカウントの削除（退会）は、現在準備中です"
       : code==="LOGIN_REQUIRED" ? "ログインし直してから、もう一度お試しください"
       : (status===404||code==="NOT_CONFIGURED") ? "現在、退会の申請を受け付けられません（準備中）。時間をおいてお試しください"
       : "申請できませんでした。通信状態を確認して、もう一度お試しください");
@@ -2134,6 +2153,7 @@ function AccountDeletePage({ctx}){
   const head = html`<header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>アカウントの削除</h1></header>`;
   if(!user) return html`<div className="screen">${head}<div className="demo-note"><${Icon} n="info" size=${18}/><span>アカウントを削除するには、ログインしてください。</span></div></div>`;
   if(profile&&profile.deletion) return html`<div className="screen">${head}<${DeletionStatus} ctx=${ctx}/></div>`;
+  if(!showAccountDeletion) return html`<div className="screen">${head}<div className="demo-note"><${Icon} n="info" size=${18}/><span>アカウントの削除（退会）は、現在準備中です。お急ぎの場合はお問い合わせ窓口へご連絡ください。</span></div></div>`;
   const submit = async () => {
     setBusy(true); setErr("");
     try{
@@ -2579,6 +2599,8 @@ function App(){
   // （ログイン・ログアウト時と、アプリの画面に戻ってきたときに確認）
   const playingRef = useRef(false);
   playingRef.current = playing;
+  const currentIdRef = useRef(null);
+  currentIdRef.current = currentId;
   const firstUid = useRef(true);
   const reloadIfNewer = () => { if(playingRef.current) return; newerBuildAvailable().then(n=>{ if(n && !playingRef.current) location.reload(); }); };
   useEffect(()=>{ if(firstUid.current){ firstUid.current=false; return; } reloadIfNewer(); },[uid]);
@@ -2721,22 +2743,55 @@ function App(){
   const toggle = () => { if(!current) return; if(!current.audioUrl){ say(NO_AUDIO); return; } setPlaying(p=>!p); };
   const seek = v => { setPos(v); if(current?.audioUrl&&audioRef.current) audioRef.current.currentTime=v; };
   const songById = id => allSongs.find(s=>s.id===id);
+  // 同じ曲を最初から再生し直す（1曲リピート・1曲だけの全曲リピート）
+  //   以前は「再生中」の状態が変わらないため再生の指示が出ず、曲の終わりで止まっていた。ここで直接再生する
+  const replayCurrent = () => {
+    const a = audioRef.current; setPos(0);
+    if(!a || !current || !current.audioUrl){ setPlaying(false); return; }
+    try{ a.currentTime = 0; }catch(e){}
+    const pr = a.play(); if(pr && pr.catch) pr.catch(()=>{ setPlaying(false); say("再生を開始できませんでした"); });
+    setPlaying(true);
+  };
+  // シャッフルの再生順：今の曲を先頭に、残りを並べ替えた順番。全曲を1回ずつ再生する
+  const shuffleRef = useRef({key:"", order:[]});
+  const shuffleOrder = (fresh=false) => {
+    const key = queue.join(",");
+    if(fresh || shuffleRef.current.key!==key || !shuffleRef.current.order.includes(currentId)){
+      const rest = queue.filter(id=>id!==currentId);
+      for(let k=rest.length-1;k>0;k--){ const r=Math.floor(Math.random()*(k+1)); [rest[k],rest[r]]=[rest[r],rest[k]]; }
+      shuffleRef.current = {key, order: queue.includes(currentId) ? [currentId,...rest] : rest};
+    }
+    return shuffleRef.current.order;
+  };
+  useEffect(()=>{ if(shuffle) shuffleOrder(true); },[shuffle]);
   const next = (auto=false) => {
-    if(!queue.length||!current) return;
-    if(auto && repeat==="one"){ seek(0); setPlaying(true); return; }
-    const i = queue.indexOf(currentId);
-    let ni;
-    if(shuffle && queue.length>1){ do{ ni=Math.floor(Math.random()*queue.length) }while(ni===i); }
-    else ni = i+1;
-    if(ni>=queue.length){ if(repeat==="all"||!auto) ni=0; else { setPlaying(false); seek(0); return; } }
-    const s = songById(queue[ni]); if(s) startSong(s);
+    if(!current) return;
+    if(auto && repeat==="one"){ replayCurrent(); return; }
+    if(!queue.length){ if(auto){ setPlaying(false); seek(0); } return; }
+    const order = shuffle && queue.length>1 ? shuffleOrder() : queue;
+    const i = order.indexOf(currentId);
+    let ni = i+1;
+    if(ni>=order.length){
+      if(repeat==="all"||!auto){
+        ni = 0;
+        // シャッフルの全曲リピート：一巡したら並べ直す（同じ曲が続かないように）
+        if(shuffle && queue.length>1){ const o=shuffleOrder(true).filter(id=>id!==currentId); shuffleRef.current.order=[currentId,...o]; ni=1; }
+      } else { setPlaying(false); seek(0); return; }   // リピートなし：最後の曲で止まる
+    }
+    const id = (shuffle && queue.length>1 ? shuffleRef.current.order : order)[ni];
+    if(id===currentId){ replayCurrent(); return; }       // 1曲だけの全曲リピートなど
+    const s = songById(id); if(s) startSong(s); else if(auto){ setPlaying(false); }
   };
   nextRef.current = next;
   const prev = () => {
     if(pos>3||!queue.length){ seek(0); return; }
-    const i = queue.indexOf(currentId);
-    const s = songById(queue[(i-1+queue.length)%queue.length]); if(s) startSong(s);
+    const order = shuffle && queue.length>1 ? shuffleOrder() : queue;
+    const i = order.indexOf(currentId);
+    const id = order[(i-1+order.length)%order.length];
+    if(id===currentId){ seek(0); return; }
+    const s = songById(id); if(s) startSong(s);
   };
+  useEffect(()=>{ if(audioRef.current) audioRef.current.loop = (repeat==="one"); },[repeat,currentId]);
   const cycleRepeat = () => setRepeat(r=>{const n=r==="off"?"all":r==="all"?"one":"off"; say({off:"リピート：オフ",all:"リピート：全曲",one:"リピート：1曲"}[n]); return n;});
 
   // 再生数：音源のある曲を再生し始めたときに1回数える
@@ -2846,6 +2901,8 @@ function App(){
     ${current && playerOpen && html`<${FullPlayer} ctx=${ctx}/>`}
     ${toast && html`<div className="toast" role="status">${toast}</div>`}
     <audio ref=${audioRef} preload="auto" playsInline onTimeUpdate=${e=>setPos(e.target.currentTime)} onEnded=${()=>nextRef.current(true)}
+      onPlay=${()=>{ if(!playingRef.current) setPlaying(true); }}
+      onPause=${e=>{ const a=e.target; setTimeout(()=>{ if(a.paused && !a.ended && playingRef.current && a.dataset.tid===currentIdRef.current) setPlaying(false); },0); }}
       onError=${e=>{ const a=e.target; if(current&&current.audioUrl&&a.dataset.tid===current.id&&a.dataset.src!==current.audioUrl){ const t=a.currentTime; a.src=current.audioUrl; a.dataset.src=current.audioUrl; a.addEventListener("loadedmetadata",()=>{ try{ a.currentTime=t; }catch(_){} if(playing) a.play().catch(()=>{}); },{once:true}); } }}
       onLoadedMetadata=${e=>{const d=Math.round(e.target.duration); const t=current&&tracks.find(x=>x.id===current.id); if(t&&isFinite(d)&&d>0&&!t.duration) repo.setDuration(t.id,d,!!(user&&(t.userId===user.id||isAdmin))).catch(()=>{});}}></audio>
   </div>`;

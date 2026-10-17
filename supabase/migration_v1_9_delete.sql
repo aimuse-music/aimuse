@@ -1,5 +1,7 @@
 -- =====================================================================
--- AIMUSE v1.9 r2 楽曲の削除（投稿者本人）とアカウントの退会（30日間の取り消し期間つき）
+-- AIMUSE v1.9 r3 楽曲の削除（投稿者本人）とアカウントの退会（30日間の取り消し期間つき）
+-- r3：退会の受付と完全削除に「データベース側のスイッチ」と「テスト用アカウントの許可リスト」を追加。
+--     初期状態は「誰も申請できない・完全削除は動かない」。運営者が SQL で切り替えるまで何も起きません
 -- r2：退会の申請は、サーバー側の処理（Edge Function「account-delete-request」）がパスワードを
 --     Supabase の正式なログイン機能で照合してから行う方式に変更（ログイン時刻だけに頼らない）
 -- Supabase の SQL Editor に全文を貼り付けて、1回実行してください。
@@ -145,6 +147,26 @@ as $$
   where r.track_id = tid and t.status = 'public' and not coalesce(p.is_banned, false)
     and not aimuse_private.is_withdrawing(r.user_id);
 $$;
+
+-- 退会の受付・完全削除のスイッチ（初期値はどちらもオフ。すでにある値は変更しない）
+--   account_deletion_mode：off＝誰も申請できない / testers＝許可リストの会員だけ / all＝全員
+--   account_purge_enabled：off＝完全削除は動かない / on＝動く
+insert into aimuse_private.settings (key, value) values ('account_deletion_mode', 'off'), ('account_purge_enabled', 'off')
+on conflict (key) do nothing;
+
+-- 退会の検証に使うテスト用アカウントの許可リスト（運営者が SQL Editor で登録。アプリからは見えない）
+create table if not exists aimuse_private.deletion_testers (
+  user_id uuid primary key,
+  note text check (note is null or char_length(note) <= 100),
+  added_at timestamptz not null default now()
+);
+alter table aimuse_private.deletion_testers enable row level security;
+revoke all on aimuse_private.deletion_testers from public;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on aimuse_private.deletion_testers from anon, authenticated';
+  end if;
+end $$;
 
 -- 本人確認（パスワード照合）の失敗記録：1人1時間に5回まで（総当たりの防止）
 create table if not exists aimuse_private.reauth_failures (
@@ -316,6 +338,16 @@ begin
   if exists (select 1 from public.profiles p where p.id = p_user and p.is_admin) then
     raise exception '管理者アカウントは退会できません。先に管理者権限を外してください';
   end if;
+  -- 受付のスイッチ（初期値 off＝誰も申請できない）。testers のときは許可リストの会員だけ
+  case coalesce((select s.value from aimuse_private.settings s where s.key = 'account_deletion_mode'), 'off')
+    when 'all' then null;
+    when 'testers' then
+      if not exists (select 1 from aimuse_private.deletion_testers t where t.user_id = p_user) then
+        raise exception 'NOT_ALLOWED: この会員は退会の検証対象ではありません';
+      end if;
+    else
+      raise exception 'DELETION_DISABLED: 退会の申請は現在受け付けていません';
+  end case;
   perform pg_advisory_xact_lock(hashtextextended('aimuse_account:' || p_user::text, 0));
 
   select * into v_req from aimuse_private.account_deletions d
@@ -443,6 +475,10 @@ as $$
 declare
   v_user uuid;
 begin
+  -- 途中で完全削除のスイッチがオフにされたら、次の手順に進まずに止める（緊急停止）
+  if coalesce((select s.value from aimuse_private.settings s where s.key = 'account_purge_enabled'), 'off') <> 'on' then
+    raise exception 'PURGE_DISABLED: 完全削除は停止中です';
+  end if;
   update aimuse_private.account_deletions d
      set locked_until = now() + interval '10 minutes'
    where d.id = p_request and d.status = 'processing'
@@ -462,6 +498,10 @@ language plpgsql security definer set search_path = ''
 as $$
 #variable_conflict use_column
 begin
+  -- 完全削除のスイッチ（初期値 off）。オフの間は何も取り出さない
+  if coalesce((select s.value from aimuse_private.settings s where s.key = 'account_purge_enabled'), 'off') <> 'on' then
+    return;
+  end if;
   -- 10回試しても終わらず止まったままの処理は「failed（運営の確認待ち）」にする
   update aimuse_private.account_deletions x set status = 'failed', lock_token = null, locked_until = null
    where x.status = 'processing' and x.attempts >= 10 and (x.locked_until is null or x.locked_until <= now());

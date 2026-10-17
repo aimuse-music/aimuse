@@ -54,6 +54,8 @@ const q = (sql) => psql(sql).out;
 const later = () => psql(`update aimuse_private.account_deletions set locked_until=now()-interval '1 second' where status='processing'`);
 const st = (u) => q(`select status||'|'||attempts from aimuse_private.account_deletions where user_id='${u}' order by requested_at desc limit 1`);
 
+// このテストは受付「全員」・完全削除「オン」の状態で行う（スイッチ自体は test_new_keys.mjs と test_v19.py で確認）
+psql("update aimuse_private.settings set value='all' where key='account_deletion_mode'; update aimuse_private.settings set value='on' where key='account_purge_enabled';");
 // ---- 準備：ハムとミケが退会を申請済みで、30日が過ぎた状態
 psql(`insert into aimuse_private.account_deletions (user_id,purge_after,hidden_tracks) values ('${HAMU}', now()-interval '1 day', '[]'), ('${MIKE}', now()+interval '10 days', '[]');
       update public.tracks set status='hidden' where user_id in ('${HAMU}','${MIKE}');`);

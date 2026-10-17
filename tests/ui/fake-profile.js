@@ -278,6 +278,7 @@
       if(n>=5) return fail(429,"TOO_MANY_ATTEMPTS");
       if(!body||body.password!=="password"){ db.reauthFails[me]=n+1; save(); return fail(401,"WRONG_PASSWORD"); }
       if(isAdmin()) return fail(403,"ADMIN_ACCOUNT");
+      if(window.__deleteMode==="off") return fail(403,"DELETION_DISABLED");   // サーバー側の受付スイッチ（本物は Edge Function とデータベースの両方）
       let d=db.deletions.find(x=>x.user_id===me&&ACTIVE.includes(x.status));
       if(!d){ const now=new Date();
         d={user_id:me,status:"pending",requested_at:now.toISOString(),purge_after:new Date(now.getTime()+30*86400000).toISOString(),
@@ -292,7 +293,7 @@
       return rpcs[name] ? rpcs[name](args||{}) : {data:null,error:null}; },
     storage:{ from(bucket){
       if(bucket==="avatars") return avatarStore;
-      return { async createSignedUrls(paths){ return { data: paths.map(p=>({ path:p, signedUrl:"data:audio/mpeg;base64,", error:null })), error:null }; },
+      return { async createSignedUrls(paths){ return { data: paths.map(p=>({ path:p, signedUrl:(p.endsWith(".jpg")||p.endsWith(".png")?"data:audio/mpeg;base64,":(window.__testAudio||"data:audio/mpeg;base64,")), error:null })), error:null }; },
                async remove(){ return {error:null}; }, async upload(){ return {error:null}; } };
     } }
   }; } };

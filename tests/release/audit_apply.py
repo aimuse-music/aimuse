@@ -24,7 +24,8 @@ COLS = {t: cols(t) for t in TABLES}
 def data_snapshot():
     out = {}
     for t, c in COLS.items():
-        out[t] = run(f"select count(*)||':'||coalesce(md5(string_agg(r, '|' order by r)),'') from (select row({c})::text r from {t}) x")[1]
+        w = " where key not in ('account_deletion_mode','account_purge_enabled')" if t == "aimuse_private.settings" else ""   # v1.9 r3 で追加する2行は別に確認
+        out[t] = run(f"select count(*)||':'||coalesce(md5(string_agg(r, '|' order by r)),'') from (select row({c})::text r from {t}{w}) x")[1]
     return out
 
 CATALOG = """
@@ -41,7 +42,7 @@ union all select 'rls '||relname||' '||relrowsecurity from pg_class c join pg_na
 order by 1"""
 def catalog(): return set(run(CATALOG)[1].splitlines())
 # 元に戻しても残す（データを守るため）と決めているもの：追加した表・列に付く権限・RLS
-KEEP = ("aimuse_private.account_deletions", "aimuse_private.account_deletion_files", "aimuse_private.reauth_failures", "aimuse_private.artist_name_history",
+KEEP = ("aimuse_private.deletion_testers", "deletion_testers ", "aimuse_private.account_deletions", "aimuse_private.account_deletion_files", "aimuse_private.reauth_failures", "aimuse_private.artist_name_history",
         "account_deletions ", "account_deletion_files ", "reauth_failures ", "artist_name_history ", "public.profiles.avatar_path", "public.profiles.header_path",
         "public.profiles.media_updated_at", "public.profiles.theme")
 def diff(a, b): return sorted(x for x in (a ^ b) if not any(k in x for k in KEEP))
@@ -58,10 +59,12 @@ for name, mig, _ in STEPS:
 d1 = data_snapshot()
 changed = [t for t in TABLES if d0[t] != d1[t] and t != "storage.buckets"]
 ok("既存のデータ（会員・曲・お気に入り・フォロー・レビュー・通報・再生記録・ファイル・削除記録）は1件も変わらない", not changed, changed or {k: d0[k].split(':')[0] for k in TABLES})
+sw = run("select string_agg(key||'='||value, ',' order by key) from aimuse_private.settings where key in ('account_deletion_mode','account_purge_enabled')")[1]
+ok("退会の受付・完全削除のスイッチは「オフ」で追加される（既存の設定は変わらない）", sw == "account_deletion_mode=off,account_purge_enabled=off", sw)
 bk = run("select string_agg(id||'='||public::text, ',' order by id) from storage.buckets")[1]
 ok("保存場所は avatars（公開）が増えるだけ。audio・covers（非公開）の設定は変わらない", bk == "audio=false,avatars=true,covers=false", bk)
 pc = run(f=S + "production_checks.sql")[1].splitlines()
-ok("本番確認SQL（r8）がすべて OK", len(pc) == 28 and all(l.split("|")[2] == "OK" for l in pc), [l.split("|")[0] for l in pc if l.split("|")[2] != "OK"])
+ok("本番確認SQL（r9）がすべて OK", len(pc) == 29 and all(l.split("|")[2] == "OK" for l in pc), [l.split("|")[0] for l in pc if l.split("|")[2] != "OK"])
 # ---- 2回目の適用（やり直しても壊れない）
 for name, mig, _ in STEPS:
     rc, o, e = run(f=S + mig, single=True)

@@ -1,0 +1,8 @@
+# AIMUSE の Edge Functions の設定（Supabase CLI 用。管理画面から作る場合は、各関数の画面で同じ設定にします）
+# 新しい形式のキー（sb_publishable_ / sb_secret_）では、Supabase の「Verify JWT」は使えないため、
+# どちらの関数もオフにして、関数の中で呼び出し元を確認します（退会申請：ログイン情報＋パスワード、完全削除：合言葉）
+[functions.account-delete-request]
+verify_jwt = false
+
+[functions.account-purge]
+verify_jwt = false

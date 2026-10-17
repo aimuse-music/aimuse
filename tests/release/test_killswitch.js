@@ -3,7 +3,7 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const PUB = '/home/claude/aimuse/public', KILL = '/home/claude/aimuse/release/sw_killswitch.js';
 let kill = false;
 const server = http.createServer((req, res) => { const u = new URL(req.url, 'http://x');
-  if (u.pathname === '/config.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('window.AIMUSE_CONFIG={supabaseUrl:"https://x.supabase.co",supabaseAnonKey:"k"};'); }
+  if (u.pathname === '/config.js') { res.writeHead(200, { 'Content-Type': 'text/javascript' }); return res.end('window.AIMUSE_CONFIG={supabaseUrl:"https://x.supabase.co",supabaseAnonKey:"k",features:{pwa:true}};'); }
   let f = u.pathname === '/sw.js' && kill ? KILL : path.join(PUB, u.pathname === '/' ? 'index.html' : u.pathname);
   if (!fs.existsSync(f)) { res.writeHead(404); return res.end(); }
   res.writeHead(200, { 'Content-Type': f.endsWith('.js') ? 'text/javascript' : f.endsWith('.html') ? 'text/html; charset=utf-8' : 'application/octet-stream', 'Cache-Control': 'no-cache' }); res.end(fs.readFileSync(f)); });

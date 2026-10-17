@@ -20,14 +20,22 @@
 - 原因を直したあと、再開させる（SQL Editor）：
   `update aimuse_private.account_deletions set status = 'processing', attempts = 0, locked_until = null where id = '<id>';`
 
+## 停止スイッチ（二重）
+- この関数の設定 `AIMUSE_PURGE_ENABLED` が `true` のときだけ動きます（初期値は停止。それ以外は 503 を返して何もしない）
+- データベース側の `account_purge_enabled` が `on` のときだけ対象を取り出します（初期値 `off`）。処理の途中で `off` にすると、次の手順に進まずに止まります
+  ```sql
+  update aimuse_private.settings set value = 'on'  where key = 'account_purge_enabled';  -- 動かす
+  update aimuse_private.settings set value = 'off' where key = 'account_purge_enabled';  -- すぐに止める
+  ```
+
 ## 設定（承認後・パソコン不要の手順）
-1. Supabase の管理画面 → Edge Functions → 新しい関数「account-purge」を作成し、`index.ts` と `purge.js` の2ファイルを貼り付けて公開
-   （管理画面のエディタで2ファイルを扱えない場合は、`purge.js` の中身を `index.ts` に貼り付けて1ファイルにします）
+1. Supabase の管理画面 → Edge Functions → 新しい関数「account-purge」を作成し、`index.ts`・`purge.js`・`supa.js` の3ファイルを貼り付けて公開
+   （新しい形式のキーに対応。外部のライブラリは使いません）
 2. Edge Functions → Secrets に `AIMUSE_PURGE_SECRET`（32文字以上のランダムな文字列）を登録
-3. 関数の設定で「JWT の確認（Verify JWT）」をオフ（合言葉で守るため）
+3. 関数の設定で「Enforce JWT verification（Verify JWT）」をオフ（合言葉で守るため）。Secrets に `AIMUSE_PURGE_ENABLED` = `true`（動かすときだけ）
 4. Integrations → Cron で1日1回、この関数を POST で呼び出す設定を作成し、ヘッダー `x-aimuse-purge-secret` に同じ合言葉を設定
 
-管理用の秘密キー（service_role）は Supabase が関数の中にだけ自動で設定します。ブラウザ・GitHub・config.js には入れません。
+管理用の秘密キー（SUPABASE_SECRET_KEYS。旧形式は service_role）は Supabase が関数の中にだけ自動で設定します。ブラウザ・GitHub・config.js には入れません。
 
 ## 費用の目安
 1日1回の実行は、Edge Functions の無料枠（月50万回）・Cron（無料）の範囲内です。

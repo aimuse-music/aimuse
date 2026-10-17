@@ -49,7 +49,7 @@
   const active = () => { const p=db.profiles.find(p=>p.id===uid()); return !!p && !p.is_banned && !withdrawing(uid()); };
   const fire = ev => listeners.forEach(cb=>cb(ev, session));
   const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-  const key = n => (n||"").normalize("NFKC").replace(/[\s​-‏‪-‮⁠-⁤﻿]+/g,"").toLowerCase();
+  const key = n => (n||"").normalize("NFKC").replace(/[\s\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]+/g,"").toLowerCase();
   const reserved = n => /(aimuse|運営|管理者|公式|admin|staff|スタッフ)/.test((n||"").normalize("NFKC").toLowerCase());
   const E = m => ({ data:null, error:{ message:m } });
   const pick = (r,cols) => { if(!cols||cols==="*") return {...r}; const o={}; cols.split(",").forEach(c=>{ c=c.trim(); if(!(c in r) && window.__noV16 && /avatar_path|header_path/.test(c)) o.__missing=c; o[c]=r[c]; }); return o; };
@@ -230,7 +230,7 @@
       const me=uid(); if(!me||!active()) return E("ERROR: アーティスト名を変更できません");
       const v=(p_name||"").replace(/\s+/g," ").trim();
       if(v.length<1||[...v].length>40) return E("ERROR: アーティスト名は1〜40文字で入力してください");
-      if(/[\u0000-\u001f\u007f​-‏‪-‮⁠-⁤﻿]/.test(v)) return E("ERROR: アーティスト名に使用できない文字が含まれています");
+      if(/[\u0000-\u001f\u007f\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/.test(v)) return E("ERROR: アーティスト名に使用できない文字が含まれています");
       const a=db.artists.find(x=>x.id===p_artist); if(!a||a.user_id!==me) return E("ERROR: アーティストが見つかりません");
       if(a.name===v) return {data:v,error:null};
       if(reserved(v)||db.artists.some(x=>x.user_id!==me&&key(x.name)===key(v))) return E("ERROR: このアーティスト名は使用できません（運営と誤解される言葉を含む、または他の会員が使用しています）");

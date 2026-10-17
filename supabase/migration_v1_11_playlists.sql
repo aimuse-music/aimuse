@@ -64,7 +64,7 @@ begin
   if char_length(v) < 1 or char_length(v) > 40 then
     raise exception 'プレイリスト名は1〜40文字で入力してください';
   end if;
-  if v ~ '[[:cntrl:]​-‏‪-‮⁠-⁤﻿]' then
+  if v ~ '[[:cntrl:]\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]' then
     raise exception 'プレイリスト名に使用できない文字が含まれています';
   end if;
   return v;

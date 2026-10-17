@@ -49,7 +49,7 @@
   const active = () => { const p=db.profiles.find(p=>p.id===uid()); return !!p && !p.is_banned && !withdrawing(uid()); };
   const fire = ev => listeners.forEach(cb=>cb(ev, session));
   const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-  const key = n => (n||"").normalize("NFKC").replace(/[\s​-‏‪-‮⁠-⁤﻿]+/g,"").toLowerCase();
+  const key = n => (n||"").normalize("NFKC").replace(/[\s\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]+/g,"").toLowerCase();
   const reserved = n => /(aimuse|運営|管理者|公式|admin|staff|スタッフ)/.test((n||"").normalize("NFKC").toLowerCase());
   const E = m => ({ data:null, error:{ message:m } });
   const pick = (r,cols) => { if(!cols||cols==="*") return {...r}; const o={}; cols.split(",").forEach(c=>{ c=c.trim(); if(!(c in r) && window.__noV16 && /avatar_path|header_path/.test(c)) o.__missing=c; o[c]=r[c]; }); return o; };
@@ -121,6 +121,10 @@
     .filter(f=>!p_before_at||!p_before|| f.created_at<p_before_at || (f.created_at===p_before_at && f[key]<p_before))
     .slice(0, Math.min(Math.max(p_limit||30,1),100));
   const ACTIVE = ["pending","processing","failed"];
+  const plName = n => { const v=String(n||"").replace(/\s+/g," ").trim(); if(v.length<1||v.length>40) return E("プレイリスト名は1〜40文字で入力してください");
+    if(/[\u0000-\u001f\u007f\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/.test(v)) return E("プレイリスト名に使用できない文字が含まれています"); return v; };
+  const plOwned = id => { db.playlists=db.playlists||[]; const me=uid(); if(!me||!active()) return E("プレイリストを変更できません（ログイン状態・メール確認・利用状況を確認してください）");
+    const p=db.playlists.find(x=>x.id===id&&x.user_id===me); return p || E("プレイリストが見つかりません"); };
   const rpcs = {
     // v1.9（migration_v1_9_delete.sql と同じ規則。規則そのものは test_v19.py で実際の PostgreSQL に対して検証済み）
     delete_my_track({p_track}){
@@ -175,6 +179,24 @@
       return {error:null,data:rows.map(g=>{const x=db.artists.find(y=>y.id===g.artist_id), p=db.profiles.find(y=>y.id===x.user_id), v=isPubArtist(x.id);
         return {artist_id:x.id,name:v?x.name:null,avatar_path:v?p.avatar_path:null,followed_at:g.created_at,cursor:g.artist_id,is_public:v};})};
     },
+    // v1.11 プレイリスト（migration_v1_11_playlists.sql と同じ規則。規則そのものは test_v111.py で実際の PostgreSQL に対して検証済み）
+    my_playlists(){ const me=uid(); if(!me) return E("permission denied for function my_playlists");
+      return {data:(db.playlists||[]).filter(p=>p.user_id===me).map(p=>({id:p.id,name:p.name,is_public:p.is_public,updated_at:p.updated_at,track_ids:p.track_ids.slice()})),error:null}; },
+    public_playlists(){ const pubT=new Set(db.tracks.filter(t=>t.status==="public").map(t=>t.id));
+      return {data:(db.playlists||[]).filter(p=>p.is_public&&visible(p.user_id)).map(p=>({id:p.id,name:p.name,updated_at:p.updated_at,track_ids:p.track_ids.filter(t=>pubT.has(t))})).filter(p=>p.track_ids.length).sort((a,b)=>b.updated_at.localeCompare(a.updated_at)),error:null}; },
+    create_playlist({p_name,p_public}){ const me=uid(); db.playlists=db.playlists||[];
+      if(!me||!active()) return E("プレイリストを作成できません（ログイン状態・メール確認・利用状況を確認してください）");
+      if(db.playlists.filter(p=>p.user_id===me).length>=50) return E("プレイリストは1人50個までです");
+      const n=plName(p_name); if(n.error) return n;
+      const id="pl000000-0000-4000-8000-"+String(Date.now()).slice(-12).padStart(12,"0"), now=new Date().toISOString(); db.playlists.push({id,user_id:me,name:n,is_public:!!p_public,updated_at:now,track_ids:[]}); save(); return {data:id,error:null}; },
+    update_playlist({p_id,p_name,p_public}){ const p=plOwned(p_id); if(p.error) return p;
+      if(p_name!=null){ const n=plName(p_name); if(n.error) return n; p.name=n; } if(p_public!=null) p.is_public=!!p_public; p.updated_at=new Date().toISOString(); save(); return {data:null,error:null}; },
+    delete_playlist({p_id}){ const p=plOwned(p_id); if(p.error) return p; db.playlists=db.playlists.filter(x=>x.id!==p_id); save(); return {data:null,error:null}; },
+    playlist_add_track({p_id,p_track}){ const p=plOwned(p_id); if(p.error) return p;
+      if(!db.tracks.find(t=>t.id===p_track&&t.status==="public")) return E("公開中の曲だけ追加できます");
+      if(!p.track_ids.includes(p_track)){ if(p.track_ids.length>=200) return E("1つのプレイリストに入れられる曲は200曲までです"); p.track_ids.push(p_track); }
+      p.updated_at=new Date().toISOString(); save(); return {data:null,error:null}; },
+    playlist_remove_track({p_id,p_track}){ const p=plOwned(p_id); if(p.error) return p; p.track_ids=p.track_ids.filter(t=>t!==p_track); p.updated_at=new Date().toISOString(); save(); return {data:null,error:null}; },
     increment_plays: () => ({data:null,error:null}),
     set_duration_if_missing: () => ({data:null,error:null}),
     public_artist_profiles({p_artist_ids}){
@@ -208,7 +230,7 @@
       const me=uid(); if(!me||!active()) return E("ERROR: アーティスト名を変更できません");
       const v=(p_name||"").replace(/\s+/g," ").trim();
       if(v.length<1||[...v].length>40) return E("ERROR: アーティスト名は1〜40文字で入力してください");
-      if(/[\u0000-\u001f\u007f​-‏‪-‮⁠-⁤﻿]/.test(v)) return E("ERROR: アーティスト名に使用できない文字が含まれています");
+      if(/[\u0000-\u001f\u007f\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/.test(v)) return E("ERROR: アーティスト名に使用できない文字が含まれています");
       const a=db.artists.find(x=>x.id===p_artist); if(!a||a.user_id!==me) return E("ERROR: アーティストが見つかりません");
       if(a.name===v) return {data:v,error:null};
       if(reserved(v)||db.artists.some(x=>x.user_id!==me&&key(x.name)===key(v))) return E("ERROR: このアーティスト名は使用できません（運営と誤解される言葉を含む、または他の会員が使用しています）");

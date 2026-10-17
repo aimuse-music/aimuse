@@ -187,10 +187,11 @@ textarea.input{min-height:130px;resize:vertical;line-height:1.7}
 .stat+.stat{border-left:1px solid var(--line)}
 .stat b{display:block;font-family:var(--f-display);font-size:16px;font-variant-numeric:tabular-nums}
 .stat span{font-size:11px;color:var(--muted)}
-.tabs{display:flex;gap:18px;border-bottom:1px solid var(--line);margin-top:22px}
-.tabs button{padding:10px 0;font-size:14px;color:var(--muted);font-weight:500;position:relative}
+.tabs{display:flex;gap:18px;border-bottom:1px solid var(--line);margin-top:22px;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{padding:10px 0;font-size:14px;color:var(--muted);font-weight:500;position:relative;white-space:nowrap;flex:none}
 .tabs button.on{color:var(--fg);font-weight:700}
-.tabs button.on::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;background:var(--grad);border-radius:2px}
+.tabs button.on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--grad);border-radius:2px}
 .admin-entry{display:flex;align-items:center;gap:12px;margin-top:16px;padding:14px;border-radius:14px;border:1px solid var(--line);background:linear-gradient(120deg,rgba(var(--accent-rgb,164,99,255),.14),rgba(var(--btn-rgb,90,114,255),.08));text-align:left;width:100%}
 
 /* profile edit（v1.6） */
@@ -297,6 +298,11 @@ button.stat{font:inherit;color:inherit;background:none;border:0;cursor:pointer;w
 .ahead{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;padding-top:4px}
 .ahead .cover{width:150px;border-radius:50%;box-shadow:0 18px 40px -16px var(--glow)}
 .ahead h2{font-size:24px;font-weight:900}
+.ahead.pl .cover{border-radius:18px}
+.pl-new{display:flex;gap:8px;margin:4px 0 10px}.pl-new .input{flex:1;min-width:0}
+.pl-edit{display:flex;gap:8px;width:100%;max-width:360px}.pl-edit .input{flex:1;min-width:0}
+.pl-new .btn,.pl-edit .btn{height:auto;align-self:stretch}
+.sheet .opt.on{outline:2px solid var(--accent)}
 .follow{padding:8px 22px;border-radius:999px;border:1px solid var(--fg);font-weight:700;font-size:13.5px}
 .follow.on{background:var(--fg);color:var(--bg)}
 
@@ -560,7 +566,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-17.7";
+const BUILD = "2026-10-18.1";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -856,7 +862,20 @@ function Cover({item,title,radius,style}){
 /* ---------- shared pieces ---------- */
 const ToolTag = ({tool}) => html`<span className=${"tag "+toolClass(tool)}>${tool}</span>`;
 
-function SongRow({song,artist,rank,cur,playing,fav,onPlay,onFav}){
+const playlistApi = {
+  rows: d => (d||[]).map(p=>({id:p.id,name:p.name,isPublic:p.is_public!==false,trackIds:p.track_ids||[]})),
+  async mine(){ const {data,error}=await sb.rpc("my_playlists"); if(error) throw error; return playlistApi.rows(data); },
+  async publicList(){ const {data,error}=await sb.rpc("public_playlists",{p_limit:30}); if(error) throw error; return playlistApi.rows(data).map(p=>({...p,isPublic:true})); },
+  async create(name,pub){ const {data,error}=await sb.rpc("create_playlist",{p_name:name,p_public:!!pub}); if(error) throw error; return data; },
+  async update(id,name,pub){ const {error}=await sb.rpc("update_playlist",{p_id:id,p_name:name??null,p_public:pub??null}); if(error) throw error; },
+  async remove(id){ const {error}=await sb.rpc("delete_playlist",{p_id:id}); if(error) throw error; },
+  async add(id,track){ const {error}=await sb.rpc("playlist_add_track",{p_id:id,p_track:track}); if(error) throw error; },
+  async drop(id,track){ const {error}=await sb.rpc("playlist_remove_track",{p_id:id,p_track:track}); if(error) throw error; }
+};
+const playlistError = e => { const m=(e&&e.message)||""; if(/Could not find the function|schema cache/i.test(m)) return "プレイリスト機能は準備中です";
+  return /[ぁ-んァ-ン一-龥]/.test(m) ? m.replace(/^.*?(?=[ぁ-んァ-ン一-龥「])/,"") : "うまくいきませんでした。通信状態を確認して、もう一度お試しください"; };
+
+function SongRow({song,artist,rank,cur,playing,fav,onPlay,onFav,onRemove}){
   return html`<div className=${"row"+(rank?"":" norank")+(cur?" cur":"")} role="button" tabIndex="0" onClick=${onPlay} onKeyDown=${e=>e.key==="Enter"&&onPlay()}>
     ${rank && html`<span className=${"rank"+(rank<=3?" top":"")}>${rank}</span>`}
     <${Cover} item=${song} radius=${10}/>
@@ -866,9 +885,67 @@ function SongRow({song,artist,rank,cur,playing,fav,onPlay,onFav}){
     </div>
     <div className="end">
       <span className="mono">${rank?fmtNum(song.plays)+"回":fmtTime(song.duration)}</span>
+      ${onRemove && html`<button className="icon-btn del" aria-label=${`「${song.title}」をプレイリストから外す`} onClick=${e=>{e.stopPropagation();onRemove()}}><${Icon} n="x" size=${18}/></button>`}
       <button className="icon-btn" aria-label=${fav?"お気に入りから削除":"お気に入りに追加"} onClick=${e=>{e.stopPropagation();onFav()}}><${Icon} n="heart" size=${20} fill=${fav} style=${{color:fav?"#ff6fae":undefined}}/></button>
     </div>
   </div>`;
+}
+
+/* ---------- プレイリスト ---------- */
+function PlaylistNew({ctx,onCreated}){
+  const [name,setName] = useState(""); const [busy,setBusy] = useState(false);
+  const make = async () => { if(busy||!name.trim()) return; setBusy(true); const id = await ctx.playlistOps.create(name); setBusy(false); if(id){ setName(""); onCreated&&onCreated(id); } };
+  return html`<div className="pl-new"><input className="input" value=${name} maxLength="40" placeholder="新しいプレイリストの名前" aria-label="新しいプレイリストの名前" onInput=${e=>setName(e.target.value)} onKeyDown=${e=>e.key==="Enter"&&make()}/>
+    <button className="btn primary sm" disabled=${busy||!name.trim()} onClick=${make}><${Icon} n="plus" size=${16}/>作成</button></div>`;
+}
+const plCover = (p,byId) => { const s = p.trackIds.map(id=>byId.get(id)).find(Boolean); return s ? html`<${Cover} item=${s} radius=${10}/>` : html`<span className="drop-ic" style=${{width:48,height:48}}><${Icon} n="music" size=${22}/></span>`; };
+function PlaylistRows({ctx,list}){
+  const byId = new Map(ctx.songs.map(s=>[s.id,s]));
+  return html`<div className="list">${list.map(p=>html`<button key=${p.id} className="row norank" onClick=${()=>ctx.openPlaylist(p.id)}>${plCover(p,byId)}
+    <div style=${{minWidth:0}}><div className="t">${p.name}</div><div className="sub"><span className="n">${p.trackIds.filter(id=>byId.has(id)).length}曲</span>${!p.isPublic&&html`<span className="tag">非公開</span>`}</div></div><${Icon} n="chev" size=${18}/></button>`)}</div>`;
+}
+function PlaylistPage({ctx}){
+  const {playlistView:id,playlists,publicPlaylists,songs,artistOf,play,favs,toggleFav,current,playing,goBack,playlistOps} = ctx;
+  const [edit,setEdit] = useState(null); const [confirmDel,setConfirmDel] = useState(false);
+  const mine = playlists.find(p=>p.id===id), pl = mine || publicPlaylists.find(p=>p.id===id);
+  const back = html`<header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button></header>`;
+  if(!pl) return html`<div className="screen">${back}<div className="empty">このプレイリストは表示できません</div></div>`;
+  const byId = new Map(songs.map(s=>[s.id,s]));
+  const list = pl.trackIds.map(t=>byId.get(t)).filter(Boolean);
+  const hidden = pl.trackIds.length - list.length;
+  const saveName = async () => { if(await playlistOps.update(pl.id,edit,null)) setEdit(null); };
+  return html`<div className="screen">${back}
+    <div className="ahead pl">
+      ${list[0] ? html`<${Cover} item=${list[0]} radius=${18}/>` : html`<span className="drop-ic" style=${{width:120,height:120}}><${Icon} n="music" size=${40}/></span>`}
+      ${edit!==null ? html`<div className="pl-edit"><input className="input" value=${edit} maxLength="40" aria-label="プレイリストの名前" onInput=${e=>setEdit(e.target.value)} onKeyDown=${e=>e.key==="Enter"&&saveName()}/><button className="btn primary sm" disabled=${!edit.trim()} onClick=${saveName}>保存</button></div>`
+        : html`<h2>${pl.name}</h2>`}
+      <div style=${{color:"var(--muted)",fontSize:13,display:"flex",gap:8,alignItems:"center"}}>${list.length}曲${mine&&html`<span className=${"tag"+(pl.isPublic?" ok":"")}>${pl.isPublic?"公開":"非公開"}</span>`}</div>
+      <div className="btn-row" style=${{width:"100%",maxWidth:360}}>
+        <button className="btn primary" disabled=${!list.length} onClick=${()=>play(list[0],list,pl.name)}><${PlayIcon} size=${18}/>すべて再生</button>
+        ${mine&&html`<button className="btn ghost" onClick=${()=>playlistOps.update(pl.id,null,!pl.isPublic)}>${pl.isPublic?"非公開にする":"公開する"}</button>`}
+      </div>
+      ${mine&&edit===null&&html`<div style=${{display:"flex",gap:16}}><button className="link" onClick=${()=>setEdit(pl.name)}>名前を変更</button><button className="link" style=${{color:"var(--danger,#ff6b6b)"}} onClick=${()=>setConfirmDel(true)}>プレイリストを削除</button></div>`}
+    </div>
+    <div style=${{marginTop:14}}>${list.length ? html`<div className="list">${list.map(s=>html`<${SongRow} key=${s.id} song=${s} artist=${artistOf(s)} cur=${current?.id===s.id} playing=${playing} fav=${favs.has(s.id)} onPlay=${()=>play(s,list,pl.name)} onFav=${()=>toggleFav(s.id)} onRemove=${mine?()=>playlistOps.drop(pl.id,s.id):null}/>`)}</div>`
+      : html`<div className="empty">${mine?"再生画面の「プレイリスト」から曲を追加できます":"曲がありません"}</div>`}</div>
+    ${mine&&hidden>0&&html`<div className="fl-listeners"><${Icon} n="info" size=${18}/><span>ほか ${hidden}曲は、現在公開されていないため表示されません。</span></div>`}
+    ${confirmDel&&html`<div className="scrim" onClick=${()=>setConfirmDel(false)}><div className="sheet" onClick=${e=>e.stopPropagation()}>
+      <h3>「${pl.name}」を削除しますか？</h3><p style=${{fontSize:13,color:"var(--muted)"}}>プレイリストだけが削除され、曲そのものは消えません。元に戻せません。</p>
+      <button className="btn primary" onClick=${async()=>{ setConfirmDel(false); if(await playlistOps.remove(pl.id)) goBack(); }}>削除する</button>
+      <button className="btn ghost" onClick=${()=>setConfirmDel(false)}>キャンセル</button>
+    </div></div>`}
+  </div>`;
+}
+function PlaylistAddSheet({ctx,song,onClose}){
+  const {user,playlists,playlistOps} = ctx;
+  return html`<div className="scrim" onClick=${onClose}><div className="sheet" onClick=${e=>e.stopPropagation()}>
+    <h3>プレイリストに追加</h3>
+    ${!user ? html`<p style=${{fontSize:13,color:"var(--muted)"}}>ログインすると、プレイリストを作って曲をまとめられます。</p>` : html`
+      <p style=${{fontSize:13,color:"var(--muted)"}}>「${song.title}」を追加するプレイリストを選んでください。もう一度タップすると外れます。</p>
+      ${playlists.map(p=>{ const on=p.trackIds.includes(song.id); return html`<button key=${p.id} className=${"opt"+(on?" on":"")} aria-pressed=${on} onClick=${()=>on?playlistOps.drop(p.id,song.id):playlistOps.add(p.id,song.id)}>${on?"✓ ":""}${p.name}</button>`; })}
+      <${PlaylistNew} ctx=${ctx} onCreated=${id=>playlistOps.add(id,song.id)}/>`}
+    <button className="btn ghost" onClick=${onClose}>閉じる</button>
+  </div></div>`;
 }
 
 function SecHead({en,title,action,onAction}){
@@ -877,7 +954,7 @@ function SecHead({en,title,action,onAction}){
 
 /* ---------- HOME ---------- */
 function Home({ctx}){
-  const {songs,artistOf,play,favs,toggleFav,openArtist,artists,current,playing,setTab,repoMode,isAdmin,showWelcome} = ctx;
+  const {songs,artistOf,play,favs,toggleFav,openArtist,artists,current,playing,setTab,repoMode,isAdmin,showWelcome,publicPlaylists,openPlaylist} = ctx;
   const [genre,setGenre] = useState(CONFIG.genres[0]);
   const featured = songs.slice(0,6);
   const fresh = [...songs].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,8);
@@ -934,6 +1011,14 @@ function Home({ctx}){
         <${Cover} item=${a} radius="50%"/><div className="n">${a.name}</div><div className="f">${fmtNum(a.followers)} フォロワー</div>
       </button>`)}</div>
     </section>`}
+
+    ${(()=>{ const byId=new Map(songs.map(s=>[s.id,s])); const pls=publicPlaylists.map(p=>({p,list:p.trackIds.map(t=>byId.get(t)).filter(Boolean)})).filter(x=>x.list.length).slice(0,10);
+      return pls.length>0&&html`<section className="sec">
+      <${SecHead} en="PLAYLISTS" title="みんなのプレイリスト"/>
+      <div className="hrow">${pls.map(({p,list})=>html`<button key=${p.id} className="card" onClick=${()=>openPlaylist(p.id)}>
+        <${Cover} item=${list[0]} radius=${14}/><div className="t">${p.name}</div><div className="a">${list.length}曲</div>
+      </button>`)}</div>
+    </section>`; })()}
   </div>`;
 }
 
@@ -1208,7 +1293,7 @@ function Upload({ctx}){
 
 /* ---------- MY PAGE ---------- */
 function MyPage({ctx}){
-  const {songs,artists,artistOf,play,favs,toggleFav,follows,openArtist,submissions,setTab,current,playing,user,profile,isAdmin,signOut,recovery,myFollowers,openFollowList} = ctx;
+  const {songs,artists,artistOf,play,favs,toggleFav,follows,openArtist,submissions,setTab,current,playing,user,profile,isAdmin,signOut,recovery,myFollowers,openFollowList,playlists} = ctx;
   const [tab,setT] = useState("fav");
   const [delSong,setDelSong] = useState(null);
   if(recovery) return html`<div className="screen"><header className="top"><h1>マイページ</h1></header><${NewPasswordPanel} ctx=${ctx}/></div>`;
@@ -1248,9 +1333,10 @@ function MyPage({ctx}){
       <div className="stat"><b>${fmtNum(myPublic.reduce((a,s)=>a+s.plays,0))}</b><span>再生数</span></div>
     </div>
     ${isAdmin&&html`<button className="admin-entry" onClick=${()=>setTab("admin")}><${Icon} n="shield"/><div style=${{flex:1}}><b style=${{display:"block",fontSize:14}}>管理者画面</b><span style=${{fontSize:12,color:"var(--muted)"}}>投稿審査・通報対応・楽曲管理</span></div><${Icon} n="chev" size=${18}/></button>`}
-    <div className="tabs">${[["fav",`お気に入り ${favSongs.length}`],["mine",`投稿曲 ${mine.length}`],["follow",`フォロー中 ${follows.size}`]].map(([k,l])=>html`<button key=${k} className=${tab===k?"on":""} onClick=${()=>setT(k)}>${l}</button>`)}</div>
+    <div className="tabs">${[["fav",`お気に入り ${favSongs.length}`],["pl",`プレイリスト ${playlists.length}`],["mine",`投稿曲 ${mine.length}`],["follow",`フォロー中 ${follows.size}`]].map(([k,l])=>html`<button key=${k} className=${tab===k?"on":""} onClick=${()=>setT(k)}>${l}</button>`)}</div>
     <div style=${{marginTop:8}}>
       ${tab==="fav" && (favSongs.length ? html`<div className="list">${favSongs.map(s=>html`<${SongRow} key=${s.id} song=${s} artist=${artistOf(s)} cur=${current?.id===s.id} playing=${playing} fav=${true} onPlay=${()=>play(s,favSongs)} onFav=${()=>toggleFav(s.id)}/>`)}</div>` : html`<div className="empty">ハートをタップした曲がここに並びます</div>`)}
+      ${tab==="pl" && html`<${PlaylistNew} ctx=${ctx}/>${playlists.length ? html`<${PlaylistRows} ctx=${ctx} list=${playlists}/>` : html`<div className="empty">プレイリストを作って、好きな曲をまとめて連続再生できます</div>`}`}
       ${tab==="mine" && (mine.length ? html`<div className="list">${mine.map(s=>html`<div key=${s.id} className="row norank"><${Cover} item=${s} radius=${10}/><div style=${{minWidth:0}}><div className="t">${s.title}</div><div className="sub"><span className="n">${s.submittedAt}</span></div></div><div className="end">${statusTag(s.status)}<button className="icon-btn del" aria-label=${`「${s.title}」を削除`} onClick=${()=>setDelSong(s)}><${Icon} n="trash" size=${19}/></button></div></div>`)}</div>` : html`<div className="empty">まだ投稿した曲はありません<br/><button className="btn primary sm" style=${{margin:"14px auto 0"}} onClick=${()=>setTab("upload")}>楽曲を投稿する</button></div>`)}
       ${tab==="follow" && (followed.length ? html`<div className="list">${followed.map(a=>html`<button key=${a.id} className="row norank" onClick=${()=>openArtist(a.id)}><${Cover} item=${a} radius="50%"/><div style=${{minWidth:0}}><div className="t">${a.name}</div><div className="sub">${fmtNum(a.followers)} フォロワー</div></div><${Icon} n="chev" size=${18}/></button>`)}</div>` : hiddenFollows===0 ? html`<div className="empty">フォローしたアーティストがここに並びます</div>` : null)}
       ${tab==="follow" && hiddenFollows>0 && html`<div className="fl-listeners"><${Icon} n="info" size=${18}/><span>ほか ${hiddenFollows}件は、現在公開中の曲がないアーティストです（フォローは残っています）。<button className="link" onClick=${()=>openFollowList({mine:true,mode:"following"})}>一覧で確認・解除する</button></span></div>`}
@@ -1379,6 +1465,7 @@ function MiniPlayer({song,artist,playing,pos,toggle,open,fav,onFav}){
 function FullPlayer({ctx}){
   const {current:song,artistOf,playing,toggle,pos,seek,next,prev,repeat,cycleRepeat,shuffle,setShuffle,favs,toggleFav,close,showLyrics,setShowLyrics,report,openArtist,queueLabel} = ctx;
   const [sheet,setSheet] = useState(false);
+  const [plSheet,setPlSheet] = useState(false);
   const lyrRef = useRef(null);
   const artist = artistOf(song);
   const [h1,h2] = song.hues||[270,230];
@@ -1416,11 +1503,13 @@ function FullPlayer({ctx}){
         <button className=${"icon-btn"+(repeat!=="off"?" on":"")} aria-label=${"リピート："+({off:"オフ",all:"全曲",one:"1曲"}[repeat])} onClick=${cycleRepeat} style=${{position:"relative"}}><${Icon} n="repeat" size=${22}/>${repeat==="one"&&html`<span style=${{position:"absolute",top:5,right:5,fontSize:9,fontWeight:900}}>1</span>`}</button>
       </div>
       <div className="pfoot">
-        <button className=${"pill"+(showLyrics?" on":"")} onClick=${()=>setShowLyrics(!showLyrics)}><${Icon} n="lyrics" size=${16}/>歌詞</button>
+        <span style=${{display:"flex",gap:8}}><button className=${"pill"+(showLyrics?" on":"")} onClick=${()=>setShowLyrics(!showLyrics)}><${Icon} n="lyrics" size=${16}/>歌詞</button>
+        <button className="pill" onClick=${()=>setPlSheet(true)}><${Icon} n="plus" size=${16}/>プレイリスト</button></span>
         <span className="mono" style=${{color:"rgba(255,255,255,.6)"}}>${fmtNum(song.plays)}回再生</span>
       </div>
       ${!song.audioUrl && html`<div className="demo-strip"><${Icon} n="info" size=${16} style=${{flex:"none",marginTop:2}}/><span>この曲の音源ファイルが見つからないため再生できません。</span></div>`}
     </div>
+    ${plSheet && html`<${PlaylistAddSheet} ctx=${ctx} song=${song} onClose=${()=>setPlSheet(false)}/>`}
     ${sheet && html`<div className="scrim" onClick=${()=>setSheet(false)}><div className="sheet" onClick=${e=>e.stopPropagation()}>
       <h3>この曲を通報</h3><p style=${{fontSize:13,color:"var(--muted)"}}>「${song.title}」について、該当する理由を選んでください。運営が確認します。</p>
       ${CONFIG.reportReasons.map(r=>html`<button key=${r} className="opt" onClick=${()=>{report(song.id,r);setSheet(false)}}>${r}</button>`)}
@@ -2548,6 +2637,10 @@ function App(){
   const [follows,setFollows] = useState(()=>new Set());
   const [followerCounts,setFollowerCounts] = useState(()=>new Map());
   const [artistCards,setArtistCards] = useState(()=>new Map());
+  const [playlists,setPlaylists] = useState([]);
+  const [publicPlaylists,setPublicPlaylists] = useState([]);
+  const [playlistView,setPlaylistView] = useState(null);
+  const [plVer,setPlVer] = useState(0);
   const [followView,setFollowView] = useState(null);   // フォロー一覧で表示する対象 {artistId, mode, mine}
   const [followVer,setFollowVer] = useState(0);         // フォロー操作のたびに増やし、一覧の人数を取り直す   // アーティストのアイコン・背景・自己紹介
   const [cardsVer,setCardsVer] = useState(0);
@@ -2594,6 +2687,27 @@ function App(){
       setFavs(r.favs); setFollows(r.follows);
     }).catch(e=>{ console.warn("social",e); if(uidRef.current===uid) say("お気に入り・フォローを読み込めませんでした"); });
   },[uid]);
+
+  // プレイリスト（自分の分はログイン中だけ。公開分は誰でも）。v1.11 未適用でもエラーにしない
+  const loadMyPlaylists = () => { const me=uid; if(!me||!sb){ setPlaylists([]); return Promise.resolve(); }
+    return playlistApi.mine().then(r=>{ if(uidRef.current===me) setPlaylists(r); }).catch(()=>{}); };
+  useEffect(()=>{ setPlaylists([]); loadMyPlaylists(); },[uid]);
+  useEffect(()=>{ if(!sb) return; playlistApi.publicList().then(setPublicPlaylists).catch(()=>setPublicPlaylists([])); },[plVer,uid]);
+  const plBusy = useRef(false);
+  const plRun = async (f, msg) => {
+    if(plBusy.current) return false; plBusy.current = true;
+    try{ const r = await f(); await loadMyPlaylists(); setPlVer(v=>v+1); if(msg) say(msg); return r===undefined ? true : r; }
+    catch(e){ say(playlistError(e)); return false; }
+    finally{ plBusy.current = false; }
+  };
+  const playlistOps = {
+    create: name => plRun(()=>playlistApi.create(name,false), "プレイリストを作成しました"),
+    update: (id,name,pub) => plRun(()=>playlistApi.update(id,name,pub), pub===true?"公開しました":pub===false?"非公開にしました":"名前を変更しました"),
+    remove: id => plRun(()=>playlistApi.remove(id), "プレイリストを削除しました"),
+    add: (id,track) => plRun(()=>playlistApi.add(id,track), "プレイリストに追加しました"),
+    drop: (id,track) => plRun(()=>playlistApi.drop(id,track), "プレイリストから外しました")
+  };
+  const openPlaylist = id => { setPlaylistView(id); go("playlist"); };
 
   // 新しい版が公開されていたら、再生中でないときに自動で読み込み直す
   // （ログイン・ログアウト時と、アプリの画面に戻ってきたときに確認）
@@ -2734,10 +2848,11 @@ function App(){
   };
 
   const startSong = song => { setCurrentId(song.id); setPos(0); setPlaying(!!song.audioUrl); if(!song.audioUrl) say(NO_AUDIO); };
-  const play = (song,list) => {
-    if(currentId===song.id){ if(!song.audioUrl){ say(NO_AUDIO); return; } setPlaying(p=>!p); return; }
+  const play = (song,list,label) => {
+    if(currentId===song.id && (!label || label===queueLabel)){ if(!song.audioUrl){ say(NO_AUDIO); return; } setPlaying(p=>!p); return; }
     setQueue((list||[song]).map(s=>s.id));
-    setQueueLabel(tab==="search"?"検索結果":tab==="me"?"マイページ":tab==="artist"?artistOf(song).name:"ホーム");
+    setQueueLabel(label||(tab==="search"?"検索結果":tab==="me"?"マイページ":tab==="artist"?artistOf(song).name:"ホーム"));
+    if(currentId===song.id){ if(song.audioUrl) setPlaying(true); else say(NO_AUDIO); return; }
     startSong(song);
   };
   const toggle = () => { if(!current) return; if(!current.audioUrl){ say(NO_AUDIO); return; } setPlaying(p=>!p); };
@@ -2881,14 +2996,14 @@ function App(){
   // 退会の申請・取り消しのあと：状況と曲の一覧を読み直す
   const refreshAccount = async () => { await auth.loadProfile(); auth.emit(); await repo.refresh(); };
   const signOut = () => auth.signOut().then(()=>{ say("ログアウトしました"); navTo("home"); });
-  const ctx = {withdrawing,refreshAccount,afterTrackDeleted,openAccountDelete:()=>go("account"),activeTheme,saveTheme,openSettings:()=>go("settings"),showWelcome:!user&&!welcomeHidden&&authState.ready,dismissWelcome,openGuide,openSignup,followView,openFollowList,followVer,myArtistIds,legalDoc,openLegal,afterProfileSave,adminResetImage,user,profile,isAdmin,myFollowers,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
+  const ctx = {playlists,publicPlaylists,playlistView,openPlaylist,playlistOps,withdrawing,refreshAccount,afterTrackDeleted,openAccountDelete:()=>go("account"),activeTheme,saveTheme,openSettings:()=>go("settings"),showWelcome:!user&&!welcomeHidden&&authState.ready,dismissWelcome,openGuide,openSignup,followView,openFollowList,followVer,myArtistIds,legalDoc,openLegal,afterProfileSave,adminResetImage,user,profile,isAdmin,myFollowers,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
     current,playing,toggle,pos,seek,next,prev,repeat,cycleRepeat,shuffle,setShuffle,close:()=>setPlayerOpen(false),showLyrics,setShowLyrics,queueLabel};
 
   useEffect(()=>{ document.body.style.overflow = playerOpen?"hidden":""; },[playerOpen]);
 
   const navItems = [["home","ホーム","home"],["search","検索","search"],["upload","投稿","plus"],["me","マイページ","user"]];
   const navActive = (tab==="artist"||tab==="follows")?(history[0]||"home"):(tab==="admin"||tab==="legal"||tab==="profile"||tab==="settings"||tab==="account")?"me":tab==="guide"?(history[0]||"home"):tab;
-  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin,legal:LegalPage,profile:ProfileEdit,follows:FollowList,guide:GuidePage,settings:SettingsPage,account:AccountDeletePage}[tab];
+  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin,legal:LegalPage,profile:ProfileEdit,follows:FollowList,playlist:PlaylistPage,guide:GuidePage,settings:SettingsPage,account:AccountDeletePage}[tab];
 
   return html`<div className="app">
     ${!online && html`<div className="offline-bar" role="status"><${Icon} n="info" size=${15}/><span>オフラインです。曲の再生・検索・投稿にはインターネット接続が必要です（つながると自動で更新します）</span></div>`}

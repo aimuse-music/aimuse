@@ -101,6 +101,15 @@
       const rows = db[q.table];
       const visible = r => q.table==="tracks" ? (r.status==="public"||r.user_id===me||isAdmin()) : isAdmin();
       if(q.op==="select") return { data: rows.filter(r=>visible(r)&&match(r)).map(r=>({...r})), error:null };
+      // 投稿（tracks の追加）：本人だけ・利用できる会員だけ。データベースの仕組みと同じく「審査待ち・再生数0」にし、アーティストを結び付ける
+      if(q.op==="insert" && q.table==="tracks"){
+        const row={...q.row}; if(!me||row.user_id!==me||!active()) return E("new row violates row-level security policy");
+        let a=db.artists.find(x=>x.user_id===me&&x.name===row.artist);
+        if(!a){ a={id:"dddddddd-dddd-4ddd-8ddd-"+String(Date.now()).slice(-12).padStart(12,"0"),user_id:me,name:row.artist}; db.artists.push(a); }
+        Object.assign(row,{artist_id:a.id,status:"pending",plays:0,created_at:new Date().toISOString()});
+        rows.push(row); save(); window.__log.push({op:"insert_track",id:row.id});
+        return { data: q.single ? {...row} : [{...row}], error:null };
+      }
       if(q.op==="update"){ const hit=rows.filter(r=>match(r)&&isAdmin()); hit.forEach(r=>Object.assign(r,q.row)); save(); return { data:q.returning?hit.map(r=>({id:r.id})):null, error:null }; }
       if(q.op==="delete"){ const hit=rows.filter(r=>match(r)&&(isAdmin()||(q.table==="tracks"&&r.user_id===me))); db[q.table]=rows.filter(r=>!hit.includes(r)); save(); return { data:q.returning?hit.map(r=>({id:r.id})):null, error:null }; }
     }
@@ -316,7 +325,12 @@
     storage:{ from(bucket){
       if(bucket==="avatars") return avatarStore;
       return { async createSignedUrls(paths){ return { data: paths.map(p=>({ path:p, signedUrl:(p.endsWith(".jpg")||p.endsWith(".png")?"data:audio/mpeg;base64,":(window.__testAudio||"data:audio/mpeg;base64,")), error:null })), error:null }; },
-               async remove(){ return {error:null}; }, async upload(){ return {error:null}; } };
+               async remove(paths){ window.__log.push({op:"media_remove",bucket,paths}); return {error:null}; },
+               // 音源・ジャケット（audio・covers）：本人の会員IDのフォルダだけ。window.__fail.media で失敗を注入
+               async upload(path, blob, opts){ await delay();
+                 if(window.__fail.media) return E("アップロードに失敗しました（テスト用）");
+                 const me=uid(); if(!me||!active()||!path.startsWith(me+"/")) return E("new row violates row-level security policy");
+                 window.__log.push({op:"upload",bucket,path,size:blob.size,type:opts&&opts.contentType}); return {data:{path},error:null}; } };
     } }
   }; } };
 })();

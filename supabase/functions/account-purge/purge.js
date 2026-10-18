@@ -82,3 +82,15 @@ export function sameSecret(a, b) {
   for (let i = 0; i < Math.max(x.length, y.length); i++) diff |= (x[i] || 0) ^ (y[i] || 0);
   return diff === 0 && x.length > 0;
 }
+
+// 呼び出し元の確認：x-aimuse-purge-secret の合言葉を、データベースの金庫（Vault）の合言葉と照合する（v1.12 の purge_secret_matches）
+//   ・関数の設定に AIMUSE_PURGE_SECRET（32文字以上）がある場合は、従来どおりその値と比べる（金庫は使わない）
+//   ・どちらも無い・照合できない場合は「設定なし」として扱い、何もしない
+export async function checkCaller(sb, provided, envSecret) {
+  const given = String(provided || "");
+  if (envSecret && String(envSecret).length >= 32) return sameSecret(envSecret, given) ? "ok" : "forbidden";
+  if (given.length < 32) return "forbidden";
+  const { data, error } = await sb.rpc("purge_secret_matches", { p_secret: given });
+  if (error) return "not_configured";
+  return data === true ? "ok" : "forbidden";
+}

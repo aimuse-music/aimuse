@@ -565,7 +565,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-18.2";
+const BUILD = "2026-10-19.1";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -2353,7 +2353,7 @@ const LEGAL_DOCS = [
       "運営者は、公開後の楽曲であっても、本規約やガイドラインへの違反、権利侵害の申し立て、その他必要と判断した場合には、事前に通知することなく非公開にし、または削除することがあります。",
       "プロフィール画像（アイコン・背景画像）と自己紹介は、審査を経ずにすぐ公開されます。運営者は、本規約・ガイドラインに違反する画像を事前に通知することなく初期画像に戻し、違反するアーティスト名・自己紹介を変更することがあります。",
       "運営者は、本規約に違反した利用者、または違反のおそれがある利用者のアカウントを利用停止にすることがあります。利用停止中は、楽曲の投稿、お気に入り、フォロー、通報などの機能を利用できません。運営者は、必要に応じてその利用者の投稿を非公開または削除します。",
-      "投稿者が自分の投稿の非公開・削除を希望する場合は、お問い合わせ窓口から依頼してください。【要確認：アプリ内に投稿の削除機能を追加した場合は記載を更新】",
+      "投稿者は、マイページの「投稿曲」から自分の投稿を削除できます。削除した投稿は、誤操作に備えて30日間保存したのち、音源・ジャケット画像とともに削除します。削除ではなく非公開を希望する場合は、お問い合わせ窓口から依頼してください。",
       "運営者は、この条に基づく対応によって利用者に生じた損害について、運営者に故意または重大な過失がある場合を除き、責任を負いません。"
     ]]},
     {h:"第8条（サービスの変更・中断・終了）", blocks:[[
@@ -2850,6 +2850,7 @@ function App(){
   const play = (song,list,label) => {
     if(currentId===song.id && (!label || label===queueLabel)){ if(!song.audioUrl){ say(NO_AUDIO); return; } setPlaying(p=>!p); return; }
     setQueue((list||[song]).map(s=>s.id));
+    shuffleRef.current = {key:"", order:[]};   // 曲を選び直したら、シャッフルの順番もその曲から作り直す（一巡目に全曲を流すため）
     setQueueLabel(label||(tab==="search"?"検索結果":tab==="me"?"マイページ":tab==="artist"?artistOf(song).name:"ホーム"));
     if(currentId===song.id){ if(song.audioUrl) setPlaying(true); else say(NO_AUDIO); return; }
     startSong(song);
@@ -2935,7 +2936,7 @@ function App(){
   const submit = async f => {
     if(!user){ say("投稿にはログインが必要です"); return false; }
     if(blockedByDeletion()) return false;
-    const id = crypto.randomUUID();
+    const id = uuid4();   // 古い端末（crypto.randomUUID が無い iOS 15.3 以前など）でも投稿できるように
     let audioPath=null, imagePath=null;
     try{
       audioPath = await uploadService.uploadToServer("audio",user.id,id,f.audio);

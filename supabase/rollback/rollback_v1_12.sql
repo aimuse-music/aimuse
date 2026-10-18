@@ -1,5 +1,5 @@
 -- =====================================================================
--- AIMUSE v1.12 を元に戻す（account_purge_db を v1.9 r4 の内容に戻すだけ。データは変更しません）
+-- AIMUSE v1.12 を元に戻す（account_purge_db を v1.9 r4 の内容に戻し、合言葉の照合の関数を外す。データは変更しません）
 -- =====================================================================
 begin;
 create or replace function public.account_purge_db(p_request uuid, p_token uuid)
@@ -32,4 +32,5 @@ $$;
 
 revoke all on function public.account_purge_db(uuid, uuid) from public, anon, authenticated;
 grant execute on function public.account_purge_db(uuid, uuid) to service_role;
+drop function if exists public.purge_secret_matches(text);
 commit;

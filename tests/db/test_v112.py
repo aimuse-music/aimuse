@@ -1,4 +1,4 @@
-# v1.12（退会の完全削除で、その会員が聴いた再生記録も消す）のテスト
+# v1.12（退会の完全削除で、その会員が聴いた再生記録も消す・合言葉の照合）のテスト
 # 使い方：python3 tests/db/test_v112.py [ポート...]   （既定：PostgreSQL 17 = 55417、15 = 55415。テンプレート prod111 = v1.11 まで適用済み）
 import subprocess, json, sys, os
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -57,9 +57,23 @@ update aimuse_private.settings set value = 'on' where key = 'account_purge_enabl
     # 権限：アプリ（authenticated・anon）からは呼べない
     o, e = q(f"select public.account_purge_db(gen_random_uuid(), gen_random_uuid())", role="authenticated")
     ok("会員（authenticated）からは実行できない", "permission denied" in e, e)
+    # 合言葉の照合（Vault の代わりに同じ形の表を用意）
+    SEC = "s" * 64
+    q("create schema if not exists vault; create table if not exists vault.decrypted_secrets (name text, decrypted_secret text, created_at timestamptz default now()); revoke all on schema vault from public, anon, authenticated;")
+    o, e = q("select public.purge_secret_matches('" + SEC + "')", role="service_role"); ok("金庫に合言葉が無ければ false", o == "f", o or e)
+    q(f"insert into vault.decrypted_secrets (name, decrypted_secret) values ('aimuse_purge_secret', '{SEC}')")
+    o, e = q("select public.purge_secret_matches('" + SEC + "')", role="service_role"); ok("一致すれば true（service_role）", o == "t", o or e)
+    o, e = q("select public.purge_secret_matches('" + "s" * 63 + "x')", role="service_role"); ok("1文字でも違えば false", o == "f", o or e)
+    o, e = q("select public.purge_secret_matches('short')", role="service_role"); ok("32文字未満は false", o == "f", o or e)
+    o, e = q("select public.purge_secret_matches(null)", role="service_role"); ok("空は false", o == "f", o or e)
+    o, e = q("select public.purge_secret_matches('" + SEC + "')", role="authenticated"); ok("会員（authenticated）は実行できない", "permission denied" in e, e)
+    o, e = q("select public.purge_secret_matches('" + SEC + "')", role="anon"); ok("未ログイン（anon）は実行できない", "permission denied" in e, e)
+    rt = q("select pg_get_function_result('public.purge_secret_matches(text)'::regprocedure)")[0]
+    ok("戻り値は true/false だけ（合言葉は返さない）", rt == "boolean", rt)
     # 元に戻す → 再適用
     o, e = q(RB); ok("元に戻せる", not e, e)
     ok("元に戻すと v1.9 r4 の関数と同じ中身", q("select md5(prosrc) from pg_proc where proname='account_purge_db'")[0] == src)
+    ok("元に戻すと照合の関数も無くなる", q("select to_regprocedure('public.purge_secret_matches(text)') is null")[0] == "t")
     o, e = q(MIG); ok("再適用できる", not e, e)
     # 前提が無い場合は何も変更せずに中止
     q("drop database if exists t112b", "postgres"); q("create database t112b template prod111", "postgres")

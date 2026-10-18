@@ -2,18 +2,24 @@
 -- AIMUSE 退会の完全削除を1日1回動かす設定（Supabase の無料機能 pg_cron・pg_net・Vault を使用）
 -- ※ 退会機能を公開する手順（supabase/functions/ROLLOUT.md）の「手順5」で使います。それ以前には実行しないでください
 -- Supabase の SQL Editor に全文を貼り付けて、1回実行してください。
---   ・合言葉（32文字以上）をデータベースの金庫（Vault）に自動で作り、毎日 03:17（日本時間）に
+--   ・合言葉（64文字）をデータベースの金庫（Vault）に自動で作り、毎日 03:17（日本時間）に
 --     Edge Function「account-purge」を呼び出します（会員ID・メールアドレスは送りません）
---   ・実行後に表示される合言葉を、Edge Functions → Secrets の AIMUSE_PURGE_SECRET に登録してください
+--   ・合言葉は表示しません。Edge Function は v1.12 の purge_secret_matches で金庫の合言葉と照合するため、
+--     人が見たり、どこかに書き写したりする必要はありません（先に v1.12 を適用してください）
 --   ・何度実行しても、予定は1つだけです（同じ名前の予定を置き換えます）。合言葉は最初の1回だけ作ります
 --   ・止めるとき：select cron.unschedule('aimuse-account-purge');
 --   ・AIMUSE BOOST の表・関数には触れません
 -- =====================================================================
+begin;   -- 途中で中止したときは、拡張機能の追加も含めて全体を取り消す
+
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
 do $$
 begin
+  if to_regprocedure('public.purge_secret_matches(text)') is null then
+    raise exception '先に v1.12（migration_v1_12_purge_play_events.sql）を適用してください。何も変更せずに中止しました。';
+  end if;
   if not exists (select 1 from vault.secrets where name = 'aimuse_purge_secret') then
     perform vault.create_secret(encode(extensions.gen_random_bytes(32), 'hex'), 'aimuse_purge_secret', 'AIMUSE account-purge の合言葉');
   end if;
@@ -33,5 +39,9 @@ select cron.schedule(
   $job$
 );
 
--- 合言葉の表示（この1行だけを Edge Function の Secrets に貼り付けます。ほかの人に見せないでください）
-select decrypted_secret as "AIMUSE_PURGE_SECRET に登録する値" from vault.decrypted_secrets where name = 'aimuse_purge_secret';
+commit;
+
+-- 結果の表示（合言葉そのものは表示しません）
+select (select count(*) from cron.job where jobname = 'aimuse-account-purge' and active) as "1日1回の予定（1なら正常）",
+       (select count(*) from vault.secrets where name = 'aimuse_purge_secret') as "金庫の合言葉（1なら正常）",
+       to_regprocedure('public.purge_secret_matches(text)') is not null as "v1.12 の照合関数";

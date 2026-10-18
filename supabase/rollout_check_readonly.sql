@@ -23,11 +23,18 @@ checks(no, item, ok, detail) as (
     and has_function_privilege('service_role', 'public.account_purge_db(uuid,uuid)', 'execute'),
     null
   union all
-  select 3, '手順5：1日1回の呼び出し（pg_cron）が登録済み',
+  select 9, '手順1：合言葉の照合の関数はサーバー側（service_role）だけが実行できる',
+    to_regprocedure('public.purge_secret_matches(text)') is not null
+    and not has_function_privilege('anon', 'public.purge_secret_matches(text)', 'execute')
+    and not has_function_privilege('authenticated', 'public.purge_secret_matches(text)', 'execute')
+    and has_function_privilege('service_role', 'public.purge_secret_matches(text)', 'execute'),
+    null
+  union all
+  select 3, '手順4：1日1回の呼び出し（pg_cron）が登録済み',
     coalesce((select n from cronjob), 0) = 1,
     case when to_regclass('cron.job') is null then 'pg_cron が未導入' else (select n from cronjob)::text || '件' end
   union all
-  select 4, '手順5：合言葉が金庫（Vault）にある',
+  select 4, '手順4：合言葉が金庫（Vault）にある（値は表示しません）',
     to_regclass('vault.secrets') is not null
     and (xpath('/row/n/text()', query_to_xml('select count(*) as n from vault.secrets where name = ''aimuse_purge_secret''', false, true, '')))[1]::text::int = 1,
     null

@@ -1,10 +1,12 @@
 -- =====================================================================
--- AIMUSE v1.12 退会の完全削除で「その会員が聴いた再生記録」も消す（関数1つの差し替えのみ）
+-- AIMUSE v1.12 退会の完全削除で「その会員が聴いた再生記録」も消す／完全削除の呼び出しの合言葉を金庫（Vault）で確認
 -- Supabase の SQL Editor に全文を貼り付けて、1回実行してください。
 --   ・前提：v1.9 r4（退会）と v1.11（プレイリスト）を実行済みであること。満たさなければ何も変更せずに中止します
 --   ・変更するのは account_purge_db（30日後の完全削除のデータ削除の手順）だけです。引数・戻り値・権限は同じです
 --   ・追加した処理：public.play_events のうち viewer_key = 'u:会員ID' の行（その会員が聴いた記録）を削除
 --     （ハムハムの手作業の削除で見つかった残り。曲の再生数 tracks.plays は変わりません）
+--   ・追加：purge_secret_matches（完全削除の Edge Function が、呼び出しの合言葉をデータベースの金庫と照合するための関数。
+--     service_role だけが実行でき、合言葉そのものは返しません）。合言葉は人が見たり書き写したりする必要がありません
 --   ・既存のデータは変更しません。退会の受付・完全削除のスイッチ（off）もそのままです
 --   ・何度実行しても同じ結果になります。全体を BEGIN〜COMMIT で囲んでいます
 --   ・AIMUSE BOOST の表・関数には触れません
@@ -54,5 +56,24 @@ $$;
 
 revoke all on function public.account_purge_db(uuid, uuid) from public, anon, authenticated;
 grant execute on function public.account_purge_db(uuid, uuid) to service_role;
+
+-- 完全削除の呼び出しの合言葉の照合（合言葉は Vault の aimuse_purge_secret。cron_account_purge.sql が作成）
+--   ・一致すれば true。金庫に合言葉が無い・32文字未満・不一致なら false。合言葉そのものは返さない
+create or replace function public.purge_secret_matches(p_secret text)
+returns boolean
+language plpgsql stable security definer set search_path = ''
+as $$
+declare v text;
+begin
+  if p_secret is null or char_length(p_secret) < 32 or to_regclass('vault.decrypted_secrets') is null then
+    return false;
+  end if;
+  execute 'select decrypted_secret from vault.decrypted_secrets where name = $1 order by created_at desc limit 1'
+    into v using 'aimuse_purge_secret';
+  return v is not null and char_length(v) >= 32 and v = p_secret;
+end;
+$$;
+revoke all on function public.purge_secret_matches(text) from public, anon, authenticated;
+grant execute on function public.purge_secret_matches(text) to service_role;
 
 commit;

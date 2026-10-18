@@ -2198,7 +2198,7 @@ function TrackDeleteSheet({song,onClose,onDeleted,say}){
     <ul className="del-notes">
       <li>公開一覧・検索・アーティストページから<b>すぐに消えます</b>${song.status==="pending"?"（審査も取り消されます）":""}。</li>
       <li>この曲の再生数・お気に入り・レビューも削除されます。</li>
-      <li>誤って削除した場合は、30日以内にお問い合わせいただければ復元できることがあります（復元後は非公開）。30日を過ぎると音源・ジャケットも削除されます。</li>
+      <li>誤って削除した場合は、30日以内にお問い合わせ（${LEGAL_CONTACT}）いただければ復元できることがあります（復元後は非公開）。30日を過ぎると音源・ジャケットも削除されます。</li>
     </ul>
     ${err && html`<div className="warn-line" role="alert"><${Icon} n="info" size=${15}/><span>${err}</span></div>`}
     <button className="btn danger" onClick=${del} disabled=${busy}>${busy?"削除しています…":"削除する"}</button>
@@ -2241,7 +2241,7 @@ function AccountDeletePage({ctx}){
   const head = html`<header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>アカウントの削除</h1></header>`;
   if(!user) return html`<div className="screen">${head}<div className="demo-note"><${Icon} n="info" size=${18}/><span>アカウントを削除するには、ログインしてください。</span></div></div>`;
   if(profile&&profile.deletion) return html`<div className="screen">${head}<${DeletionStatus} ctx=${ctx}/></div>`;
-  if(!showAccountDeletion) return html`<div className="screen">${head}<div className="demo-note"><${Icon} n="info" size=${18}/><span>アカウントの削除（退会）は、現在準備中です。お急ぎの場合はお問い合わせ窓口へご連絡ください。</span></div></div>`;
+  if(!showAccountDeletion) return html`<div className="screen">${head}<div className="demo-note"><${Icon} n="info" size=${18}/><span>アカウントの削除（退会）は、現在準備中です。お急ぎの場合はお問い合わせ窓口（${LEGAL_CONTACT}）へご連絡ください。</span></div></div>`;
   const submit = async () => {
     setBusy(true); setErr("");
     try{
@@ -2284,8 +2284,8 @@ function AccountDeletePage({ctx}){
    ・本文は blocks の配列：文字列＝段落、配列＝箇条書き
    ・ログインしていなくても閲覧可。URL末尾 #terms / #privacy / #guidelines で直接開ける */
 const LEGAL_OPERATOR = "AIMUSE運営事務局（個人による運営）";
-const LEGAL_DATE = "【要確認：制定日（公開する日）】";
-const LEGAL_CONTACT = "【要確認：お問い合わせ用のメールアドレス（公開前に設定）】";
+const LEGAL_DATE = "2026年10月19日";
+const LEGAL_CONTACT = "aimuse.musicworld@gmail.com";
 const LEGAL_DOCS = [
 {
   id:"terms", tab:"利用規約", title:"利用規約",

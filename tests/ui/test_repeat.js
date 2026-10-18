@@ -24,6 +24,8 @@ function wav(sec) { const sr = 8000, n = Math.floor(sr * sec), b = Buffer.alloc(
   const w = ms => p.waitForTimeout(ms || 400);
   const st = () => p.evaluate(() => { const a = document.querySelector('audio'); const mini = document.querySelector('.mini button[aria-label="一時停止"], .mini button[aria-label="再生"]');
     const big = document.querySelector('.player .big-play'); return { tid: a.dataset.tid, paused: a.paused, ended: a.ended, t: a.currentTime, loop: a.loop, mini: mini && mini.getAttribute('aria-label'), big: big && big.getAttribute('aria-label') }; });
+  // 曲の終わりのちょうどその瞬間に調べると、次の再生が始まる直前（ended=true）に当たることがある。繰り返す設定の確認では、その瞬間を避けて調べ直す
+  const stS = async () => { let s = await st(); for (let k = 0; k < 6 && s.ended; k++) { await w(120); s = await st(); } return s; };
   // 再生された曲の順番を記録（変わるたびに1件）
   await p.exposeFunction('__rec', () => {});
   const watch = async ms => { const seq = []; const end = Date.now() + ms; let last = null, restarts = 0, lastT = 0;
@@ -49,17 +51,17 @@ function wav(sec) { const sr = 8000, n = Math.floor(sr * sec), b = Buffer.alloc(
   // ---- 2. 全曲リピート：最後のあと先頭に戻って続ける
   await setRepeat('全曲'); await closePlayer(); await playRank(titles[0]); await w(100);
   if ((await st()).paused) { await p.locator('.mini button[aria-label="再生"]').click(); }
-  r = await watch(4600); s = await st();
+  r = await watch(4600); s = await stS();
   ok('2 全曲リピート：最後の曲のあと先頭に戻って再生が続く', r.seq.length >= 4 && r.seq[3] === r.seq[0] && !s.paused, { seq: r.seq.map(short) });
 
   // ---- 3. 1曲リピート：同じ曲を繰り返す（以前は曲の終わりで止まっていた）
   await setRepeat('1曲'); const one = (await st()).tid;
-  r = await watch(3200); s = await st();
+  r = await watch(3200); s = await stS();
   ok('3 1曲リピート：曲の終わりで止まらず、同じ曲を最初から繰り返す', r.seq.length === 1 && r.seq[0] === one && r.restarts >= 2 && !s.paused, { seq: r.seq.map(short), restarts: r.restarts, s });
   ok('3 1曲リピート中は、全画面の表示が「一時停止」（再生中）で、実際にも再生中', s.big === '一時停止' && !s.paused);
   // 端末によって loop が効かない場合の予備（曲の終わりの合図で最初から再生し直す）
   await p.evaluate(() => { const a = document.querySelector('audio'); a.loop = false; });
-  r = await watch(2400); s = await st();
+  r = await watch(2400); s = await stS();
   ok('3 予備の仕組み：繰り返しの設定が効かない端末でも、終わりの合図で同じ曲を再生し直す', r.seq.length === 1 && r.restarts >= 1 && !s.paused, { restarts: r.restarts, s });
   await p.locator('.player button[aria-label="次の曲"]').click(); await w(300);
   ok('3 1曲リピート中でも「次の曲」を押せば次へ進む', (await st()).tid !== one);
@@ -70,7 +72,7 @@ function wav(sec) { const sr = 8000, n = Math.floor(sr * sec), b = Buffer.alloc(
   await p.evaluate(() => { });
   await p.locator('nav.nav button', { hasText: '検索' }).click(); await w(300); await p.fill('#q', 'ひまわり'); await w(500);
   await p.locator('.sec .list .row', { hasText: 'ひまわり' }).first().click(); await w(300);
-  r = await watch(2800); s = await st();
+  r = await watch(2800); s = await stS();
   ok('4 曲が1つだけの一覧でも、全曲リピートで繰り返す', r.seq.length === 1 && r.restarts >= 2 && !s.paused, { seq: r.seq.map(short), restarts: r.restarts });
   await p.locator('nav.nav button', { hasText: 'ホーム' }).click(); await w(300);
 

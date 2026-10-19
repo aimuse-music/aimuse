@@ -13,7 +13,7 @@
 begin;   -- 途中で中止したときは、拡張機能の追加も含めて全体を取り消す
 
 create extension if not exists pg_cron;
-create extension if not exists pg_net;
+create extension if not exists pg_net with schema extensions;   -- Supabase 推奨の場所
 
 do $$
 begin

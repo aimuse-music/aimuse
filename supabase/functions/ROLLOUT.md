@@ -9,29 +9,29 @@ Edge Functions → Secrets に登録するのは、秘密ではない設定値�
 
 | 手順 | 内容 | 本番への影響 |
 |---|---|---|
-| ★1 | SQL Editor で `migration_v1_12_purge_play_events.sql` を実行 | 完全削除の関数を1つ差し替え（その会員が聴いた再生記録も消す）と、合言葉の照合の関数を追加。データは変わりません |
+| ★1 ⏳ | v1.12：照合の関数 `purge_secret_matches` は 2026-10-19 に適用済み。残り（完全削除の手順に1行追加）は運営者が SQL Editor で `supabase/prod_2026-10-19_finish.sql` を実行（Claude の接続からは削除を含む変更を実行できないため） | 関数の差し替えのみ。データは変わりません |
 | ★2 ✅ 2026-10-19 公開済み | Edge Function `account-delete-request`（`index.ts`・`request.js`・`supa.js`）を公開。**Verify JWT はオフ** | 追加のみ。受付が off の間は、誰も申請できません |
 | ★3 ✅ 2026-10-19 公開済み | Edge Function `account-purge`（`index.ts`・`purge.js`・`supa.js`）を公開。**Verify JWT はオフ** | 追加のみ。合言葉と停止スイッチがあるため、呼ばれても何も消しません |
-| ★4 | SQL Editor で `cron_account_purge.sql` を実行（合言葉の作成と、1日1回の呼び出しの登録。結果には「1」が並ぶだけ） | `AIMUSE_PURGE_ENABLED` が無い間は何もしません |
-| 5 | Edge Functions → Secrets に `AIMUSE_ALLOWED_ORIGINS` = `https://aimusemusic.com`、`AIMUSE_DELETE_MODE` = `testers` を登録 | 設定のみ |
+| ★4 ✅ 2026-10-19 設定済み | `cron_account_purge.sql`：pg_cron・pg_net の有効化、金庫の合言葉の作成、毎日 03:17 の呼び出しの登録。呼び出しの確認済み（正しい合言葉 → 「停止中」503、違う合言葉 → 403）。pg_net の場所（extensions）への入れ直しは ★1 の SQL に含む | `AIMUSE_PURGE_ENABLED` が無い間、完全削除のスイッチが off の間は何もしません |
+| 5 | 専用テストアカウントを作る（表示名「退会テスト用」）→ ★`01_register_tester.sql`（許可リストに登録・受付は off のまま）→ ★Secrets の `AIMUSE_DELETE_TESTERS` に会員ID を登録 | 許可リストへの1行の追加のみ |
 | 6 | 専用テストアカウントで検証（下記） | テスト用アカウントだけが対象 |
 | 7 | 全員に公開：Secrets の `AIMUSE_DELETE_MODE` = `all`、SQL で受付 `all`・完全削除 `on`、PR「launch-switches」（`config.js` の `accountDeletion: true`・`pwa: true`）を main へ | 公開 |
 
+`AIMUSE_ALLOWED_ORIGINS` は未設定のままで構いません（未設定なら `https://aimusemusic.com` だけを許可します）。
 各手順のあとは、`rollout_check_readonly.sql`（読み取り専用）で状態を確認できます。
 
 ## 手順6：専用テストアカウントでの検証（本番の会員には影響しません）
 SQL はすべて `supabase/deletion_test/` にあります。どの SQL も、許可リスト以外の会員の申請があれば何も変更せずに中止します。
 
-1. 専用テストアカウントを作る：アプリで会員登録し、確認メールのリンクを開く（管理者にはしない。NOCTERA は使わない）
-2. `01_register_tester.sql`：1行目のメールアドレスを書き換えて実行 → 表示された会員ID を Secrets の `AIMUSE_DELETE_TESTERS` に登録
-3. iPhone で `https://aimusemusic.com/#account-delete-test` を開き、テスト用アカウントでログイン → 設定 → 「アカウントを削除（退会）」→ パスワードを入れて申請
+1. ★`01b_start_testers.sql`（受付を「テスト用アカウントだけ」にする）と、Secrets の `AIMUSE_DELETE_MODE` = `testers`（運営者の承認後）
+2. iPhone で `https://aimusemusic.com/#account-delete-test` を開き、テスト用アカウントでログイン → 設定 → 「アカウントを削除（退会）」→ パスワードを入れて申請
    - パスワードを間違えると申請できないこと、「退会手続き中」と表示されることを確認
-4. 「退会を取り消す」→ 元に戻ることを確認 → もう一度申請
-5. Secrets の `AIMUSE_PURGE_ENABLED` = `true` にしてから、`02_fast_forward_and_purge.sql` を実行
+3. 「退会を取り消す」→ 元に戻ることを確認 → もう一度申請
+4. Secrets の `AIMUSE_PURGE_ENABLED` = `true` にしてから、`02_fast_forward_and_purge.sql` を実行（運営者の承認後）
    - テスト用アカウントの申請だけを「30日を過ぎた」状態にし、完全削除を1回だけ呼び出します
-6. 1〜2分後に `03_check.sql`：申請が `done`、会員数が1減る、NOCTERA の曲数は変わらない、応答が 200
-7. テスト用アカウントでログインできないことを確認
-8. `04_finish_test.sql` で受付・完全削除を off に戻す（公開する場合は手順7へ）
+5. 1〜2分後に `03_check.sql`：申請が `done`、会員数が1減る、NOCTERA の曲数は変わらない、応答が 200
+6. テスト用アカウントでログインできないことを確認
+7. `04_finish_test.sql` で受付・完全削除を off に戻し、Secrets の `AIMUSE_PURGE_ENABLED` を削除（公開する場合は手順7へ）
 
 ## すぐに止める方法
 - 申請の受付を止める：`update aimuse_private.settings set value = 'off' where key = 'account_deletion_mode';`

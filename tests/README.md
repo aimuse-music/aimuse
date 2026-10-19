@@ -19,7 +19,8 @@
 - `release/check_readonly.py`（確認用SQLが読み取り専用であることの検査：文が1つ・書き込みの命令なし・標準の読み取り関数だけ・読み取り専用の取引で実行できる）
 - `release/test_killswitch.js`（PWA の緊急停止）
 - `db/test_v111.py`（プレイリスト 35件）・`ui/test_playlist.js`（プレイリストの画面 23件）
-- `db/test_v112.py`（v1.12：退会の完全削除で、その会員が聴いた再生記録も消す 18件×PostgreSQL 17・15）・`ui/test_upload.js`（楽曲の投稿：入力チェック・確認・失敗時・申請 15件）
+- `db/test_v112.py`（v1.12：退会の完全削除で、その会員が聴いた再生記録も消す 27件×PostgreSQL 17・15）・`ui/test_upload.js`（楽曲の投稿：入力チェック・確認・失敗時・申請 15件）
 - 画面のテストの端末指定は `iphone` または `android`（それ以外の文字は iPhone 13 として動きます）
-- `db/test_deletion_test_sql.py`（退会テスト用SQL 01〜04：専用テストアカウントだけが対象・本番の会員を守る 13件×2）・`edge/test_purge_caller.mjs`（完全削除の呼び出し元を金庫の合言葉で確認 7件）
+- `db/test_deletion_test_sql.py`（退会テスト用SQL 01・01b・02〜04：表示名「退会テスト用」のアカウントだけが対象・登録だけでは受付は off のまま・本番の会員を守る 19件×2）
+- `db/test_prod_finish.py`（2026-10-19 本番作業の仕上げSQL：v1.12・pg_net の入れ直し・既存データが変わらない・中止の条件 15件×2。pg_net は `share/extension` に置いた同じ形の偽物で代用）・`edge/test_new_keys.mjs` の 3b（受付スイッチをデータベースで確認：v1.13 未適用・off・testers・all・権限 7件）・`edge/test_purge_caller.mjs`（完全削除の呼び出し元を金庫の合言葉で確認 7件）
 - まとめて実行：`bash tests/run_all.sh`

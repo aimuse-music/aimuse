@@ -6,7 +6,7 @@
 アプリの退会画面で入力されたパスワードを、サーバー側で照合し、本人と確認できたときだけ退会を申請します。
 
 1. 送られてきたログイン情報（JWT）を、Supabase の認証サーバー（`/auth/v1/user`）で確認して会員を特定（公開用キーだけの呼び出しは何もしない）
-2. 受付スイッチ（この関数の設定）を確認：`AIMUSE_DELETE_MODE` が off（初期値）なら誰も申請できない／testers なら `AIMUSE_DELETE_TESTERS` の会員だけ／all なら全員
+2. 受付スイッチを確認：通常はデータベースの `account_deletion_mode`（v1.13 の `account_deletion_gate`。off＝誰も申請できない／testers＝許可リストの会員だけ／all＝全員。確認できないときは受け付けない）。Secrets に `AIMUSE_DELETE_MODE` を登録した場合だけ、そちらを優先
 3. 1時間に5回までの枠を1つ予約（`account_reauth_begin`。同時に送られても5回を超えない。結果は `account_reauth_end` で記録）
 4. パスワードを Supabase の正式なログイン機能（`/auth/v1/token`）で照合。照合用のログインはすぐ終了
 5. `account_request_deletion`（秘密キー専用）で申請。**データベース側でも**受付スイッチと許可リストを確認
@@ -20,7 +20,7 @@
 ## 設定（承認後・パソコン不要）
 1. Supabase 管理画面 → Edge Functions → 「account-delete-request」を作成し、`index.ts`・`request.js`・`supa.js` を貼り付けて公開
 2. 関数の設定で **「Enforce JWT verification（Verify JWT）」をオフ**（新しい形式のキーでは使えないため。本人確認は関数の中で行う）
-3. Secrets：`AIMUSE_ALLOWED_ORIGINS` = `https://aimusemusic.com`、`AIMUSE_DELETE_MODE` = `off`（検証時に `testers`）、`AIMUSE_DELETE_TESTERS` = テスト用アカウントの会員ID
+3. Secrets：登録は不要です（許可するサイトは未設定なら `https://aimusemusic.com`、受付はデータベースのスイッチに従う）
 4. データベース側のスイッチ（SQL Editor）：
    ```sql
    -- 検証を始めるとき（テスト用アカウントだけ）

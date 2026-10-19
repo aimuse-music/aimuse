@@ -39,6 +39,17 @@ checks(no, item, ok, detail) as (
     and (xpath('/row/n/text()', query_to_xml('select count(*) as n from vault.secrets where name = ''aimuse_purge_secret''', false, true, '')))[1]::text::int = 1,
     null
   union all
+  select 10, '手順4：pg_net が Supabase 推奨の場所（extensions）にある',
+    coalesce((select extnamespace = to_regnamespace('extensions') from pg_extension where extname = 'pg_net'), false),
+    coalesce((select extnamespace::regnamespace::text from pg_extension where extname = 'pg_net'), 'pg_net が未導入')
+  union all
+  select 11, '手順5：受付スイッチの確認関数（v1.13）はサーバー側（service_role）だけが実行できる',
+    to_regprocedure('public.account_deletion_gate(uuid)') is not null
+    and not has_function_privilege('anon', 'public.account_deletion_gate(uuid)', 'execute')
+    and not has_function_privilege('authenticated', 'public.account_deletion_gate(uuid)', 'execute')
+    and has_function_privilege('service_role', 'public.account_deletion_gate(uuid)', 'execute'),
+    null
+  union all
   select 5, '受付・完全削除のスイッチ（検証中は「testers / off→on」、公開後は「all / on」）',
     (select mode from s) in ('off', 'testers', 'all') and (select purge from s) in ('off', 'on'),
     '受付=' || (select mode from s) || ' / 完全削除=' || (select purge from s)

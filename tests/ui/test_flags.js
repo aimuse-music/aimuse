@@ -38,7 +38,7 @@ const server = http.createServer((req, res) => { const u = new URL(req.url, 'htt
   ok('1 カラーテーマなど、ほかの設定は従来どおり', await x.p.locator('.th-card').count() === 6);
   // 実際の本番用 config.js の初期値も確認
   const real = fs.readFileSync(path.join(PUB, 'config.js'), 'utf8');
-  ok('1 本番用 config.js の初期値：pwa false・accountDeletion false', /pwa:\s*false/.test(real) && /accountDeletion:\s*false/.test(real));
+  ok('1 本番用 config.js のスイッチは true か false で明記（公開後は pwa・accountDeletion とも true）', /pwa:\s*(true|false)/.test(real) && /accountDeletion:\s*(true|false)/.test(real), (real.match(/(pwa|accountDeletion):\s*\w+/g) || []).join(' '));
 
   // ---- 2. 退会オフでも、手続き中の方には状況と取り消しを表示（本人が戻せなくなる事故を防ぐ）
   await x.p.evaluate(() => { const d = window.__db, now = Date.now(); d.deletions.push({ user_id: '22222222-2222-4222-8222-222222222222', status: 'pending', requested_at: new Date(now).toISOString(), purge_after: new Date(now + 29 * 86400000).toISOString(), hidden: [] }); sessionStorage.setItem('fakedb2', JSON.stringify(d)); });

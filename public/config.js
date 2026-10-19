@@ -7,7 +7,7 @@ window.AIMUSE_CONFIG = {
   supabaseAnonKey: "sb_publishable_p1C-sr805QLLx4LARKcFcw_NFzm3r1H",
   // 機能スイッチ（公開の段階に合わせて運営者が切り替えます。true 以外はすべてオフ）
   features: {
-    pwa: false,              // ホーム画面に追加（PWA）。オフの間は登録済みの Service Worker も解除
-    accountDeletion: false   // 退会の申請画面。オフでも、退会手続き中の方の状況表示と取り消しは使えます
+    pwa: true,               // ホーム画面に追加（PWA）。オフの間は登録済みの Service Worker も解除
+    accountDeletion: true    // 退会の申請画面。オフでも、退会手続き中の方の状況表示と取り消しは使えます
   }
 };

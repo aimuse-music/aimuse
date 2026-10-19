@@ -3,6 +3,7 @@ import subprocess, json
 import os; D=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),'supabase')+'/'
 rd=lambda f: open(D+f,encoding='utf-8').read()
 MIG=rd('migration_v1_12_purge_play_events.sql'); F=[rd('deletion_test/0%d'%i+n) for i,n in [(1,'_register_tester.sql'),(2,'_fast_forward_and_purge.sql'),(3,'_check.sql'),(4,'_finish_test.sql')]]
+F1B=rd('deletion_test/01b_start_testers.sql')
 T='72000000-0000-4000-8000-000000000001'; M='72000000-0000-4000-8000-000000000002'; ADM='10000000-0000-4000-8000-000000000003'
 R=[]
 def ok(n,c,i=''): R.append(c); print(f"  [{'PASS' if c else 'FAIL'}] {n}  {str(i)[:150]}")
@@ -19,12 +20,21 @@ insert into vault.decrypted_secrets(name,decrypted_secret) values ('aimuse_purge
 create schema if not exists net; create table net.calls (url text, headers jsonb); create table net._http_response (status_code int, created timestamptz default now());
 create function net.http_post(url text, headers jsonb, body jsonb, timeout_milliseconds int) returns bigint language sql as $$ insert into net.calls values (url, headers) returning 1::bigint $$;
 update public.profiles set is_admin = true where id = '{ADM}';
-insert into auth.users (id,email,email_confirmed_at) values ('{T}','tester@example.com',now()),('{M}','member@example.com',now());""")
-    w=lambda email: F[0].replace("テスト用のメールアドレス",email)
-    o,e=q(F[0]); ok('書き換えずに実行すると中止・変化なし', '1人ではありません' in e and q("select value from aimuse_private.settings where key='account_deletion_mode'")[0]=='off', e)
-    o,e=q(w(q(f"select email from auth.users where id='{ADM}'")[0])); ok('管理者は登録できない', '管理者' in e, e)
-    q(f"update auth.users set email_confirmed_at=null where id='{M}'"); o,e=q(w('member@example.com')); ok('メール未確認は登録できない', '確認' in e, e); q(f"update auth.users set email_confirmed_at=now() where id='{M}'")
-    o,e=q(w('Tester@Example.com ')); ok('テスト用アカウントを登録（大文字・空白も一致）・会員IDだけ表示・受付 testers', not e and o.split('|')[0]==T and o.split('|')[1]=='testers', o or e)
+insert into auth.users (id,email,email_confirmed_at) values ('{M}','member@example.com',now());""")
+    mode=lambda: q("select value from aimuse_private.settings where key='account_deletion_mode'")[0]
+    o,e=q(F[0]); ok('テスト用アカウントが無ければ中止・変化なし', '1人ではありません' in e and mode()=='off' and q("select count(*) from aimuse_private.deletion_testers")[0]=='0', e)
+    o,e=q(F1B); ok('許可リストが空なら 01b は中止（受付 off のまま）', '許可リストが空' in e and mode()=='off', e)
+    q(f"update public.profiles set display_name='退会テスト用' where id='{ADM}'"); o,e=q(F[0]); ok('管理者は登録できない', '管理者' in e, e)
+    q(f"update public.profiles set display_name='管理' where id='{ADM}'")
+    q(f"""insert into auth.users (id,email,email_confirmed_at,raw_user_meta_data) values ('{T}','tester@example.com',null,'{{"display_name":" 退会テスト用 "}}')""")
+    o,e=q(F[0]); ok('メール未確認は登録できない', '確認' in e, e)
+    q(f"update auth.users set email_confirmed_at=now(), created_at=now()-interval '8 days' where id='{T}'"); o,e=q(F[0]); ok('登録から7日を過ぎたアカウントは使えない', '7日' in e, e)
+    q(f"update auth.users set created_at=now() where id='{T}'")
+    q(f"insert into public.artists (user_id,name) values ('{T}','テスト')"); o,e=q(F[0]); ok('アーティストを持つアカウントは使えない', 'アーティスト' in e, e); q(f"delete from public.artists where user_id='{T}'")
+    q(f"update public.profiles set display_name='退会テスト用' where id='{M}'"); o,e=q(F[0]); ok('同じ表示名が2人いれば中止', '2 人' in e, e); q(f"update public.profiles set display_name='会員' where id='{M}'")
+    o,e=q(F[0]); ok('テスト用アカウントを登録（表示名の前後の空白も一致）・会員IDだけ表示・受付は off のまま', not e and o.split('|')[0]==T and o.split('|')[1]=='off', o or e)
+    o,e=q(f"select status from public.account_request_deletion('{T}')",role='service_role'); ok('受付 off の間はテスト用アカウントも申請できない', 'pending' not in o and e, e)
+    o,e=q(F1B); ok('01b：受付を testers にする（完全削除は off のまま）', not e and o.split('|')[:2]==['testers','off'], o or e)
     # 申請（Edge Function の代わりに service_role で）
     o,e=q(f"select status from public.account_request_deletion('{T}')",role='service_role'); ok('テスト用アカウントは申請できる', o=='pending', o or e)
     o,e=q(f"select status from public.account_request_deletion('{M}')",role='service_role'); ok('許可リスト以外の会員は申請できない（受付 testers）', 'pending' not in o and e, e)

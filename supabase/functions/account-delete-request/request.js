@@ -11,7 +11,8 @@
 //   ⑤ ほかの端末のログインを終了（admin.signOut の others）
 // 返す内容に、会員ID・メールアドレスは含めません。
 
-// 受付のスイッチ（この関数の設定）：off＝誰も申請できない（初期値）/ testers＝許可リストの会員IDだけ / all＝全員
+// 受付のスイッチ（この関数の設定 AIMUSE_DELETE_MODE）：off＝誰も申請できない / testers＝許可リストの会員IDだけ / all＝全員
+//   設定が無いときは、データベースのスイッチに従う（databaseGate）
 //   データベース側にも同じスイッチと許可リストがあり、両方が許可したときだけ申請できる
 export function deletionGate(mode, testers, userId) {
   const m = String(mode || "off").trim();
@@ -23,7 +24,18 @@ export function deletionGate(mode, testers, userId) {
   return { status: 403, body: { code: "DELETION_DISABLED", message: "アカウントの削除（退会）は、現在準備中です" } };
 }
 
-export async function handleDeletionRequest({ admin, verifyPassword, userJwt, password, mode = "off", testers = "" }) {
+// 受付のスイッチをデータベースで確認（Edge Function の設定 AIMUSE_DELETE_MODE が無いとき。v1.13 の account_deletion_gate）
+//   ・データベースのスイッチ（account_deletion_mode と許可リスト）だけで受付を切り替えられる
+//   ・確認できないとき（関数が無い・障害）は申請を受け付けない
+export async function databaseGate(admin, userId) {
+  const { data, error } = await admin.rpc("account_deletion_gate", { p_user: userId });
+  if (error) return { status: 503, body: { code: "DELETION_DISABLED", message: "アカウントの削除（退会）は、現在準備中です" } };
+  const code = Array.isArray(data) ? (data[0] && Object.values(data[0])[0]) : data;
+  if (code === null || code === undefined || code === "") return null;
+  return { status: 403, body: { code: code === "NOT_ALLOWED" ? "NOT_ALLOWED" : "DELETION_DISABLED", message: "アカウントの削除（退会）は、現在準備中です" } };
+}
+
+export async function handleDeletionRequest({ admin, verifyPassword, userJwt, password, mode = null, testers = "" }) {
   const reply = (status, body) => ({ status, body });
   if (!userJwt) return reply(401, { code: "LOGIN_REQUIRED", message: "ログインしてください" });
 
@@ -32,7 +44,8 @@ export async function handleDeletionRequest({ admin, verifyPassword, userJwt, pa
   if (userErr || !user || !user.id || !user.email) return reply(401, { code: "LOGIN_REQUIRED", message: "ログインし直してください" });
 
   // 受付のスイッチ（パスワードを照合する前に判定。対象外の会員の試行回数は使わない）
-  const gate = deletionGate(mode, testers, user.id);
+  const useDb = mode === null || mode === undefined || String(mode).trim() === "";
+  const gate = useDb ? await databaseGate(admin, user.id) : deletionGate(mode, testers, user.id);
   if (gate) return gate;
 
   if (typeof password !== "string" || password.length === 0 || password.length > 200) {

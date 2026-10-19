@@ -71,6 +71,35 @@ ok("3 公開用キーでは、会員の削除も完全削除の関数も実行�
 const old = await fetch(`${gw.url}/rest/v1/rpc/account_purge_claim`, { method: "POST", headers: { apikey: KEYS.secret, Authorization: `Bearer ${KEYS.secret}`, "Content-Type": "application/json" }, body: "{}" });
 ok("3 （参考）秘密キーを Authorization に入れる従来の送り方は、新しい形式では拒否される", old.status === 401);
 
+// ---- 3b. 関数の設定 AIMUSE_DELETE_MODE が無いとき：データベースのスイッチに従う（v1.13 account_deletion_gate）
+const dbReq = (u, pw) => handleDeletionRequest({ admin, verifyPassword: verify, userJwt: userJwt(u), password: pw, mode: null });
+const tokenCalls = (m) => gw.log.slice(m).filter((l) => l.path === "/auth/v1/token").length;
+q("update aimuse_private.settings set value='all' where key='account_deletion_mode'");
+mark = gw.log.length; r = await dbReq("mike", "mike-pass");
+ok("3b 確認の関数が無い（v1.13 未適用）ときは、データベースが all でも受け付けない（パスワード照合もしない）", r.status === 503 && r.body.code === "DELETION_DISABLED" && tokenCalls(mark) === 0 && active(MIKE) === "0", r.body);
+q(fs.readFileSync(new URL("../../supabase/migration_v1_13_deletion_gate.sql", import.meta.url), "utf8"));
+q("update aimuse_private.settings set value='off' where key='account_deletion_mode'");
+mark = gw.log.length; r = await dbReq("mike", "mike-pass");
+ok("3b データベースの受付が off なら「準備中」（パスワード照合もしない）", r.status === 403 && r.body.code === "DELETION_DISABLED" && tokenCalls(mark) === 0 && active(MIKE) === "0", r.body);
+q("update aimuse_private.settings set value='testers' where key='account_deletion_mode'");
+mark = gw.log.length; r = await dbReq("mike", "mike-pass");
+ok("3b testers：許可リストに無い会員は申請できない（パスワード照合もしない）", r.status === 403 && r.body.code === "NOT_ALLOWED" && tokenCalls(mark) === 0 && active(MIKE) === "0", r.body);
+q(`insert into aimuse_private.deletion_testers (user_id) values ('${MIKE}') on conflict do nothing`);
+r = await dbReq("mike", "wrong");
+ok("3b testers：許可リストの会員でもパスワード違いは 401", r.status === 401 && r.body.code === "WRONG_PASSWORD" && active(MIKE) === "0", r.body);
+r = await dbReq("mike", "mike-pass");
+ok("3b testers：許可リストの会員は正しいパスワードで申請できる", r.status === 200 && r.body.status === "pending" && active(MIKE) === "1", r.body);
+q(`update aimuse_private.account_deletions set status='canceled', canceled_at=now() where user_id='${MIKE}' and status='pending'`);
+q("update aimuse_private.settings set value='all' where key='account_deletion_mode'");
+q(`delete from aimuse_private.deletion_testers where user_id='${MIKE}'`); q(`delete from aimuse_private.reauth_failures where user_id='${MIKE}'`);
+r = await dbReq("mike", "mike-pass");
+ok("3b all：許可リストに無い会員も申請できる", r.status === 200 && r.body.status === "pending" && active(MIKE) === "1", r.body);
+const pubc = adminClient({ url: gw.url, secret: KEYS.publishable, publishable: KEYS.publishable });
+const g1 = await pubc.rpc("account_deletion_gate", { p_user: MIKE });
+const g2 = await fetch(`${gw.url}/rest/v1/rpc/account_deletion_gate`, { method: "POST", headers: { apikey: KEYS.publishable, Authorization: `Bearer ${userJwt("mike")}`, "Content-Type": "application/json" }, body: JSON.stringify({ p_user: MIKE }) });
+ok("3b 確認の関数は、未ログイン・会員からは実行できない（service_role 専用）", g1.error && g1.error.status === 403 && g2.status === 403, { g1: g1.error, g2: g2.status });
+q(`update aimuse_private.account_deletions set status='canceled', canceled_at=now() where user_id='${MIKE}' and status='pending'`);
+
 // ---- 4. 完全削除（新しい形式のキー・HTTP）
 q(`update aimuse_private.account_deletions set purge_after=now()-interval '1 minute' where user_id='${HAMU}' and status='pending'`);
 let p = await runPurge(admin);

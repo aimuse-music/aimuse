@@ -7,7 +7,8 @@
 //   旧形式：SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY）。管理用の秘密キーは利用者に返しません
 // ・この関数の設定（Secrets）
 //     AIMUSE_ALLOWED_ORIGINS …… 呼び出しを許可するサイト（カンマ区切り。未設定なら https://aimusemusic.com）
-//     AIMUSE_DELETE_MODE ………… off（初期値・誰も申請できない）/ testers / all
+//     AIMUSE_DELETE_MODE ………… 通常は登録しない（データベースのスイッチ account_deletion_mode に従う）。
+//                               登録すると、こちらが優先：off（誰も申請できない）/ testers / all
 //     AIMUSE_DELETE_TESTERS …… testers のときに申請を許可する会員ID（カンマ区切り）
 import { handleDeletionRequest, corsHeaders } from "./request.js";
 import { resolveKeys, adminClient, passwordVerifier } from "./supa.js";
@@ -34,7 +35,7 @@ Deno.serve(async (req: Request) => {
   try {
     const r = await handleDeletionRequest({
       admin, verifyPassword, userJwt: looksLikeUserJwt ? userJwt : "", password,
-      mode: env("AIMUSE_DELETE_MODE") ?? "off", testers: env("AIMUSE_DELETE_TESTERS") ?? "",
+      mode: env("AIMUSE_DELETE_MODE"), testers: env("AIMUSE_DELETE_TESTERS") ?? "",
     });
     return Response.json(r.body, { status: r.status, headers: cors });
   } catch (e) {

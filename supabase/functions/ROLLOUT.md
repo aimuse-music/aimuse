@@ -10,12 +10,12 @@ Edge Functions → Secrets に登録するのは、秘密ではない設定値�
 | 手順 | 内容 | 本番への影響 |
 |---|---|---|
 | ★1 | SQL Editor で `migration_v1_12_purge_play_events.sql` を実行 | 完全削除の関数を1つ差し替え（その会員が聴いた再生記録も消す）と、合言葉の照合の関数を追加。データは変わりません |
-| ★2 | Edge Function `account-delete-request`（`index.ts`・`request.js`・`supa.js`）を公開。**Verify JWT はオフ** | 追加のみ。受付が off の間は、誰も申請できません |
-| ★3 | Edge Function `account-purge`（`index.ts`・`purge.js`・`supa.js`）を公開。**Verify JWT はオフ** | 追加のみ。合言葉と停止スイッチがあるため、呼ばれても何も消しません |
+| ★2 ✅ 2026-10-19 公開済み | Edge Function `account-delete-request`（`index.ts`・`request.js`・`supa.js`）を公開。**Verify JWT はオフ** | 追加のみ。受付が off の間は、誰も申請できません |
+| ★3 ✅ 2026-10-19 公開済み | Edge Function `account-purge`（`index.ts`・`purge.js`・`supa.js`）を公開。**Verify JWT はオフ** | 追加のみ。合言葉と停止スイッチがあるため、呼ばれても何も消しません |
 | ★4 | SQL Editor で `cron_account_purge.sql` を実行（合言葉の作成と、1日1回の呼び出しの登録。結果には「1」が並ぶだけ） | `AIMUSE_PURGE_ENABLED` が無い間は何もしません |
 | 5 | Edge Functions → Secrets に `AIMUSE_ALLOWED_ORIGINS` = `https://aimusemusic.com`、`AIMUSE_DELETE_MODE` = `testers` を登録 | 設定のみ |
 | 6 | 専用テストアカウントで検証（下記） | テスト用アカウントだけが対象 |
-| 7 | 全員に公開：Secrets の `AIMUSE_DELETE_MODE` = `all`、SQL で受付 `all`・完全削除 `on`、`config.js` の `accountDeletion: true` を main へ | 公開 |
+| 7 | 全員に公開：Secrets の `AIMUSE_DELETE_MODE` = `all`、SQL で受付 `all`・完全削除 `on`、PR「launch-switches」（`config.js` の `accountDeletion: true`・`pwa: true`）を main へ | 公開 |
 
 各手順のあとは、`rollout_check_readonly.sql`（読み取り専用）で状態を確認できます。
 
@@ -45,3 +45,6 @@ SQL はすべて `supabase/deletion_test/` にあります。どの SQL も、�
 - 他の会員のデータは削除しない（他の会員のファイル・フォロー・再生記録・曲が残ることを確認）
 - 申請中は、その会員の曲・プロフィール・プレイリスト・レビュー・フォローを公開画面から隠す
 - 他の会員のプレイリストに入っていた退会者の曲は、完全削除のときに一覧から外れる（曲そのものが無くなるため）
+
+## 元に戻す方法（Edge Function）
+- Supabase の画面 → Edge Functions → 関数を選ぶ → 削除。関数が無くても、アプリは「準備中」と表示するだけで、他の機能には影響しません

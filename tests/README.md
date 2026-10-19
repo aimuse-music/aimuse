@@ -24,3 +24,4 @@
 - `db/test_deletion_test_sql.py`（退会テスト用SQL 01・01b・02〜04：表示名「退会テスト用」のアカウントだけが対象・登録だけでは受付は off のまま・本番の会員を守る 19件×2）
 - `db/test_prod_finish.py`（2026-10-19 本番作業の仕上げSQL：v1.12・pg_net の入れ直し・既存データが変わらない・中止の条件 15件×2。pg_net は `share/extension` に置いた同じ形の偽物で代用）・`edge/test_new_keys.mjs` の 3b（受付スイッチをデータベースで確認：v1.13 未適用・off・testers・all・権限 7件）・`edge/test_purge_caller.mjs`（完全削除の呼び出し元を金庫の合言葉で確認 7件）
 - まとめて実行：`bash tests/run_all.sh`
+- `ui/test_recovery.js`（パスワード再設定のリンクで開くと新しいパスワードの入力画面が出る・期限切れのリンクは理由を表示・通常の起動では出ない 14件×iPhone/Android。リンクの通知が読み込み直後に1回だけ届く本物の動きを fake-profile.js で再現）

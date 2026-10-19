@@ -291,14 +291,29 @@
     getPublicUrl(path){ return {data:{publicUrl: blobs[path] || ("https://x.supabase.co/storage/v1/object/public/avatars/"+path)}}; }
   };
 
-  window.supabase = { createClient(){ return {
+  // 本物の supabase-js と同じく、作成時にアドレスのメールリンク情報（#access_token…&type=recovery / #error_code=…）を読み取って消し、
+  // 読み込みが終わった直後（setTimeout 0）に、その時点で登録済みの受け取り先へだけ PASSWORD_RECOVERY を通知する
+  let initP = Promise.resolve();
+  const detectUrl = () => {
+    const h = new URLSearchParams((location.hash||"").replace(/^#/,""));
+    if(!h.get("access_token") && !h.get("error_code") && !h.get("error")) return;
+    history.replaceState(null, "", location.pathname + location.search);
+    if(h.get("error_code") || h.get("error")) return;
+    const u = Object.entries(USERS).find(([e,x])=>"jwt-"+x.id===h.get("access_token"));
+    if(!u) return;
+    session = { user:{ id:u[1].id, email:u[0] }, access_token:h.get("access_token"), reauthAt:Date.now() };
+    localStorage.setItem("fake-session", JSON.stringify(session));
+    window.__recoveryNotified = 0;
+    initP = delay().then(()=>{ if(h.get("type")==="recovery") setTimeout(()=>{ window.__recoveryNotified = listeners.size; listeners.forEach(cb=>cb("PASSWORD_RECOVERY", session)); },0); });
+  };
+  window.supabase = { createClient(){ detectUrl(); return {
     auth:{
-      async getSession(){ await delay(); return { data:{ session } }; },
+      async getSession(){ await initP; await delay(); return { data:{ session } }; },
       onAuthStateChange(cb){ listeners.add(cb); setTimeout(()=>cb("INITIAL_SESSION", session),0); return { data:{ subscription:{ unsubscribe(){ listeners.delete(cb) } } } }; },
       async signInWithPassword({email,password}){ await delay(); const u=USERS[email]; if(!u||password==="wrong") return {data:{user:null,session:null},error:{message:"Invalid login credentials"}};
         session = { user:{ id:u.id, email }, access_token:"jwt-"+u.id, reauthAt:Date.now() }; localStorage.setItem("fake-session", JSON.stringify(session)); fire("SIGNED_IN"); return { data:{ session, user:session.user }, error:null }; },
       async signOut(o){ await delay(); window.__log.push({op:"signOut",scope:o&&o.scope}); if(o&&o.scope==="others") return { error:null }; session=null; localStorage.removeItem("fake-session"); fire("SIGNED_OUT"); return { error:null }; },
-      async signUp(){ return { error:{message:"n/a"} }; }, async updateUser(){ return { error:null }; }, async resetPasswordForEmail(){ return { error:null }; }
+      async signUp(){ return { error:{message:"n/a"} }; }, async updateUser(a){ await delay(); window.__log.push({op:"updateUser",hasPassword:!!(a&&a.password)}); return { error:null }; }, async resetPasswordForEmail(){ return { error:null }; }
     },
     // Edge Function（account-delete-request）の代わり：パスワード照合・1時間5回まで・管理者は不可（本物の処理は tests/edge で検証）
     functions:{ async invoke(name,{body}={}){ await delay(); window.__log.push({op:"invoke",name,hasPassword:!!(body&&body.password)});

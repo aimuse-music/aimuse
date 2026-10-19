@@ -565,7 +565,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-19.1";
+const BUILD = "2026-10-19.2";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -653,6 +653,17 @@ const social = {
 
 const SB_CFG = window.AIMUSE_CONFIG || {};
 const sbReady = !!(window.supabase && SB_CFG.supabaseUrl && SB_CFG.supabaseAnonKey && !/^__/.test(SB_CFG.supabaseUrl));
+// メールのリンク（パスワード再設定・確認）で開いたときの情報を、Supabase がアドレスを読み取って消す前に控えておく
+//   ・type=recovery … パスワード再設定のリンク → 新しいパスワードの入力画面を出す
+//   ・error_code など … 期限切れ・使用済みのリンク → ログイン画面に理由を表示する
+const AUTH_LINK = (()=>{
+  try{
+    const h = new URLSearchParams((location.hash||"").replace(/^#/,"")), q = new URLSearchParams(location.search||"");
+    const get = k => h.get(k) || q.get(k);
+    const code = get("error_code"), errd = get("error_description");
+    return { recovery: get("type")==="recovery", error: (code||errd) ? (code==="otp_expired" ? "メールのリンクの有効期限が切れているか、すでに使われています。もう一度「パスワードを忘れた場合」から再設定メールを送ってください。" : "メールのリンクを確認できませんでした。もう一度お試しください。") : null };
+  }catch(e){ return { recovery:false, error:null }; }
+})();
 const sb = sbReady ? window.supabase.createClient(SB_CFG.supabaseUrl, SB_CFG.supabaseAnonKey, {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}) : null;
 
 /* 音源・画像は非公開バケット。期限付きURL（署名付きURL）を発行して再生・表示する
@@ -697,10 +708,10 @@ const reportFromRow = r => ({
 
 /* 会員（ログイン状態） */
 const auth = {
-  user:null, profile:null, ready:false, recovery:false, listeners:new Set(),
+  user:null, profile:null, ready:false, recovery:false, linkError:null, listeners:new Set(),
   get isAdmin(){ return !!(this.profile&&this.profile.is_admin); },
-  emit(){ this.listeners.forEach(f=>f({user:this.user,profile:this.profile,ready:this.ready,recovery:this.recovery})); },
-  subscribe(f){ this.listeners.add(f); f({user:this.user,profile:this.profile,ready:this.ready,recovery:this.recovery}); return ()=>this.listeners.delete(f); },
+  emit(){ this.listeners.forEach(f=>f({user:this.user,profile:this.profile,ready:this.ready,recovery:this.recovery,linkError:this.linkError})); },
+  subscribe(f){ this.listeners.add(f); f({user:this.user,profile:this.profile,ready:this.ready,recovery:this.recovery,linkError:this.linkError}); return ()=>this.listeners.delete(f); },
   async loadProfile(){
     if(!sb||!this.user){ this.profile=null; return; }
     let r = await sb.from("profiles").select("id,display_name,is_admin,avatar_path,header_path,theme").eq("id",this.user.id).maybeSingle();
@@ -712,15 +723,20 @@ const auth = {
   },
   async init(){
     if(!sb){ this.ready=true; this.emit(); return; }
-    const {data} = await sb.auth.getSession();
-    this.user = data.session?.user||null;
-    await this.loadProfile(); this.ready=true; this.emit();
+    // 先に通知を受け取る準備をする（パスワード再設定のリンクの通知「PASSWORD_RECOVERY」は、読み込み直後に1回だけ届くため）
     sb.auth.onAuthStateChange((event,session)=>{
       if(event==="PASSWORD_RECOVERY") this.recovery=true;
+      if(!this.ready) return;   // 読み込み中は下の getSession の結果で反映する
       const prevId=this.user?.id; this.user=session?.user||null;
       // コールバック内で直接 await しない（Supabaseの推奨）
       setTimeout(async()=>{ await this.loadProfile(); this.emit(); if(prevId!==this.user?.id) repo.refresh(); },0);
     });
+    const {data} = await sb.auth.getSession();
+    this.user = data.session?.user||null;
+    // 通知を受け取れなかった場合も、再設定のリンクで開いてログイン状態になっていれば入力画面を出す
+    if(AUTH_LINK.recovery && this.user) this.recovery=true;
+    if(AUTH_LINK.error && !this.user) this.linkError=AUTH_LINK.error;
+    await this.loadProfile(); this.ready=true; this.emit();
   },
   signIn:(email,password)=>sb.auth.signInWithPassword({email,password}),
   signUp:(email,password,name)=>sb.auth.signUp({email,password,options:{data:{display_name:name||undefined},emailRedirectTo:location.origin+location.pathname}}),
@@ -1537,7 +1553,7 @@ function AuthPanel({ctx}){
   const [name,setName] = useState(()=>authDraft.name);
   useEffect(()=>{ authDraft.mode=mode==="reset"?"login":mode; authDraft.email=email; authDraft.name=name; },[mode,email,name]);
   const [busy,setBusy] = useState(false);
-  const [err,setErr] = useState(null);
+  const [err,setErr] = useState(()=>{ const e=auth.linkError; auth.linkError=null; return e; });
   const [info,setInfo] = useState(null);
   if(!sb) return html`<div className="empty">サーバーとの接続設定が完了していないため、ログインできません。</div>`;
   const go = async () => {
@@ -2631,7 +2647,7 @@ function App(){
   const [reportsRaw,setReports] = useState([]);
   const [repoMode,setRepoMode] = useState("pending");
   const [repoLoadedAt,setRepoLoadedAt] = useState(0);
-  const [authState,setAuthState] = useState({user:null,profile:null,ready:false,recovery:false});
+  const [authState,setAuthState] = useState({user:null,profile:null,ready:false,recovery:false,linkError:null});
   // お気に入り・フォローはログイン中の会員ごとにSupabaseから読み込む（未ログイン時は空）
   const [favs,setFavs] = useState(()=>new Set());
   const [follows,setFollows] = useState(()=>new Set());
@@ -2672,6 +2688,7 @@ function App(){
   const user = authState.user, profile = authState.profile, isAdmin = !!(profile&&profile.is_admin);
   const withdrawing = !!(user && profile && profile.deletion);   // 退会手続き中（操作はサーバー側でも拒否される）
   useEffect(()=>{ if(authState.recovery){ setHistory([]); setTab("me"); } },[authState.recovery]);
+  useEffect(()=>{ if(authState.linkError){ setHistory([]); setTab("me"); } },[authState.linkError]);
 
   // ログイン・ログアウト・アカウント切り替えのたびに、まず空にしてから本人の分だけ読み込み直す
   const uid = user ? user.id : null;

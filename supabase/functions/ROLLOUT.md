@@ -30,7 +30,8 @@ SQL はすべて `supabase/deletion_test/` にあります。どの SQL も、�
 2. Secrets の `AIMUSE_PURGE_ENABLED` = `true` にしてから、`02_fast_forward_and_purge.sql` を実行
    - テスト用アカウントの申請だけを「30日を過ぎた」状態にし、完全削除を1回だけ呼び出します
 3. 1〜2分後に `03_check.sql`：申請が `done`、会員数が1減る、NOCTERA の曲数は変わらない、応答が 200
-4. 公開を続ける場合は、完全削除 `on` のまま毎日の自動実行に任せます。止める場合は「すぐに止める方法」へ
+4. 完全削除をまだ有効にしない場合は `04b_finish_test_keep_intake.sql`（受付は全員のまま、完全削除 off）と、Secrets の `AIMUSE_PURGE_ENABLED` の削除
+5. 有効にする場合は、完全削除 `on` のまま毎日の自動実行に任せます（運営者の承認後）
 
 ## すぐに止める方法
 - 申請の受付を止める：`update aimuse_private.settings set value = 'off' where key = 'account_deletion_mode';`（アプリの画面は「準備中」と表示します）

@@ -3,7 +3,7 @@ import subprocess, json
 import os; D=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),'supabase')+'/'
 rd=lambda f: open(D+f,encoding='utf-8').read()
 MIG=rd('migration_v1_12_purge_play_events.sql'); F=[rd('deletion_test/0%d'%i+n) for i,n in [(1,'_register_tester.sql'),(2,'_fast_forward_and_purge.sql'),(3,'_check.sql'),(4,'_finish_test.sql')]]
-F1B=rd('deletion_test/01b_start_testers.sql')
+F1B=rd('deletion_test/01b_start_testers.sql'); F4B=rd('deletion_test/04b_finish_test_keep_intake.sql')
 T='72000000-0000-4000-8000-000000000001'; M='72000000-0000-4000-8000-000000000002'; ADM='10000000-0000-4000-8000-000000000003'
 R=[]
 def ok(n,c,i=''): R.append(c); print(f"  [{'PASS' if c else 'FAIL'}] {n}  {str(i)[:150]}")
@@ -49,6 +49,9 @@ insert into auth.users (id,email,email_confirmed_at) values ('{M}','member@examp
     hdr=q("select headers->>'x-aimuse-purge-secret' = repeat('z',64) from net.calls")[0]; ok('呼び出しには金庫の合言葉を使い、結果には表示しない', hdr=='t' and 'zzzz' not in o, o)
     o,e=q(F[1]); ok('もう一度実行しても、対象はテスト用アカウントの申請だけ', not e and q("select string_agg(user_id::text, ',') from aimuse_private.account_deletions where purge_after < now() and status='pending'")[0]==T, e)
     o,e=q(F[2]); ok('確認SQL（読み取り）が動く', not e and o.count('|')>=7, (o or e)[:120])
+    q("update aimuse_private.settings set value='all' where key='account_deletion_mode'")
+    o,e=q(F4B); ok('後片付け（公開中）：受付は all のまま、完全削除 off、許可リスト0人', o=='all|off|0', o or e)
+    q(f"insert into aimuse_private.deletion_testers (user_id) values ('{T}')")
     o,e=q(F[3]); ok('後片付け：受付・完全削除 off、許可リスト0人', o=='off|off|0', o or e)
     subprocess.run(['psql','-h','/opt/pgx','-p',str(port),'-U','postgres','-X','-q','-d','postgres','-c','drop database if exists dt'],capture_output=True)
 print(f"合計 {len(R)} 件 / 不合格 {R.count(False)} 件")

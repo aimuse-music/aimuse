@@ -73,6 +73,12 @@ export async function handleProbe({ admin, keys, userJwt, callerSecret, body, en
   }
   // 2. 設定（Cloudflare）
   const acct = env("CF_ACCOUNT_ID"), token = env("CF_AI_TOKEN");
+  // 設定の確認だけ（check: true）：名前と形式、トークンが有効かを返す。AI の解析はしない（無料枠を使わない）。値そのものは返さない
+  if (body && body.check === true) {
+    const out = { mode: "check", cf_account_id: { set: !!acct, format_ok: !!acct && /^[0-9a-f]{32}$/i.test(acct) }, cf_ai_token: { set: !!token, status: null } };
+    if (token && out.cf_account_id.format_ok) out.cf_ai_token.status = await verifyToken(fetchImpl, acct, token);
+    return reply(200, out);
+  }
   if (!acct || !/^[0-9a-f]{32}$/i.test(acct) || !token) return reply(503, { code: "NOT_CONFIGURED" });
   // 3. 対象の曲
   const trackId = body && body.track_id;
@@ -84,6 +90,8 @@ export async function handleProbe({ admin, keys, userJwt, callerSecret, body, en
   if (!track) return reply(404, { code: "NOT_FOUND" });
   const lyrics = Array.isArray(track.lyrics) ? track.lyrics : [];
   if (!lyrics.some((l) => lyricKind(l) === "text")) return reply(422, { code: "NO_LYRICS" });
+  // 長さが分からない曲（0秒）と10分を超える曲は解析しない（使うニューロンを見積もれないため・無料枠を守るため）
+  if (!(track.duration > 0)) return reply(422, { code: "UNKNOWN_DURATION" });
   if (track.duration > MAX_SECONDS) return reply(422, { code: "TOO_LONG" });
   // 4. 音源（非公開の保存場所から、管理用のキーで取り出す）
   const t0 = now();
@@ -133,6 +141,18 @@ export async function handleProbe({ admin, keys, userJwt, callerSecret, body, en
     lines: al.lines.map((x) => ({ ...x, line: x.i + 1, text: lyrics[x.i] })),
     transcript_head: String(result.text || "").slice(0, 400),
   });
+}
+
+// トークンが有効か（Cloudflare の確認用の窓口。解析ではないので無料枠を使わない）。アカウントのトークン → 個人のトークンの順に確認
+async function verifyToken(fetchImpl, acct, token) {
+  for (const url of [`https://api.cloudflare.com/client/v4/accounts/${acct}/tokens/verify`, "https://api.cloudflare.com/client/v4/user/tokens/verify"]) {
+    try {
+      const r = await fetchImpl(url, { headers: { Authorization: `Bearer ${token}` } });
+      const j = await r.json().catch(() => null);
+      if (r.ok && j && j.success && j.result && j.result.status) return String(j.result.status);
+    } catch (_) { /* 次の窓口で確認 */ }
+  }
+  return "invalid_or_unverifiable";
 }
 
 async function restGet(fetchImpl, keys, q) {

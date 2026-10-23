@@ -27,6 +27,7 @@ function world(o = {}) {
     if (url.includes("/rest/v1/profiles")) return J(200, [{ is_admin: url.includes("u-admin") && !o.bannedAdmin, is_banned: !!o.bannedAdmin }]);
     if (url.includes("/rest/v1/tracks")) return o.noTrack ? J(200, []) : J(200, [{ id: TRACK, title: "おぼろ月", lyrics: o.lyrics || LYR, audio_path: "u-admin/" + TRACK + ".mp3", duration: o.duration ?? 258 }]);
     if (url.includes("/storage/v1/object/audio/")) { if (o.audioFail) return J(404, {}); const b = o.bigAudio ? new Uint8Array(21 * 1024 * 1024) : AUDIO; return { ok: true, status: 200, arrayBuffer: async () => b.buffer.slice(0) }; }
+    if (url.includes("/tokens/verify")) { if (o.verify === "user" && url.includes("/accounts/")) return J(401, { success: false }); return o.verify === "bad" ? J(401, { success: false, errors: [{ code: 1000 }] }) : J(200, { success: true, result: { status: "active" } }); }
     if (url.startsWith("https://api.cloudflare.com/")) {
       if (o.cfThrow) { const e = new Error("aborted"); e.name = o.cfThrow; throw e; }
       if (o.cf) return J(o.cf.status, o.cf.body);
@@ -54,6 +55,7 @@ r = await run({}, { secret: SECRET, body: { track_id: "1;drop" } }); ok("3 曲ID
 r = await run({ noTrack: true }, { secret: SECRET }); ok("3 曲が無ければ 404", r.status === 404);
 r = await run({ lyrics: ["[Intro]", ""] }, { secret: SECRET }); ok("3 歌詞が無ければ 422（解析しない）", r.status === 422 && r.body.code === "NO_LYRICS" && !r.log.some((l) => String(l.url || "").includes("storage")));
 r = await run({ duration: 900 }, { secret: SECRET }); ok("3 10分を超える曲は 422（無料枠を守る）", r.status === 422 && r.body.code === "TOO_LONG");
+r = await run({ duration: 0 }, { secret: SECRET }); ok("3 長さが分からない曲（0秒）は 422（Cloudflare を呼ばない）", r.status === 422 && r.body.code === "UNKNOWN_DURATION" && !r.log.some((l) => String(l.url || "").includes("cloudflare")));
 r = await run({ audioFail: true }, { secret: SECRET }); ok("3 音源を取り出せなければ 502", r.status === 502 && r.body.code === "AUDIO_UNAVAILABLE");
 r = await run({ bigAudio: true }, { secret: SECRET }); ok("3 20MB を超える音源は 422（Cloudflare を呼ばない）", r.status === 422 && !r.log.some((l) => String(l.url || "").includes("cloudflare")));
 // 4. Cloudflare の失敗
@@ -81,10 +83,20 @@ r = await run({}, { secret: SECRET, body: { track_id: TRACK, prompt: true } });
 const sent2 = JSON.parse(r.log.find((l) => String(l.url || "").startsWith("https://api.cloudflare.com/")).body);
 ok("5 prompt: true のときだけ、歌詞の先頭（見出しを除く・120文字まで）を手がかりに渡す", sent2.initial_prompt === promptFrom(LYR) && !sent2.initial_prompt.includes("Verse") && sent2.initial_prompt.length <= 120);
 r = await run({}, { jwt: "jwt-admin" }); ok("5 管理者のログイン情報でも実行できる", r.status === 200 && r.body.caller === "admin");
-// 6. そのほか
-ok("6 Base64 の変換は大きなデータでも正しい", toBase64(new Uint8Array(200_000).fill(255)) === Buffer.alloc(200_000, 255).toString("base64"));
+// 6. 設定の確認だけ（AI を呼ばない）
+r = await run({}, { secret: SECRET, body: { check: true } });
+ok("6 設定の確認：名前・形式・トークンが有効か（active）を返す", r.status === 200 && r.body.cf_account_id.set && r.body.cf_account_id.format_ok && r.body.cf_ai_token.set && r.body.cf_ai_token.status === "active", r.body);
+ok("6 設定の確認では解析しない（AI・音源・曲の読み取りなし）", !r.log.some((l) => String(l.url || "").includes("/ai/run/") || String(l.url || "").includes("/storage/") || String(l.url || "").includes("/rest/v1/tracks")));
+ok("6 設定の確認の結果に、トークンとアカウントIDの値は含まれない", !JSON.stringify(r.body).includes(TOKEN) && !JSON.stringify(r.body).includes(ACCT));
+r = await run({ verify: "user" }, { secret: SECRET, body: { check: true } }); ok("6 個人のトークンでも確認できる", r.body.cf_ai_token.status === "active");
+r = await run({ verify: "bad" }, { secret: SECRET, body: { check: true } }); ok("6 無効なトークンは invalid と分かる", r.body.cf_ai_token.status === "invalid_or_unverifiable");
+r = await run({ env: { CF_AI_TOKEN: null, CF_ACCOUNT_ID: "abc" } }, { secret: SECRET, body: { check: true } });
+ok("6 未登録・形式違いも分かる（Cloudflare に問い合わせない）", !r.body.cf_ai_token.set && r.body.cf_account_id.set && !r.body.cf_account_id.format_ok && !r.log.some((l) => String(l.url || "").includes("cloudflare")));
+r = await run({}, { body: { check: true } }); ok("6 設定の確認も、合言葉か管理者でなければ実行できない", r.status === 401);
+// 7. そのほか
+ok("7 Base64 の変換は大きなデータでも正しい", toBase64(new Uint8Array(200_000).fill(255)) === Buffer.alloc(200_000, 255).toString("base64"));
 const a = fs.readFileSync(new URL("../../supabase/functions/account-purge/supa.js", import.meta.url), "utf8"), b = fs.readFileSync(new URL("../../supabase/functions/lyrics-align-probe/supa.js", import.meta.url), "utf8");
-ok("6 接続部品（supa.js）は他の関数と同じ内容", a === b);
+ok("7 接続部品（supa.js）は他の関数と同じ内容", a === b);
 
 const f = R.filter((x) => !x[1]); console.log(`\n合計 ${R.length} 件 / 不合格 ${f.length} 件`); f.forEach((x) => console.log("  FAIL:", x[0]));
 process.exit(f.length ? 1 : 0);

@@ -27,14 +27,18 @@ revoke all on function public.align_probe_secret_matches(text) from public, anon
 grant execute on function public.align_probe_secret_matches(text) to service_role;
 
 -- 解析する曲の情報（読み取りだけ）。この DB では service_role に表の直接の読み取り権限が無いため、関数で渡す
+--   ・検証の対象として決めた1曲（おぼろ月）だけ、しかも公開中のときだけ返す。ほかの曲の ID を渡しても何も返さない
+--   ・返すのは曲名・歌詞・音源の保存場所・長さだけ（投稿者・会員の情報は含めない）
 create or replace function public.align_probe_track(p_track uuid)
 returns table (id uuid, title text, lyrics text[], audio_path text, duration integer)
 language sql stable security definer set search_path = ''
-as $$ select t.id, t.title, t.lyrics, t.audio_path, t.duration from public.tracks t where t.id = p_track $$;
+as $$ select t.id, t.title, t.lyrics, t.audio_path, t.duration from public.tracks t
+      where t.id = p_track and t.status = 'public'
+        and t.id = any (array['8ff6cf08-3d73-40b7-8dbc-4b09bac917cc']::uuid[]) $$;
 revoke all on function public.align_probe_track(uuid) from public, anon, authenticated;
 grant execute on function public.align_probe_track(uuid) to service_role;
 
--- 管理者か（読み取りだけ。利用停止中は false）
+-- 管理者か（読み取りだけ。true/false だけを返す。利用停止中は false。名前・メールなどは返さない）
 create or replace function public.align_probe_is_admin(p_user uuid)
 returns boolean
 language sql stable security definer set search_path = ''

@@ -134,7 +134,40 @@
     if(/[\u0000-\u001f\u007f\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/.test(v)) return E("プレイリスト名に使用できない文字が含まれています"); return v; };
   const plOwned = id => { db.playlists=db.playlists||[]; const me=uid(); if(!me||!active()) return E("プレイリストを変更できません（ログイン状態・メール確認・利用状況を確認してください）");
     const p=db.playlists.find(x=>x.id===id&&x.user_id===me); return p || E("プレイリストが見つかりません"); };
+  // v1.14 歌詞の同期（migration_v1_14_lyrics_sync.sql と同じ規則。規則そのものは test_v114.py で実際の PostgreSQL に対して検証済み）
+  db.lyricsSync = db.lyricsSync || {};
+  const lhash = l => JSON.stringify(l||[]);
+  const isHead = l => /^\s*(\[[^\]]*\]|【[^】]*】)\s*$/.test(l||"");
+  const rpcsSync = {
+    lyrics_sync_get({p_track}){
+      if(window.__noV114) return E("Could not find the function public.lyrics_sync_get");
+      const t=db.tracks.find(x=>x.id===p_track), s=db.lyricsSync[p_track];
+      if(!t||!s||!(t.status==="public"||t.user_id===uid()||isAdmin())) return {data:[],error:null};
+      return {data:[{lines:s.lines,source:s.source,updated_at:s.updated_at,stale:s.hash!==lhash(t.lyrics)}],error:null};
+    },
+    lyrics_sync_save({p_track,p_lines}){
+      if(window.__noV114) return E("Could not find the function public.lyrics_sync_save");
+      if(!uid()||!active()) return E("NOT_ALLOWED: 同期を保存できるのは、ログイン中の会員だけです");
+      const t=db.tracks.find(x=>x.id===p_track); if(!t) return E("NOT_FOUND: 楽曲が見つかりません");
+      if(t.user_id!==uid()&&!isAdmin()) return E("NOT_ALLOWED: 歌詞の同期を変更できるのは、投稿者本人と運営だけです");
+      if(!Array.isArray(p_lines)) return E("BAD_DATA: 形式が正しくありません");
+      let pi=-1, pt=0, pe=null; const out=[];
+      for(const x of p_lines){
+        if(!x||typeof x!=="object"||Object.keys(x).some(k=>!["i","t","e"].includes(k))||!Number.isInteger(x.i)||typeof x.t!=="number") return E("BAD_DATA: 形式が正しくありません");
+        const l=(t.lyrics||[])[x.i]; if(l==null||!String(l).trim()||isHead(l)) return E(`BAD_DATA: 空行・見出しには時刻を付けられません（${x.i+1}行目）`);
+        const tt=Math.round(x.t*100)/100; if(x.i<=pi) return E("BAD_DATA: 行の順番が正しくありません");
+        if(tt<0||tt>(t.duration>0?t.duration+30:3600)) return E(`BAD_DATA: 時刻が曲の長さの範囲外です（${x.i+1}行目）`);
+        if(tt<pt||(pe!=null&&tt<pe)) return E(`BAD_DATA: 時刻が前の行より前になっています（${x.i+1}行目）`);
+        let ee=null; if(x.e!=null){ ee=Math.round(x.e*100)/100; if(ee<=tt) return E(`BAD_DATA: 歌い終わりの時刻が正しくありません（${x.i+1}行目）`); }
+        out.push(ee==null?{i:x.i,t:tt}:{i:x.i,t:tt,e:ee}); pi=x.i; pt=tt; pe=ee;
+      }
+      db.lyricsSync[p_track]={lines:out,source:"manual",hash:lhash(t.lyrics),updated_at:new Date().toISOString()}; save();
+      window.__log.push({op:"lyrics_sync_save",track:p_track,lines:out});
+      return {data:{count:out.length},error:null};
+    }
+  };
   const rpcs = {
+    ...rpcsSync,
     // v1.9（migration_v1_9_delete.sql と同じ規則。規則そのものは test_v19.py で実際の PostgreSQL に対して検証済み）
     delete_my_track({p_track}){
       if(window.__noV19) return E("Could not find the function public.delete_my_track");

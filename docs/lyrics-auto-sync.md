@@ -57,7 +57,7 @@
 4. SQL Editor で `supabase/rollback/rollback_v1_15.sql`（同期の時刻は残る。AI の同期も消す場合は最後のコメントの1行）
 
 ## テスト（作業環境）
-- データベース `tests/db/test_v115.py`：98件 × PostgreSQL 17・15
+- データベース `tests/db/test_v115.py`：99件 × PostgreSQL 17・15
 - 照合と品質 `tests/edge/test_align.mjs`：22件／処理本体（実際の PostgreSQL 17 と偽の Cloudflare）`tests/edge/test_lyrics_align.mjs`：29件
 - 画面 `tests/ui/test_lyrics_align.js`：36件 × iPhone・Android（既存の画面のテストも再実行）
 

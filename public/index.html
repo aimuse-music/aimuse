@@ -350,6 +350,40 @@ button.stat{font:inherit;color:inherit;background:none;border:0;cursor:pointer;w
 .lyrics p{font-size:21px;font-weight:700;line-height:1.55;color:rgba(255,255,255,.4);padding:5px 0;transition:color .3s}
 .lyrics p.on{color:#fff}
 .lyrics p.gap{height:18px;padding:0}
+.lyrics{position:relative}
+.lyrics.static p{color:rgba(255,255,255,.88)}
+.lyrics p.head{font-size:11.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.5);padding:14px 0 2px;line-height:1.3}
+.lyr-wrap{width:100%;display:flex;flex-direction:column;gap:8px}
+.lyr-sync-note{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:rgba(255,255,255,.7)}
+.ls .top h1{flex:none}
+.ls .seek::-webkit-slider-runnable-track{background:linear-gradient(90deg,var(--violet) var(--p),var(--line) var(--p))}
+.ls .seek::-moz-range-track{background:var(--line)}
+.ls .seek::-moz-range-progress{background:var(--violet)}
+.ls .seek::-webkit-slider-thumb{background:var(--violet)}
+.ls .seek::-moz-range-thumb{background:var(--violet)}
+.ls-panel{position:sticky;top:56px;z-index:15;margin-left:calc(-1*var(--gl));margin-right:calc(-1*var(--gr));background:var(--bg);padding:8px var(--gr) 10px var(--gl);display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line)}
+.ls-song{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.ls-song b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ls-ctrl{display:flex;align-items:center;justify-content:center;gap:12px}
+.ls-ctrl .big-play{width:54px;height:54px;background:var(--violet);color:#fff}
+.ls-tap{height:auto;min-height:64px;padding:8px 14px;flex-direction:column;gap:2px;font-size:16px}
+.ls-tap small{font-size:12px;font-weight:600;opacity:.9;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ls-sub{display:flex;gap:8px}.ls-sub .btn{flex:1}
+.ls-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.ls-shift{display:flex;align-items:center;gap:6px}
+.btn.xs{height:32px;width:auto;padding:0 10px;font-size:12px;border-radius:9px}
+.ls-list{padding:10px 0 calc(var(--nav-h,64px) + var(--mini-h,64px) + 40px);display:flex;flex-direction:column;gap:4px}
+.ls-list .hint{margin:0 0 4px}
+.ls-head{font-size:11.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:12px 0 2px}
+.ls-row{border-radius:12px;padding:6px 8px;border:1px solid transparent;scroll-margin-top:var(--ls-top,270px);scroll-margin-bottom:calc(var(--nav-h,64px) + var(--mini-h,64px) + 16px)}
+.ls-row.cur{border-color:var(--violet)}
+.ls-row.on{background:var(--surface2)}
+.ls-row.bad{border-color:var(--bad)}
+.ls-line{display:flex;gap:10px;align-items:baseline;width:100%;text-align:left;background:none;border:0;color:inherit;padding:4px 0;font:inherit;cursor:pointer}
+.ls-line .mono{flex:none;width:58px;color:var(--muted);font-size:12.5px}
+.ls-line .tx{font-size:15px;line-height:1.45}
+.ls-tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:2px 0 4px 68px}
+.ls-end{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:4px}
 .lyrics .none{font-size:15px;color:rgba(255,255,255,.65);text-align:center;padding-top:30%}
 .pt{display:flex;align-items:center;gap:12px}
 .pt .t{font-size:22px;font-weight:900;line-height:1.3}
@@ -565,7 +599,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-19.2";
+const BUILD = "2026-10-23.1";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -808,6 +842,23 @@ const repo = {
     const t=this.tracks.get(id); if(t){ this.tracks.set(id,{...t,duration:d}); this.emit(); }
     if(persist) await sb.rpc("set_duration_if_missing",{tid:id,d});
   },
+  // 歌詞の同期：曲ごとに1回読み込んで保持（再生のたびに読み直さない）。v1.14 が未適用でも歌詞は全文表示できる
+  syncCache:new Map(),
+  async loadSync(id,force){
+    if(!sb||!id) return null;
+    if(!force && this.syncCache.has(id)) return this.syncCache.get(id);
+    const {data,error} = await sb.rpc("lyrics_sync_get",{p_track:id});
+    if(error){ console.warn("lyrics_sync",error.message); return null; }
+    const r = Array.isArray(data) ? data[0] : data;
+    const v = r && Array.isArray(r.lines) ? {lines:r.lines.filter(x=>x&&isFinite(x.t)).map(x=>({i:x.i,t:+x.t,...(x.e!=null?{e:+x.e}:{})})),stale:!!r.stale,source:r.source||"manual",updatedAt:r.updated_at||null} : {lines:[],stale:false,source:null,updatedAt:null};
+    this.syncCache.set(id,v); return v;
+  },
+  async saveSync(id,lines){
+    const {error} = await sb.rpc("lyrics_sync_save",{p_track:id,p_lines:lines});
+    if(error) throw error;
+    const v = {lines:lines.map(x=>({...x})),stale:false,source:"manual",updatedAt:new Date().toISOString()};
+    this.syncCache.set(id,v); return v;
+  },
   async removeFiles(t){
     if(t&&t.audioPath) await sb.storage.from("audio").remove([t.audioPath]);
     if(t&&t.imagePath) await sb.storage.from("covers").remove([t.imagePath]);
@@ -818,6 +869,28 @@ const artistKey = name => "ar_"+[...(name||"")].reduce((h,c)=>(h*31+c.charCodeAt
 
 /* ---------- utilities ---------- */
 const fmtTime = s => { s=Math.max(0,Math.floor(s||0)); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); };
+/* ---------- 歌詞の同期（v1.14）----------
+   ・各行の歌い出しの時刻（秒）を保存し、再生中は音源の現在の時刻から「歌い出しを過ぎた最後の行」を表示する
+     （再生速度・一時停止・シーク・途中からの再生でもずれが溜まらない）
+   ・最初の行の歌い出しより前（イントロ）と、歌い終わり e の後（間奏・終わり）は、どの行も表示しない
+   ・見出し（行全体が [ ] か【 】で囲まれた行。Suno の [Verse 1] など）は区切りとして表示し、時刻は付けない
+   ・同期の時刻が無い曲・歌詞が変わって要確認の曲は、歌詞を全文表示するだけ（推測では光らせない） */
+const LYRIC_HEAD = /^\s*(\[[^\]]*\]|【[^】]*】)\s*$/;
+const lyricKind = l => (l==null || !String(l).trim()) ? "gap" : LYRIC_HEAD.test(l) ? "head" : "text";
+const headLabel = l => String(l).trim().replace(/^[\[【]\s*/,"").replace(/\s*[\]】]$/,"");
+const LYRIC_LEAD = 0.15;   // 文字が目に入るまでの遅れの分だけ、少し早めに表示する（秒）
+// lines：[{i,t,e?}]（i の小さい順・t は前の行以上）→ いま表示する歌詞の行番号（無ければ -1）
+const syncActive = (lines,time) => {
+  if(!lines||!lines.length||!isFinite(time)) return -1;
+  const x = time + LYRIC_LEAD;
+  let lo=0, hi=lines.length-1, k=-1;
+  while(lo<=hi){ const m=(lo+hi)>>1; if(lines[m].t<=x){ k=m; lo=m+1; } else hi=m-1; }
+  if(k<0) return -1;
+  const s = lines[k];
+  return (s.e!=null && x>=s.e) ? -1 : s.i;
+};
+const fmtClock = s => { if(s==null||!isFinite(s)) return "--:--.-"; s=Math.max(0,s); const m=Math.floor(s/60), r=s-m*60; return m+":"+(r<10?"0":"")+r.toFixed(1); };
+
 const fmtNum = n => n>=10000 ? (n/10000).toFixed(n>=100000?0:1).replace(/\.0$/,"")+"万" : n.toLocaleString("ja-JP");
 const toolClass = t => t==="Suno"?"suno":t==="Udio"?"udio":"other";
 const nowStr = () => { const d=new Date(); const p=n=>String(n).padStart(2,"0"); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
@@ -1352,7 +1425,7 @@ function MyPage({ctx}){
     <div style=${{marginTop:8}}>
       ${tab==="fav" && (favSongs.length ? html`<div className="list">${favSongs.map(s=>html`<${SongRow} key=${s.id} song=${s} artist=${artistOf(s)} cur=${current?.id===s.id} playing=${playing} fav=${true} onPlay=${()=>play(s,favSongs)} onFav=${()=>toggleFav(s.id)}/>`)}</div>` : html`<div className="empty">ハートをタップした曲がここに並びます</div>`)}
       ${tab==="pl" && html`<${PlaylistNew} ctx=${ctx}/>${playlists.length ? html`<${PlaylistRows} ctx=${ctx} list=${playlists}/>` : html`<div className="empty">プレイリストを作って、好きな曲をまとめて連続再生できます</div>`}`}
-      ${tab==="mine" && (mine.length ? html`<div className="list">${mine.map(s=>html`<div key=${s.id} className="row norank"><${Cover} item=${s} radius=${10}/><div style=${{minWidth:0}}><div className="t">${s.title}</div><div className="sub"><span className="n">${s.submittedAt}</span></div></div><div className="end">${statusTag(s.status)}<button className="icon-btn del" aria-label=${`「${s.title}」を削除`} onClick=${()=>setDelSong(s)}><${Icon} n="trash" size=${19}/></button></div></div>`)}</div>` : html`<div className="empty">まだ投稿した曲はありません<br/><button className="btn primary sm" style=${{margin:"14px auto 0"}} onClick=${()=>setTab("upload")}>楽曲を投稿する</button></div>`)}
+      ${tab==="mine" && (mine.length ? html`<div className="list">${mine.map(s=>html`<div key=${s.id} className="row norank"><${Cover} item=${s} radius=${10}/><div style=${{minWidth:0}}><div className="t">${s.title}</div><div className="sub"><span className="n">${s.submittedAt}</span></div></div><div className="end">${statusTag(s.status)}${Array.isArray(s.lyrics)&&s.lyrics.some(l=>lyricKind(l)==="text")&&s.audioUrl&&html`<button className="icon-btn" aria-label=${`「${s.title}」の歌詞の同期`} onClick=${()=>ctx.openLyricsSync(s)}><${Icon} n="lyrics" size=${19}/></button>`}<button className="icon-btn del" aria-label=${`「${s.title}」を削除`} onClick=${()=>setDelSong(s)}><${Icon} n="trash" size=${19}/></button></div></div>`)}</div>` : html`<div className="empty">まだ投稿した曲はありません<br/><button className="btn primary sm" style=${{margin:"14px auto 0"}} onClick=${()=>setTab("upload")}>楽曲を投稿する</button></div>`)}
       ${tab==="follow" && (followed.length ? html`<div className="list">${followed.map(a=>html`<button key=${a.id} className="row norank" onClick=${()=>openArtist(a.id)}><${Cover} item=${a} radius="50%"/><div style=${{minWidth:0}}><div className="t">${a.name}</div><div className="sub">${fmtNum(a.followers)} フォロワー</div></div><${Icon} n="chev" size=${18}/></button>`)}</div>` : hiddenFollows===0 ? html`<div className="empty">フォローしたアーティストがここに並びます</div>` : null)}
       ${tab==="follow" && hiddenFollows>0 && html`<div className="fl-listeners"><${Icon} n="info" size=${18}/><span>ほか ${hiddenFollows}件は、現在公開中の曲がないアーティストです（フォローは残っています）。<button className="link" onClick=${()=>openFollowList({mine:true,mode:"following"})}>一覧で確認・解除する</button></span></div>`}
     </div>
@@ -1478,7 +1551,7 @@ function MiniPlayer({song,artist,playing,pos,toggle,open,fav,onFav}){
 }
 
 function FullPlayer({ctx}){
-  const {current:song,artistOf,playing,toggle,pos,seek,next,prev,repeat,cycleRepeat,shuffle,setShuffle,favs,toggleFav,close,showLyrics,setShowLyrics,report,openArtist,queueLabel} = ctx;
+  const {current:song,artistOf,playing,toggle,pos,seek,next,prev,repeat,cycleRepeat,shuffle,setShuffle,favs,toggleFav,close,showLyrics,setShowLyrics,report,openArtist,queueLabel,getTime,isAdmin,openLyricsSync} = ctx;
   const [sheet,setSheet] = useState(false);
   const [plSheet,setPlSheet] = useState(false);
   const lyrRef = useRef(null);
@@ -1486,9 +1559,30 @@ function FullPlayer({ctx}){
   const [h1,h2] = song.hues||[270,230];
   const pct = Math.min(100,pos/song.duration*100);
   const lines = song.lyrics||[];
-  const textLines = lines.map((l,i)=>[l,i]).filter(([l])=>l);
-  const activeIdx = textLines.length ? textLines[Math.min(textLines.length-1,Math.floor(pos/song.duration*textLines.length))][1] : -1;
-  useEffect(()=>{ const el=lyrRef.current?.querySelector("p.on"); if(el) el.scrollIntoView({block:"center",behavior:"smooth"}); },[activeIdx,showLyrics]);
+  const hasText = lines.some(l=>lyricKind(l)==="text");
+  const canSync = !!((song.mine||isAdmin) && hasText && song.audioUrl && openLyricsSync);
+  // 同期の時刻：曲ごとに1回だけ読み込む（保持して再生のたびに読み直さない）
+  const [sync,setSync] = useState(()=>repo.syncCache.get(song.id)||null);
+  useEffect(()=>{ let alive=true; setSync(repo.syncCache.get(song.id)||null); if(hasText) repo.loadSync(song.id).then(v=>{ if(alive) setSync(v); }).catch(()=>{}); return ()=>{ alive=false; }; },[song.id]);
+  const syncLines = sync && !sync.stale && sync.lines.length ? sync.lines : null;
+  // 表示する行：音源の現在の時刻から決める（再生中は画面の書き換えごとに確認。表示が変わるときだけ描き直す）
+  const [activeIdx,setActiveIdx] = useState(-1);
+  useEffect(()=>{
+    if(!showLyrics||!syncLines){ setActiveIdx(-1); return; }
+    let raf=0;
+    const tick=()=>{ setActiveIdx(syncActive(syncLines,getTime?getTime():pos)); if(playing) raf=requestAnimationFrame(tick); };
+    tick();
+    return ()=>cancelAnimationFrame(raf);
+  },[showLyrics,syncLines,playing,pos,song.id]);
+  // 自動スクロール：歌詞の枠の中だけを動かす（画面全体は動かさない）。指で歌詞を動かしたあと4秒間は止める
+  const userScrollUntil = useRef(0);
+  const holdScroll = () => { userScrollUntil.current = Date.now()+4000; };
+  useEffect(()=>{
+    const box=lyrRef.current; if(!box||activeIdx<0||Date.now()<userScrollUntil.current) return;
+    const el=box.querySelector("p.on"); if(!el) return;
+    const top = el.offsetTop - box.clientHeight/2 + el.offsetHeight/2;
+    try{ box.scrollTo({top:Math.max(0,top),behavior:"smooth"}); }catch(e){ box.scrollTop=Math.max(0,top); }
+  },[activeIdx,showLyrics]);
   const fav = favs.has(song.id);
   return html`<div className="player" style=${{background:`radial-gradient(120% 70% at 50% 0%, hsl(${h1} 55% 32%), transparent 70%), linear-gradient(180deg,hsl(${h2} 45% 14%),#0b0912 85%)`}} role="dialog" aria-label="再生画面">
     <div className="player-in">
@@ -1498,7 +1592,12 @@ function FullPlayer({ctx}){
         <button className="icon-btn" aria-label="この曲を通報" onClick=${()=>setSheet(true)}><${Icon} n="flag" size=${20}/></button>
       </div>
       <div className="stage">
-        ${showLyrics ? html`<div className="lyrics" ref=${lyrRef}>${lines.length ? lines.map((l,i)=>l?html`<p key=${i} className=${i===activeIdx?"on":""}>${l}</p>`:html`<p key=${i} className="gap"></p>`) : html`<div className="none">${song.instrumental?"インストゥルメンタル曲のため歌詞はありません":"歌詞はまだ登録されていません"}</div>`}</div>`
+        ${showLyrics ? html`<div className="lyr-wrap">
+          <div className=${"lyrics"+(syncLines?" synced":" static")} ref=${lyrRef} onTouchStart=${holdScroll} onWheel=${holdScroll} onPointerDown=${holdScroll}>${lines.length ? lines.map((l,i)=>{ const k=lyricKind(l);
+            return k==="gap" ? html`<p key=${i} className="gap"></p>` : k==="head" ? html`<p key=${i} className="head">${headLabel(l)}</p>` : html`<p key=${i} className=${i===activeIdx?"on":""}>${l}</p>`; }) : html`<div className="none">${song.instrumental?"インストゥルメンタル曲のため歌詞はありません":"歌詞はまだ登録されていません"}</div>`}</div>
+          ${canSync && html`<div className="lyr-sync-note">${sync&&sync.stale ? html`<span>歌詞が変わったため、同期の確認が必要です</span>` : !syncLines ? html`<span>歌詞の同期がまだありません</span>` : null}
+            <button className="pill" onClick=${()=>openLyricsSync(song)}><${Icon} n="lyrics" size=${15}/>${syncLines?"同期を編集":"歌詞の同期を設定"}</button></div>`}
+        </div>`
           : html`<${Cover} item=${song} title=${song.title} radius=${22} style=${{width:"min(100%,360px)"}}/>`}
       </div>
       <div className="pt">
@@ -1530,6 +1629,144 @@ function FullPlayer({ctx}){
       ${CONFIG.reportReasons.map(r=>html`<button key=${r} className="opt" onClick=${()=>{report(song.id,r);setSheet(false)}}>${r}</button>`)}
       <button className="btn ghost" style=${{marginTop:4}} onClick=${()=>setSheet(false)}>キャンセル</button>
     </div></div>`}
+  </div>`;
+}
+
+/* ---------- 歌詞の同期の編集（投稿者本人・管理者。スマートフォンだけで操作できる）----------
+   ・曲を再生しながら、次の行の歌い出しで大きなボタンを押すと、その行の時刻が記録される（押すまでの遅れを補正）
+   ・「歌が止まる」で直前の行に歌い終わり（間奏・曲の終わり）を付けると、そこから次の行まで歌詞を表示しない
+   ・各行は 0.1秒単位で前後に調整でき、全体を一度にずらすこともできる。「保存する」まではデータベースに送らない */
+const TAP_REACT = 0.2;   // ボタンを押すまでの平均的な遅れ（秒）
+function LyricsSyncPage({ctx}){
+  const {syncSong:song,goBack} = ctx;
+  if(!song) return html`<div className="screen"><header className="top"><button className="icon-btn" aria-label="戻る" onClick=${goBack}><${Icon} n="back"/></button><h1>歌詞の同期</h1></header><div className="empty">曲が見つかりません</div></div>`;
+  return html`<${LyricsSyncEditor} key=${song.id} ctx=${ctx} song=${song}/>`;
+}
+function LyricsSyncEditor({ctx,song}){
+  const {goBack,say} = ctx;
+  const lines = song.lyrics||[];
+  const textIdx = useMemo(()=>lines.map((l,i)=>lyricKind(l)==="text"?i:-1).filter(i=>i>=0),[song.id]);
+  const aRef = useRef(null);
+  const [times,setTimes] = useState(()=>lines.map(()=>null));   // 行ごとに null か {t, e?}
+  const [loaded,setLoaded] = useState(false);
+  const [staleNote,setStaleNote] = useState(false);
+  const [cursor,setCursor] = useState(textIdx.length?textIdx[0]:-1);
+  const [now,setNow] = useState(0);
+  const [dur,setDur] = useState(song.duration||0);
+  const [playing,setPlaying] = useState(false);
+  const [rate,setRate] = useState(1);
+  const [dirty,setDirty] = useState(false);
+  const [busy,setBusy] = useState(false);
+  const [err,setErr] = useState(null);
+  const [confirmClear,setConfirmClear] = useState(false);
+  const [confirmLeave,setConfirmLeave] = useState(false);
+  useEffect(()=>{ let alive=true; repo.loadSync(song.id,true).then(v=>{ if(!alive) return;
+      if(v && v.lines.length && !v.stale){ const t=lines.map(()=>null); v.lines.forEach(x=>{ if(x.i>=0&&x.i<t.length&&lyricKind(lines[x.i])==="text") t[x.i]=x.e!=null?{t:x.t,e:x.e}:{t:x.t}; }); setTimes(t);
+        const first=textIdx.find(i=>!t[i]); setCursor(first!=null?first:-1); }
+      if(v && v.stale && v.lines.length) setStaleNote(true);
+      setLoaded(true); }).catch(()=>setLoaded(true));
+    return ()=>{ alive=false; const a=aRef.current; if(a){ try{ a.pause(); }catch(e){} } }; },[]);
+  // 再生中は 0.1秒ごとに現在の時刻を読む（画面の書き換えを抑えて、スマートフォンでも軽く動かす）
+  useEffect(()=>{ if(!playing) return; const id=setInterval(()=>{ const a=aRef.current; if(a) setNow(a.currentTime); },100); return ()=>clearInterval(id); },[playing]);
+  const a = () => aRef.current;
+  const toggle = () => { const el=a(); if(!el) return; if(el.paused){ const pr=el.play(); if(pr&&pr.catch) pr.catch(()=>say("再生を開始できませんでした")); } else el.pause(); };
+  const seekTo = v => { const el=a(); if(!el) return; const t=Math.max(0,Math.min(v,(isFinite(el.duration)&&el.duration)||dur||v)); try{ el.currentTime=t; }catch(e){} setNow(t); };
+  const cycleRate = () => { const n = rate===1?0.75:rate===0.75?0.5:1; setRate(n); const el=a(); if(el) el.playbackRate=n; };
+  const change = f => { setTimes(prev=>{ const t=prev.slice(); f(t); return t; }); setDirty(true); setErr(null); };
+  const nextText = i => { const k=textIdx.indexOf(i); return k>=0&&k+1<textIdx.length ? textIdx[k+1] : -1; };
+  const prevTimed = (t,i) => { for(let k=textIdx.indexOf(i)-1;k>=0;k--){ const j=textIdx[k]; if(t[j]) return j; } return -1; };
+  const tapStart = () => {
+    if(cursor<0) return;
+    const at = Math.max(0, Math.round(((a()?a().currentTime:now)-TAP_REACT)*100)/100);
+    change(t=>{ t[cursor]={t:at}; const p=prevTimed(t,cursor); if(p>=0&&t[p].e!=null&&t[p].e>at) t[p]={t:t[p].t}; });
+    setCursor(nextText(cursor));
+  };
+  const markEnd = () => {
+    const at = Math.max(0, Math.round(((a()?a().currentTime:now)-TAP_REACT)*100)/100);
+    let target=-1; for(const i of textIdx){ if(times[i]&&times[i].t<at) target=i; }
+    if(target<0||at-times[target].t<0.2){ say("歌い終わりを付ける行がありません。先に歌い出しを記録してください"); return; }
+    change(t=>{ t[target]={t:t[target].t,e:at}; });
+    say("「"+lines[target].slice(0,12)+"」の後を間奏にしました");
+  };
+  const back1 = () => { const k=cursor<0?textIdx.length-1:textIdx.indexOf(cursor)-1; if(k>=0) setCursor(textIdx[k]); };
+  const nudge = (i,d) => change(t=>{ if(!t[i]) return; const nt=Math.max(0,Math.round((t[i].t+d)*100)/100); t[i]= t[i].e!=null ? {t:nt,e:Math.max(nt+0.1,t[i].e)} : {t:nt}; });
+  const shiftAll = d => change(t=>{ t.forEach((x,i)=>{ if(x){ const nt=Math.max(0,Math.round((x.t+d)*100)/100); t[i]= x.e!=null ? {t:nt,e:Math.max(nt+0.1,Math.round((x.e+d)*100)/100)} : {t:nt}; } }); });
+  const clearLine = i => change(t=>{ t[i]=null; });
+  const clearEnd = i => change(t=>{ if(t[i]) t[i]={t:t[i].t}; });
+  const built = useMemo(()=>textIdx.filter(i=>times[i]).map(i=>times[i].e!=null?{i,t:times[i].t,e:times[i].e}:{i,t:times[i].t}),[times]);
+  // 時刻の順番が逆になっている行（保存できない）
+  const bad = useMemo(()=>{ const out=new Set(); let pt=-1, pe=null; built.forEach(x=>{ if(x.t<pt||(pe!=null&&x.t<pe)) out.add(x.i); pt=x.t; pe=x.e!=null?x.e:null; }); return out; },[built]);
+  const preview = syncActive(built,now);
+  const missing = textIdx.filter(i=>!times[i]).length;
+  const save = async () => {
+    if(bad.size){ setErr(`時刻が前の行より前になっている行があります（${[...bad].map(i=>i+1).slice(0,5).join("・")}行目）。調整してから保存してください`); return; }
+    setBusy(true); setErr(null);
+    try{ await repo.saveSync(song.id,built); setDirty(false); setStaleNote(false); say(built.length?"歌詞の同期を保存しました":"歌詞の同期を消しました（歌詞は全文表示になります）"); }
+    catch(e){ const m=(e&&e.message)||""; setErr(/NOT_ALLOWED/.test(m)?"この曲の同期を変更する権限がありません":/BAD_DATA/.test(m)?m.replace(/^.*BAD_DATA:\s*/,""):/lyrics_sync_save|function/i.test(m)?"歌詞の同期の準備がまだ完了していません（運営の作業待ち）":"保存できませんでした。通信状態を確認して、もう一度お試しください"); }
+    setBusy(false);
+  };
+  const leave = () => { if(dirty) setConfirmLeave(true); else goBack(); };
+  // 次に合わせる行が見えるように、一覧の中で表示位置を合わせる
+  useEffect(()=>{ if(cursor<0) return; const el=document.getElementById("ls-row-"+cursor); if(el&&el.scrollIntoView) el.scrollIntoView({block:"nearest",behavior:"smooth"}); },[cursor]);
+  const total = (a()&&isFinite(a().duration)&&a().duration) || dur || 0;
+  // 上に固定した操作部分の高さ（一覧の行が隠れないように、自動で合わせる位置に使う）
+  const rootRef = useRef(null), panelRef = useRef(null);
+  useEffect(()=>{ const set=()=>{ const root=rootRef.current, pnl=panelRef.current; if(!root||!pnl) return;
+      const hdr=root.querySelector("header.top"); const top = hdr ? (parseFloat(getComputedStyle(hdr).top)||0) + hdr.offsetHeight - 6 : 0;
+      pnl.style.top = top+"px"; root.style.setProperty("--ls-top",(top+pnl.offsetHeight+8)+"px"); };
+    set(); window.addEventListener("resize",set); return ()=>window.removeEventListener("resize",set); },[]);
+  return html`<div className="screen ls" ref=${rootRef}>
+    <header className="top"><button className="icon-btn" aria-label="戻る" onClick=${leave}><${Icon} n="back"/></button><h1>歌詞の同期</h1>
+      <button className="btn primary sm" style=${{marginLeft:"auto"}} onClick=${save} disabled=${busy||!loaded}>${busy?"保存中…":"保存する"}</button></header>
+    <audio ref=${aRef} src=${song.audioUrl||undefined} preload="auto" playsInline
+      onPlay=${()=>setPlaying(true)} onPause=${()=>{ setPlaying(false); const el=a(); if(el) setNow(el.currentTime); }} onEnded=${()=>setPlaying(false)}
+      onTimeUpdate=${e=>{ if(e.target.paused) setNow(e.target.currentTime); }} onSeeked=${e=>setNow(e.target.currentTime)}
+      onLoadedMetadata=${e=>{ const d=e.target.duration; if(isFinite(d)&&d>0) setDur(d); e.target.playbackRate=rate; }}></audio>
+    <div className="ls-panel" ref=${panelRef}>
+      <div className="ls-song"><b>${song.title}</b><span className="mono">${fmtClock(now)} / ${fmtTime(total)}</span></div>
+      <input className="seek" type="range" min="0" max=${Math.max(1,total)} step="0.1" value=${Math.min(now,total||now)} onInput=${e=>seekTo(+e.target.value)} aria-label="再生位置" style=${{"--p":(total?Math.min(100,now/total*100):0)+"%"}}/>
+      <div className="ls-ctrl">
+        <button className="btn ghost sm" onClick=${()=>seekTo(now-5)} aria-label="5秒戻る">−5秒</button>
+        <button className="big-play" aria-label=${playing?"一時停止":"再生"} onClick=${toggle}>${playing?html`<${PauseIcon} size=${26}/>`:html`<${PlayIcon} size=${26}/>`}</button>
+        <button className="btn ghost sm" onClick=${()=>seekTo(now+5)} aria-label="5秒進む">+5秒</button>
+        <button className="btn ghost sm" onClick=${cycleRate} aria-label="再生速度">${rate}倍</button>
+      </div>
+      <button className="btn primary ls-tap" onClick=${tapStart} disabled=${cursor<0}>
+        ${cursor<0 ? "すべての行に時刻が付きました" : html`<span>歌い出しでタップ</span><small>${cursor+1}行目：${lines[cursor]}</small>`}</button>
+      <div className="ls-sub">
+        <button className="btn ghost sm" onClick=${markEnd} aria-label="歌が止まる（間奏・曲の終わり）">歌が止まる（間奏）</button>
+        <button className="btn ghost sm" onClick=${back1}>1行戻る</button>
+      </div>
+      ${err && html`<span className="err" role="alert">${err}</span>`}
+    </div>
+    <div className="ls-list">
+      <p className="hint">曲を再生し、ボタンに表示されている行の歌い出しで押してください。押すまでの遅れ（約0.2秒）は自動で補正します。間奏や曲の終わりで「歌が止まる」を押すと、次の歌い出しまで歌詞を表示しません。行をタップすると、その行から合わせ直せます。</p>
+      ${staleNote && html`<div className="demo-note"><${Icon} n="info" size=${18}/><span>歌詞が変わったため、以前の同期は使えません。最初から合わせてください。</span></div>`}
+      <div className="ls-meta"><span>${textIdx.length-missing} / ${textIdx.length} 行に時刻あり${missing?`（未設定 ${missing}行）`:""}</span>
+        <span className="ls-shift">全体を <button className="btn ghost xs" onClick=${()=>shiftAll(-0.1)}>−0.1秒</button><button className="btn ghost xs" onClick=${()=>shiftAll(0.1)}>+0.1秒</button></span></div>
+      ${lines.map((l,i)=>{ const k=lyricKind(l); if(k==="gap") return null;
+        if(k==="head") return html`<div key=${i} className="ls-head">${headLabel(l)}</div>`;
+        const x=times[i];
+        return html`<div key=${i} id=${"ls-row-"+i} className=${"ls-row"+(i===cursor?" cur":"")+(i===preview?" on":"")+(bad.has(i)?" bad":"")}>
+          <button className="ls-line" onClick=${()=>setCursor(i)} aria-label=${`${i+1}行目を次に合わせる行にする`}><span className="mono">${fmtClock(x&&x.t)}</span><span className="tx">${l}</span></button>
+          ${x && html`<div className="ls-tools">
+            <button className="btn ghost xs" onClick=${()=>nudge(i,-0.1)} aria-label=${`${i+1}行目を0.1秒早く`}>−0.1</button>
+            <button className="btn ghost xs" onClick=${()=>nudge(i,0.1)} aria-label=${`${i+1}行目を0.1秒遅く`}>+0.1</button>
+            <button className="btn ghost xs" onClick=${()=>{ seekTo(Math.max(0,x.t-2)); const el=a(); if(el&&el.paused) toggle(); }} aria-label=${`${i+1}行目の少し前から再生`}>▶ 確認</button>
+            <button className="btn ghost xs" onClick=${()=>clearLine(i)} aria-label=${`${i+1}行目の時刻を消す`}>消す</button>
+            ${x.e!=null && html`<span className="ls-end mono">〜${fmtClock(x.e)} 間奏<button className="link" onClick=${()=>clearEnd(i)} aria-label=${`${i+1}行目の歌い終わりを消す`}>×</button></span>`}
+          </div>`}
+        </div>`; })}
+      <button className="btn ghost sm" style=${{margin:"18px auto 0"}} onClick=${()=>setConfirmClear(true)}>すべての時刻を消す</button>
+    </div>
+    ${confirmClear && html`<div className="scrim" onClick=${()=>setConfirmClear(false)}><div className="sheet" onClick=${e=>e.stopPropagation()}>
+      <h3>すべての時刻を消しますか？</h3><p style=${{fontSize:13,color:"var(--muted)"}}>「保存する」を押すまでは、保存済みの同期は変わりません。歌詞そのものは消えません。</p>
+      <button className="btn primary" onClick=${()=>{ change(t=>t.fill(null)); setCursor(textIdx.length?textIdx[0]:-1); setConfirmClear(false); }}>消す</button>
+      <button className="btn ghost" onClick=${()=>setConfirmClear(false)}>キャンセル</button></div></div>`}
+    ${confirmLeave && html`<div className="scrim" onClick=${()=>setConfirmLeave(false)}><div className="sheet" onClick=${e=>e.stopPropagation()}>
+      <h3>保存していない変更があります</h3><p style=${{fontSize:13,color:"var(--muted)"}}>このまま戻ると、変更は失われます。</p>
+      <button className="btn primary" onClick=${()=>{ setConfirmLeave(false); save(); }}>保存する</button>
+      <button className="btn ghost" onClick=${()=>{ setConfirmLeave(false); goBack(); }}>保存せずに戻る</button></div></div>`}
   </div>`;
 }
 
@@ -2670,6 +2907,7 @@ function App(){
   const [repeat,setRepeat] = useState("off");
   const [shuffle,setShuffle] = useState(false);
   const [playerOpen,setPlayerOpen] = useState(false);
+  const [syncSongId,setSyncSongId] = useState(null);   // 歌詞の同期を編集する曲
   const [showLyrics,setShowLyrics] = useState(false);
   const [toast,setToast] = useState(null);
   const audioRef = useRef(null);
@@ -3014,19 +3252,24 @@ function App(){
   // 退会の申請・取り消しのあと：状況と曲の一覧を読み直す
   const refreshAccount = async () => { await auth.loadProfile(); auth.emit(); await repo.refresh(); };
   const signOut = () => auth.signOut().then(()=>{ say("ログアウトしました"); navTo("home"); });
+  // 歌詞の同期の編集画面：投稿者本人と管理者。編集中は下のプレーヤーを止める（編集画面の中で再生する）
+  const openLyricsSync = s => { if(!s) return; if(!user){ say("ログインしてください"); return; } setPlaying(false); setPlayerOpen(false); setSyncSongId(s.id); go("lyricsync"); };
+  const syncSong = useMemo(()=>{ const t=syncSongId&&tracks.find(x=>x.id===syncSongId); return t ? {...toSong(t),lyrics:Array.isArray(t.lyrics)?t.lyrics:[],mine:!!(user&&t.userId===user.id)} : null; },[syncSongId,tracks,user]);
+  const getTime = () => { const a=audioRef.current; return (a && current && a.dataset.tid===current.id && isFinite(a.currentTime)) ? a.currentTime : pos; };
   const ctx = {playlists,publicPlaylists,playlistView,openPlaylist,playlistOps,withdrawing,refreshAccount,afterTrackDeleted,openAccountDelete:()=>go("account"),activeTheme,saveTheme,openSettings:()=>go("settings"),showWelcome:!user&&!welcomeHidden&&authState.ready,dismissWelcome,openGuide,openSignup,followView,openFollowList,followVer,myArtistIds,legalDoc,openLegal,afterProfileSave,adminResetImage,user,profile,isAdmin,myFollowers,signOut,say,recovery:authState.recovery,authReady:authState.ready,songs,allSongs,artists,artistOf,play,favs,toggleFav,follows,toggleFollow,openArtist,artistId,goBack,setTab:go,submit,submissions,decide,reports,resolveReport,report,setVisibility,removeSong,repoMode,
-    current,playing,toggle,pos,seek,next,prev,repeat,cycleRepeat,shuffle,setShuffle,close:()=>setPlayerOpen(false),showLyrics,setShowLyrics,queueLabel};
+    current,playing,toggle,pos,seek,next,prev,repeat,cycleRepeat,shuffle,setShuffle,close:()=>setPlayerOpen(false),showLyrics,setShowLyrics,queueLabel,
+    getTime,openLyricsSync,syncSong};
 
   useEffect(()=>{ document.body.style.overflow = playerOpen?"hidden":""; },[playerOpen]);
 
   const navItems = [["home","ホーム","home"],["search","検索","search"],["upload","投稿","plus"],["me","マイページ","user"]];
-  const navActive = (tab==="artist"||tab==="follows")?(history[0]||"home"):(tab==="admin"||tab==="legal"||tab==="profile"||tab==="settings"||tab==="account")?"me":tab==="guide"?(history[0]||"home"):tab;
-  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin,legal:LegalPage,profile:ProfileEdit,follows:FollowList,playlist:PlaylistPage,guide:GuidePage,settings:SettingsPage,account:AccountDeletePage}[tab];
+  const navActive = (tab==="artist"||tab==="follows")?(history[0]||"home"):(tab==="admin"||tab==="legal"||tab==="profile"||tab==="settings"||tab==="account"||tab==="lyricsync")?"me":tab==="guide"?(history[0]||"home"):tab;
+  const Screen = {home:Home,search:Search,upload:Upload,me:MyPage,artist:Artist,admin:Admin,legal:LegalPage,profile:ProfileEdit,follows:FollowList,playlist:PlaylistPage,guide:GuidePage,settings:SettingsPage,account:AccountDeletePage,lyricsync:LyricsSyncPage}[tab];
 
   return html`<div className="app">
     ${!online && html`<div className="offline-bar" role="status"><${Icon} n="info" size=${15}/><span>オフラインです。曲の再生・検索・投稿にはインターネット接続が必要です（つながると自動で更新します）</span></div>`}
     <${Screen} key=${tab+(tab==="artist"?artistId:tab==="follows"?JSON.stringify(followView):"")} ctx=${ctx}/>
-    ${current && !playerOpen && html`<${MiniPlayer} song=${current} artist=${artistOf(current)} playing=${playing} pos=${pos} toggle=${toggle} open=${()=>setPlayerOpen(true)} fav=${favs.has(current.id)} onFav=${()=>toggleFav(current.id)}/>`}
+    ${current && !playerOpen && tab!=="lyricsync" && html`<${MiniPlayer} song=${current} artist=${artistOf(current)} playing=${playing} pos=${pos} toggle=${toggle} open=${()=>setPlayerOpen(true)} fav=${favs.has(current.id)} onFav=${()=>toggleFav(current.id)}/>`}
     <nav className="nav" aria-label="メインナビゲーション"><div className="nav-in">
       ${navItems.map(([k,l,ic])=>html`<button key=${k} className=${navActive===k?"on":""} onClick=${()=>navTo(k)} aria-current=${navActive===k?"page":undefined}>
         ${k==="upload"?html`<span className="up"><${Icon} n="plus" size=${20} sw=${2.4}/></span>`:html`<${Icon} n=${ic} size=${24} sw=${navActive===k?2.2:1.7}/>`}<span>${l}</span></button>`)}

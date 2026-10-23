@@ -10,6 +10,7 @@ echo "v1.9 退会など: $(python3 tests/db/test_v19.py 2>&1 | sum)"
 echo "v1.10 レビュー名: $(python3 tests/db/test_v110.py 2>&1 | sum)"
 echo "v1.11 プレイリスト: $(python3 tests/db/test_v111.py 2>&1 | sum)"
 echo "v1.12 再生記録・合言葉の照合: $(python3 tests/db/test_v112.py 2>&1 | sum)"
+echo "v1.14 歌詞の同期: $(python3 tests/db/test_v114.py 2>&1 | sum)"
 echo "本番作業の仕上げSQL: $(python3 tests/db/test_prod_finish.py 2>&1 | sum)"
 echo "退会テスト用SQL: $(python3 tests/db/test_deletion_test_sql.py 2>&1 | sum)"
 echo "== Edge Function"
@@ -24,5 +25,5 @@ echo "完全削除（v1.12 適用後）: $(node tests/edge/test_account_purge.mj
 for d in e_req e_keys e_purge; do $P -d postgres -c "drop database if exists $d" >/dev/null 2>&1; done
 echo "== 画面（iPhone 13 / Android）"
 mkdir -p $H/out; cp tests/ui/*.js $H/; cd $H
-for t in test_recovery test_guest test_profile test_follow test_theme test_delete test_playlist test_repeat test_upload; do for d in iphone android; do echo "$t [$d]: $(timeout 600 node $t.js $ROOT/public/index.html $d out 2>&1 | sum)"; done; done
+for t in test_lyrics_sync test_recovery test_guest test_profile test_follow test_theme test_delete test_playlist test_repeat test_upload; do for d in iphone android; do echo "$t [$d]: $(timeout 600 node $t.js $ROOT/public/index.html $d out 2>&1 | sum)"; done; done
 for d in iphone android; do echo "test_flags [$d]: $(timeout 600 node test_flags.js $ROOT/public $d 2>&1 | sum)"; echo "test_pwa [$d]: $(timeout 600 node test_pwa.js $ROOT/public $d out 2>&1 | sum)"; echo "test_contrast [$d]: $(timeout 600 node test_contrast.js $ROOT/public/index.html $d out 2>&1 | sum)"; done

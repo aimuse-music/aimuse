@@ -65,8 +65,9 @@ export async function handleProbe({ admin, keys, userJwt, callerSecret, body, en
     const { data: got, error } = await admin.auth.getUser(userJwt);
     const user = got && got.user;
     if (error || !user || !user.id) return reply(401, { code: "LOGIN_REQUIRED" });
-    const p = await restGet(fetchImpl, keys, `profiles?id=eq.${encodeURIComponent(user.id)}&select=is_admin,is_banned`);
-    if (!p.ok || !p.rows[0] || p.rows[0].is_admin !== true || p.rows[0].is_banned) return reply(403, { code: "ADMIN_ONLY" });
+    // この DB では service_role に表の直接の読み取り権限が無いため、読み取りだけの関数で確認する
+    const { data: isAdm, error: admErr } = await admin.rpc("align_probe_is_admin", { p_user: user.id });
+    if (admErr || isAdm !== true) return reply(403, { code: "ADMIN_ONLY" });
     who = "admin";
   } else {
     return reply(401, { code: "LOGIN_REQUIRED" });
@@ -84,9 +85,9 @@ export async function handleProbe({ admin, keys, userJwt, callerSecret, body, en
   const trackId = body && body.track_id;
   if (typeof trackId !== "string" || !UUID.test(trackId)) return reply(400, { code: "BAD_REQUEST" });
   const usePrompt = !!(body && body.prompt === true);
-  const t = await restGet(fetchImpl, keys, `tracks?id=eq.${trackId}&select=id,title,lyrics,audio_path,duration`);
-  if (!t.ok) return reply(502, { code: "DB_ERROR" });
-  const track = t.rows[0];
+  const { data: rows, error: tErr } = await admin.rpc("align_probe_track", { p_track: trackId });
+  if (tErr) return reply(502, { code: "DB_ERROR" });
+  const track = Array.isArray(rows) ? rows[0] : rows;
   if (!track) return reply(404, { code: "NOT_FOUND" });
   const lyrics = Array.isArray(track.lyrics) ? track.lyrics : [];
   if (!lyrics.some((l) => lyricKind(l) === "text")) return reply(422, { code: "NO_LYRICS" });
@@ -153,13 +154,4 @@ async function verifyToken(fetchImpl, acct, token) {
     } catch (_) { /* 次の窓口で確認 */ }
   }
   return "invalid_or_unverifiable";
-}
-
-async function restGet(fetchImpl, keys, q) {
-  try {
-    const r = await fetchImpl(`${keys.url}/rest/v1/${q}`, { headers: { ...keyHeaders(keys.secret), Accept: "application/json" } });
-    if (!r.ok) return { ok: false, rows: [] };
-    const rows = await r.json();
-    return { ok: true, rows: Array.isArray(rows) ? rows : [] };
-  } catch (_) { return { ok: false, rows: [] }; }
 }

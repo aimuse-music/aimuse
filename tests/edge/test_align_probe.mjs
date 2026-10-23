@@ -17,15 +17,19 @@ function world(o = {}) {
   const log = [];
   const env = (k) => ({ CF_ACCOUNT_ID: ACCT, CF_AI_TOKEN: TOKEN, ...(o.env || {}) })[k] ?? null;
   const admin = {
-    async rpc(name, args) { log.push({ rpc: name }); if (o.noRpc) return { data: null, error: { message: "function not found" } }; return { data: name === "align_probe_secret_matches" && args.p_secret === SECRET, error: null }; },
+    async rpc(name, args) { log.push({ rpc: name, args });
+      if (o.noRpc) return { data: null, error: { message: "function not found" } };
+      if (name === "align_probe_secret_matches") return { data: args.p_secret === SECRET, error: null };
+      if (name === "align_probe_is_admin") return { data: args.p_user === "u-admin" && !o.bannedAdmin, error: null };
+      if (name === "align_probe_track") { if (o.trackRpcFail) return { data: null, error: { message: "permission denied" } }; return { data: o.noTrack ? [] : [{ id: TRACK, title: "おぼろ月", lyrics: o.lyrics || LYR, audio_path: "u-admin/" + TRACK + ".mp3", duration: o.duration ?? 258 }], error: null }; }
+      return { data: null, error: { message: "unknown" } }; },
     auth: { async getUser(jwt) { return jwt === "jwt-admin" ? { data: { user: { id: "u-admin" } }, error: null } : jwt === "jwt-member" ? { data: { user: { id: "u-member" } }, error: null } : { data: { user: null }, error: { status: 401 } }; } },
   };
   const keys = { url: "https://p.supabase.co", secret: "sb_secret_K", publishable: "sb_publishable_P" };
   const fetchImpl = async (url, init = {}) => {
     const method = init.method || "GET"; log.push({ url, method, headers: init.headers || {}, body: init.body });
     const J = (s, b) => ({ ok: s >= 200 && s < 300, status: s, json: async () => b, arrayBuffer: async () => new ArrayBuffer(0) });
-    if (url.includes("/rest/v1/profiles")) return J(200, [{ is_admin: url.includes("u-admin") && !o.bannedAdmin, is_banned: !!o.bannedAdmin }]);
-    if (url.includes("/rest/v1/tracks")) return o.noTrack ? J(200, []) : J(200, [{ id: TRACK, title: "おぼろ月", lyrics: o.lyrics || LYR, audio_path: "u-admin/" + TRACK + ".mp3", duration: o.duration ?? 258 }]);
+    if (url.includes("/rest/v1/")) return J(403, { message: "permission denied" });   // 本番と同じく、表を直接は読めない
     if (url.includes("/storage/v1/object/audio/")) { if (o.audioFail) return J(404, {}); const b = o.bigAudio ? new Uint8Array(21 * 1024 * 1024) : AUDIO; return { ok: true, status: 200, arrayBuffer: async () => b.buffer.slice(0) }; }
     if (url.includes("/tokens/verify")) { if (o.verify === "user" && url.includes("/accounts/")) return J(401, { success: false }); return o.verify === "bad" ? J(401, { success: false, errors: [{ code: 1000 }] }) : J(200, { success: true, result: { status: "active" } }); }
     if (url.startsWith("https://api.cloudflare.com/")) {
@@ -76,7 +80,8 @@ ok("5 推定した時刻（単語の時刻あり）", r.body.granularity === "wo
 ok("5 Cloudflare へは指定のモデル・アカウントの URL に、トークンを Authorization で送る", cf.url === `https://api.cloudflare.com/client/v4/accounts/${ACCT}/ai/run/${MODEL}` && cf.headers.Authorization === `Bearer ${TOKEN}`);
 ok("5 音源を Base64 にして送る（元のデータと一致）・日本語・無音の除去", sent.audio === Buffer.from(AUDIO).toString("base64") && sent.language === "ja" && sent.vad_filter === true && !("initial_prompt" in sent));
 ok("5 返す内容・記録にトークンと管理用のキーが含まれない", !JSON.stringify(r.body).includes(TOKEN) && !JSON.stringify(r.body).includes("sb_secret") && !JSON.stringify(r.body).includes(SECRET));
-ok("5 データベースに書き込まない（読み取りと照合の関数だけ）", r.log.filter((l) => l.url && l.url.includes("/rest/v1/")).every((l) => l.method === "GET") && r.log.filter((l) => l.rpc).every((l) => l.rpc === "align_probe_secret_matches"));
+ok("5 データベースに書き込まない（表を直接読み書きせず、読み取りだけの関数3つだけを使う）", !r.log.some((l) => l.url && l.url.includes("/rest/v1/")) && r.log.filter((l) => l.rpc).every((l) => ["align_probe_secret_matches", "align_probe_track"].includes(l.rpc)));
+{ const r0 = await run({ trackRpcFail: true }, { secret: SECRET }); ok("5 曲の情報を読めないときは DB_ERROR（音源・Cloudflare を呼ばない）", r0.status === 502 && r0.body.code === "DB_ERROR" && !r0.log.some((l) => String(l.url || "").includes("storage") || String(l.url || "").includes("cloudflare"))); }
 ok("5 音源は管理用のキーで非公開の保存場所から取り出す（Cloudflare には管理用のキーを送らない）", r.log.find((l) => String(l.url || "").includes("/storage/")).headers.apikey === "sb_secret_K" && !JSON.stringify(cf.headers).includes("sb_secret"));
 ok("5 使うニューロンの見積もり（4分18秒で約200）", r.body.neurons_estimate === 201, r.body.neurons_estimate);
 r = await run({}, { secret: SECRET, body: { track_id: TRACK, prompt: true } });
@@ -86,7 +91,7 @@ r = await run({}, { jwt: "jwt-admin" }); ok("5 管理者のログイン情報で
 // 6. 設定の確認だけ（AI を呼ばない）
 r = await run({}, { secret: SECRET, body: { check: true } });
 ok("6 設定の確認：名前・形式・トークンが有効か（active）を返す", r.status === 200 && r.body.cf_account_id.set && r.body.cf_account_id.format_ok && r.body.cf_ai_token.set && r.body.cf_ai_token.status === "active", r.body);
-ok("6 設定の確認では解析しない（AI・音源・曲の読み取りなし）", !r.log.some((l) => String(l.url || "").includes("/ai/run/") || String(l.url || "").includes("/storage/") || String(l.url || "").includes("/rest/v1/tracks")));
+ok("6 設定の確認では解析しない（AI・音源・曲の読み取りなし）", !r.log.some((l) => String(l.url || "").includes("/ai/run/") || String(l.url || "").includes("/storage/")) && !r.log.some((l) => l.rpc === "align_probe_track"));
 ok("6 設定の確認の結果に、トークンとアカウントIDの値は含まれない", !JSON.stringify(r.body).includes(TOKEN) && !JSON.stringify(r.body).includes(ACCT));
 r = await run({ verify: "user" }, { secret: SECRET, body: { check: true } }); ok("6 個人のトークンでも確認できる", r.body.cf_ai_token.status === "active");
 r = await run({ verify: "bad" }, { secret: SECRET, body: { check: true } }); ok("6 無効なトークンは invalid と分かる", r.body.cf_ai_token.status === "invalid_or_unverifiable");

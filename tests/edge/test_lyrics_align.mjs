@@ -80,14 +80,14 @@ function fakeFetch(opt = {}) {
   };
   return { f, log };
 }
-const ENV = { AIMUSE_ALIGN_ENABLED: "1", CF_ACCOUNT_ID: "0123456789abcdef0123456789abcdef", CF_AI_TOKEN: "cf-token-SECRET-xyz" };
+const ENV = { CF_ACCOUNT_ID: "0123456789abcdef0123456789abcdef", CF_AI_TOKEN: "cf-token-SECRET-xyz" };
 const keys = { url: "https://proj.supabase.co", secret: "sb_secret_TEST", publishable: "sb_publishable_TEST" };
 const run = (o = {}) => { const ff = fakeFetch(o.fetch); const a = admin(o.inject); return handleRun({ admin: a, keys, callerSecret: o.secret === undefined ? SECRET : o.secret, env: (k) => ({ ...ENV, ...(o.env || {}) })[k] ?? null, fetchImpl: ff.f }).then((r) => ({ ...r, log: ff.log, calls: a.calls })); };
 
 // 1. 呼び出し元・切り替え
 let r = await run({ secret: null }); ok("1 合言葉なしは 401（データベースも呼ばない）", r.status === 401 && r.calls.length === 0);
 r = await run({ secret: "x".repeat(64) }); ok("1 合言葉が違えば 403（取り出さない）", r.status === 403 && !r.calls.includes("lyrics_align_claim"));
-r = await run({ env: { AIMUSE_ALIGN_ENABLED: null } }); ok("1 AIMUSE_ALIGN_ENABLED が無ければ何もしない（disabled）", r.status === 200 && r.body.status === "disabled" && !r.calls.includes("lyrics_align_claim"));
+r = await run({ env: { AIMUSE_ALIGN_DISABLED: "1" } }); ok("1 非常用の AIMUSE_ALIGN_DISABLED=1 なら何もしない（disabled）", r.status === 200 && r.body.status === "disabled" && !r.calls.includes("lyrics_align_claim"));
 r = await run({ env: { CF_AI_TOKEN: null } }); ok("1 Cloudflare の設定が無ければ 503（取り出さない）", r.status === 503 && !r.calls.includes("lyrics_align_claim"));
 // 2. 停止中
 asAdmin(`select public.admin_align_enqueue_existing()`);

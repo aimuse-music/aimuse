@@ -39,7 +39,7 @@ pg_cron（5分ごと）── 合言葉付き ──▶ Edge Function「lyrics-a
 新しい表は RLS を有効にし、未ログイン・会員には権限を付けない（関数経由のみ）。
 
 ## 3. 既存曲の一括解析
-1. v1.15 を適用（この時点では止めた状態：Edge Function の `AIMUSE_ALIGN_ENABLED` が未設定なら何もしない）
+1. v1.15 を適用（この時点では止めた状態：管理画面で再開するまで何もしない）
 2. 管理者が `admin_align_enqueue_existing` を実行 → 歌詞があり、手動の同期が無い公開中の曲を解析待ちに登録
 3. まず1曲（おぼろ月）だけ動かして結果を確認 → 承認後に残り 9曲
 4. 5分ごとに1曲ずつ処理。10曲で約50分、合計 約2,200ニューロン（1日の上限の内側）
@@ -115,7 +115,7 @@ pg_cron（5分ごと）── 合言葉付き ──▶ Edge Function「lyrics-a
 6. 検証用の関数の片付け
 
 ## 11. 元に戻す方法
-- すぐ止める：Edge Function の Secrets `AIMUSE_ALIGN_ENABLED` を消す（または定期実行を止める）
+- すぐ止める：管理画面で停止（非常用：Secrets に `AIMUSE_ALIGN_DISABLED` = `1`、または定期実行を止める）
 - 完全に戻す：rollback_v1_15.sql（追加した表・関数・トリガーを外し、lyrics_sync_save を v1.14 に戻す）。AI が作った同期（source=auto）を消すかどうかは別に確認
 
 ## 12. 決めていただきたいこと

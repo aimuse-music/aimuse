@@ -39,19 +39,19 @@
 
 ## 停止と再開
 - 管理画面 →「歌詞AI」→「停止する／再開する」（すぐ効く。解析中の1曲は終わってから止まる）
-- 非常用：Edge Function の Secrets `AIMUSE_ALIGN_ENABLED` を消す（その時点で何もしなくなる）
+- 非常用：Edge Function の Secrets に `AIMUSE_ALIGN_DISABLED` = `1` を追加する（その時点で何もしなくなる）
 - 定期実行を止める：`select cron.unschedule('aimuse-lyrics-align');`
 
 ## 本番導入の手順（6段階・それぞれ承認を取ってから）
 1. **データベース**：v1.15 を適用（停止中）→ 既存データ・表の権限・RLS が変わらないこと、会員・未ログインが仕事用の関数を実行できないことを照合
-2. **Edge Function と定期実行**：`lyrics-align` を配置（Secrets：`AIMUSE_ALIGN_ENABLED=1`・`CF_ACCOUNT_ID`・`CF_AI_TOKEN` は検証のものを使う）→ `cron_lyrics_align.sql` → 停止中のまま、呼び出しが「paused」で何もしないことを確認
+2. **Edge Function と定期実行**：`lyrics-align` を配置（Secrets は検証の `CF_ACCOUNT_ID`・`CF_AI_TOKEN` をそのまま使う。追加の設定は不要）→ `cron_lyrics_align.sql` → 停止中のまま、呼び出しが「paused」で何もしないことを確認
 3. **アプリの公開**（main へマージ・Cloudflare Pages）：管理画面「歌詞AI」・編集画面の下書き・プライバシーポリシーの追記（※会員の曲を解析する前に公開しておく）
 4. **おぼろ月1曲**：管理画面で「この1曲を登録」→「再開」→ 約5〜10分で確認待ち → 編集画面で聞いて確かめて保存 → 再生画面で表示を確認 → 「停止」
 5. **残り9曲**：「公開中の曲をまとめて登録」→「再開」→ 約1時間（約1,900ニューロン）→ 1曲ずつ確認して保存
 6. **新しい投稿**：再開したままにする（承認されると自動で解析待ち）。検証用の `lyrics-align-probe` と関数3つを片付ける
 
 ## 元に戻す
-1. 管理画面で「停止する」（または Secrets の `AIMUSE_ALIGN_ENABLED` を消す）
+1. 管理画面で「停止する」（または Secrets に `AIMUSE_ALIGN_DISABLED` = `1`）
 2. `select cron.unschedule('aimuse-lyrics-align');`
 3. Supabase の画面 → Edge Functions → `lyrics-align` を削除
 4. SQL Editor で `supabase/rollback/rollback_v1_15.sql`（同期の時刻は残る。AI の同期も消す場合は最後のコメントの1行）

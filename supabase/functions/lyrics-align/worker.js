@@ -25,8 +25,8 @@ export async function handleRun({ admin, keys, callerSecret, env, fetchImpl = fe
   const m = await admin.rpc("lyrics_align_secret_matches", { p_secret: String(callerSecret) });
   if (m.error) return reply(503, { code: "NOT_CONFIGURED" });
   if (m.data !== true) return reply(403, { code: "FORBIDDEN" });
-  // 2. 非常用の切り替え（Secrets の AIMUSE_ALIGN_ENABLED が "1" のときだけ動く）
-  if (env("AIMUSE_ALIGN_ENABLED") !== "1") return reply(200, { status: "disabled" });
+  // 2. 非常用の停止（Secrets に AIMUSE_ALIGN_DISABLED="1" を入れると、何もしない）。ふだんの停止・再開は管理画面（データベースの設定）
+  if (env("AIMUSE_ALIGN_DISABLED") === "1") return reply(200, { status: "disabled" });
   const acct = env("CF_ACCOUNT_ID"), token = env("CF_AI_TOKEN");
   if (!acct || !/^[0-9a-f]{32}$/i.test(acct) || !token) return reply(503, { code: "NOT_CONFIGURED" });
   // 3. 1曲だけ取り出す（停止中・上限・解析中の曲がある場合は取り出さない）

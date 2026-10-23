@@ -161,11 +161,73 @@
         let ee=null; if(x.e!=null){ ee=Math.round(x.e*100)/100; if(ee<=tt) return E(`BAD_DATA: 歌い終わりの時刻が正しくありません（${x.i+1}行目）`); }
         out.push(ee==null?{i:x.i,t:tt}:{i:x.i,t:tt,e:ee}); pi=x.i; pt=tt; pe=ee;
       }
-      db.lyricsSync[p_track]={lines:out,source:"manual",hash:lhash(t.lyrics),updated_at:new Date().toISOString()}; save();
+      const prev=db.lyricsSync[p_track]; const src=prev&&["auto","mixed"].includes(prev.source)&&prev.hash===lhash(t.lyrics)?"mixed":"manual";
+      db.lyricsSync[p_track]={lines:out,source:src,hash:lhash(t.lyrics),updated_at:new Date().toISOString()}; save();
       window.__log.push({op:"lyrics_sync_save",track:p_track,lines:out});
-      return {data:{count:out.length},error:null};
-    }
+      return {data:{count:out.length,source:src},error:null};
+    },
+    // v1.15 歌詞の自動同期（AI）（migration_v1_15_lyrics_auto_sync.sql と同じ規則。規則そのものは test_v115.py で実際の PostgreSQL に対して検証済み）
+    //   db.alignJobs[track] = {state, reason, proposal, meta:{ratio, quality_ok, est, hash}, review}、db.alignSettings
+    lyrics_align_status({p_track}){
+      if(window.__noV115) return E("Could not find the function public.lyrics_align_status");
+      const t=db.tracks.find(x=>x.id===p_track); const role=alignRole(t); if(!role) return E("NOT_ALLOWED: この曲の情報は見られません");
+      const j=(db.alignJobs||{})[p_track]; const st=db.alignSettings||{paused:false}; const s=db.lyricsSync[p_track];
+      const base={sync_source:s&&s.hash===lhash(t.lyrics)?s.source:null,paused:!!st.paused,role,requests_left:(db.alignReqLeft??2)};
+      if(!j) return {data:{state:"none",...base},error:null};
+      const cur=j.proposal&&j.meta&&j.meta.hash===lhash(t.lyrics);
+      return {data:{state:j.state,reason:j.reason,attempts:0,proposal:cur?j.proposal:null,meta:cur?{ratio:j.meta.ratio,quality_ok:j.meta.quality_ok,est:j.meta.est||[]}:null,review:j.review||null,...base},error:null};
+    },
+    lyrics_align_my_states(){
+      if(window.__noV115) return E("Could not find the function public.lyrics_align_my_states");
+      const me=uid(); return {data:Object.entries(db.alignJobs||{}).filter(([id])=>{ const t=db.tracks.find(x=>x.id===id); return t&&t.user_id===me; })
+        .map(([id,j])=>({track_id:id,state:j.state,has_proposal:!!(j.proposal&&j.meta&&j.meta.hash===lhash(db.tracks.find(x=>x.id===id).lyrics))})),error:null};
+    },
+    lyrics_align_apply({p_track,p_lines}){
+      const t=db.tracks.find(x=>x.id===p_track); const role=alignRole(t); if(!role) return E("NOT_ALLOWED: 歌詞の同期を変更できるのは、投稿者本人と運営だけです");
+      const j=(db.alignJobs||{})[p_track]; if(!j||!j.proposal||!j.meta||j.meta.hash!==lhash(t.lyrics)) return E("NO_PROPOSAL: 今の歌詞に対する AI の提案がありません");
+      const s=db.lyricsSync[p_track];
+      if(t.user_id!==uid()&&s&&["manual","mixed"].includes(s.source)&&s.hash===lhash(t.lyrics)&&s.lines.length) return E("NOT_ALLOWED: 投稿者が手動で合わせた同期は、投稿者本人の操作なしに置き換えられません");
+      const lines=p_lines||j.proposal; const same=JSON.stringify(lines)===JSON.stringify(j.proposal);
+      const m=new Map(j.proposal.map(x=>[x.i,x.t])); const d=lines.filter(x=>m.has(x.i)).map(x=>Math.abs(x.t-m.get(x.i))).sort((a,b)=>a-b);
+      const review={compared:d.length,changed:d.filter(x=>x>=0.05).length,median_abs:d.length?Math.round(d[Math.floor((d.length-1)/2)]*100)/100:0,max_abs:d.length?Math.round(d[d.length-1]*100)/100:0};
+      db.lyricsSync[p_track]={lines:lines.map(x=>({...x})),source:same?"auto":"mixed",hash:lhash(t.lyrics),updated_at:new Date().toISOString()};
+      j.state="applied"; j.review=review; save(); window.__log.push({op:"lyrics_align_apply",track:p_track,lines,source:same?"auto":"mixed"});
+      return {data:{count:lines.length,source:same?"auto":"mixed",review},error:null};
+    },
+    lyrics_align_request({p_track}){
+      const t=db.tracks.find(x=>x.id===p_track); if(!alignRole(t)) return E("NOT_ALLOWED: AI の解析を頼めるのは、投稿者本人と運営だけです");
+      if((db.alignReqLeft??2)<=0) return E("LIMIT: この曲の AI 解析は、1日2回までです");
+      db.alignReqLeft=(db.alignReqLeft??2)-1; db.alignJobs=db.alignJobs||{}; db.alignJobs[p_track]={state:"queued",reason:"requested"}; save();
+      window.__log.push({op:"lyrics_align_request",track:p_track}); return {data:{result:"queued"},error:null};
+    },
+    lyrics_align_dismiss({p_track}){
+      const t=db.tracks.find(x=>x.id===p_track); if(!alignRole(t)) return E("NOT_ALLOWED");
+      const j=(db.alignJobs||{})[p_track]; if(j&&j.state==="review") j.state="dismissed"; save(); window.__log.push({op:"lyrics_align_dismiss",track:p_track}); return {data:{ok:true},error:null};
+    },
+    admin_align_overview(){
+      if(window.__noV115) return E("Could not find the function public.admin_align_overview");
+      if(!isAdmin()) return E("NOT_ALLOWED: 運営だけが使えます");
+      const st=db.alignSettings||{paused:true,pause_reason:"initial",daily_cap:6000}; const jobs=Object.entries(db.alignJobs||{}).map(([id,j])=>{ const t=db.tracks.find(x=>x.id===id)||{};
+        return {track_id:id,title:t.title,artist:t.artist,state:j.state,reason:j.reason,ratio:j.meta?j.meta.ratio:null,quality_ok:j.meta?j.meta.quality_ok:null,review:j.review||null,attempts:0,last_error:null}; });
+      const counts={}; jobs.forEach(j=>{ counts[j.state]=(counts[j.state]||0)+1; });
+      const rv=jobs.filter(j=>j.review&&j.review.median_abs!=null);
+      return {data:{settings:{paused:!!st.paused,pause_reason:st.pause_reason||"",daily_cap:st.daily_cap||6000,auto_apply:false,blocked_until:null},today:{reserved:db.alignReserved||0,runs:0,ok:0,failed:0},counts,
+        accuracy:{songs:rv.length,median_abs:rv.length?rv[0].review.median_abs:0,max_abs:rv.length?Math.max(...rv.map(j=>j.review.max_abs)):0},jobs},error:null};
+    },
+    admin_align_set_paused({p_paused}){ if(!isAdmin()) return E("NOT_ALLOWED: 運営だけが使えます"); db.alignSettings={...(db.alignSettings||{daily_cap:6000}),paused:!!p_paused,pause_reason:p_paused?"admin":""}; save(); window.__log.push({op:"admin_align_set_paused",paused:!!p_paused}); return {data:{paused:!!p_paused},error:null}; },
+    admin_align_enqueue({p_track}){ if(!isAdmin()) return E("NOT_ALLOWED: 運営だけが使えます"); db.alignJobs=db.alignJobs||{};
+      const t=db.tracks.find(x=>x.id===p_track); const s=db.lyricsSync[p_track];
+      if(db.alignJobs[p_track]) return {data:{result:"duplicate"},error:null};
+      if(s&&t&&s.hash===lhash(t.lyrics)){ db.alignJobs[p_track]={state:"skipped",reason:"has_sync"}; save(); return {data:{result:"skipped"},error:null}; }
+      db.alignJobs[p_track]={state:"queued",reason:"admin"}; save(); window.__log.push({op:"admin_align_enqueue",track:p_track}); return {data:{result:"queued"},error:null}; },
+    admin_align_enqueue_existing(){ if(!isAdmin()) return E("NOT_ALLOWED: 運営だけが使えます"); db.alignJobs=db.alignJobs||{}; const out={};
+      db.tracks.filter(t=>t.status==="public").forEach(t=>{ let r; if(db.alignJobs[t.id]) r="duplicate"; else if(!(t.lyrics||[]).some(l=>String(l).trim()&&!isHead(l))){ r="waiting"; db.alignJobs[t.id]={state:"waiting",reason:"no_lyrics"}; }
+        else if(db.lyricsSync[t.id]&&db.lyricsSync[t.id].hash===lhash(t.lyrics)){ r="skipped"; db.alignJobs[t.id]={state:"skipped",reason:"has_sync"}; } else { r="queued"; db.alignJobs[t.id]={state:"queued",reason:"existing"}; } out[r]=(out[r]||0)+1; });
+      save(); window.__log.push({op:"admin_align_enqueue_existing",out}); return {data:out,error:null}; },
+    admin_align_retry({p_track}){ if(!isAdmin()) return E("NOT_ALLOWED: 運営だけが使えます"); const j=(db.alignJobs||{})[p_track]; if(!j||!["failed","skipped","dismissed"].includes(j.state)) return E("BAD_DATA: 打ち切り・対象外・不採用の曲だけ、やり直せます");
+      j.state="queued"; j.reason="admin_retry"; save(); return {data:{result:"queued"},error:null}; }
   };
+  const alignRole = t => !t||!uid() ? null : isAdmin() ? "admin" : (t.user_id===uid()&&active()) ? "owner" : null;
   const rpcs = {
     ...rpcsSync,
     // v1.9（migration_v1_9_delete.sql と同じ規則。規則そのものは test_v19.py で実際の PostgreSQL に対して検証済み）

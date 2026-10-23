@@ -20,6 +20,8 @@ for d in e_req e_keys e_purge; do $P -d postgres -c "drop database if exists $d"
 $P -d e_purge -f supabase/migration_v1_10_review_names.sql >/dev/null 2>&1; $P -d e_purge -f supabase/migration_v1_11_playlists.sql >/dev/null 2>&1; $P -d e_purge -f supabase/migration_v1_12_purge_play_events.sql >/dev/null 2>&1
 echo "退会の申請: $(node tests/edge/test_account_request.mjs e_req 2>&1 | sum)"
 echo "新しい形式のキー: $(node tests/edge/test_new_keys.mjs e_keys 2>&1 | sum)"
+echo "歌詞の自動同期の照合: $(node tests/edge/test_align.mjs 2>&1 | sum)"
+echo "自動同期の検証機能: $(node tests/edge/test_align_probe.mjs 2>&1 | sum)"
 echo "呼び出し元の確認: $(node tests/edge/test_purge_caller.mjs 2>&1 | sum)"
 echo "完全削除（v1.12 適用後）: $(node tests/edge/test_account_purge.mjs e_purge 2>&1 | sum)"
 for d in e_req e_keys e_purge; do $P -d postgres -c "drop database if exists $d" >/dev/null 2>&1; done

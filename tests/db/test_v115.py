@@ -125,7 +125,8 @@ for port in PORTS:
     only(T2, True); o, e = claim(); c2 = J(o)
     o, e = finish(T2, c2["token"], [{"i": 0, "t": 1}], META_OK); ok("6 形式の違う結果（見出しに時刻）は保存しない（bad_result・再試行しない）", J(o)["status"] == "bad_result" and job(T2)["state"] == "failed", o)
     only(T2, True); o, e = claim(); c2 = J(o)
-    o, e = finish(T2, c2["token"], GOOD, {**META_OK, "quality_ok": False, "reasons": ["est_run", "BAD<script>"]}); j = job(T2)
+    o, e = finish(T2, c2["token"], GOOD, {**META_OK, "quality_ok": "yes", "reasons": ["est_run", "BAD<script>"], "ai_ms": "x", "words": -5}); j = job(T2)
+    ok("6 形式の違う付帯情報（品質が文字・数が負）でも保存は止まらず、不合格・0 として扱う", J(o) and J(o)["status"] == "review" and j["meta"]["quality_ok"] is False and j["meta"]["ai_ms"] == 0 and j["meta"]["words"] == 0, o or e)
     ok("6 時刻の検査に落ちた結果は不合格、理由は決まった形の文字だけ記録", j["meta"]["quality_ok"] is False and j["meta"]["reasons"] == ["est_run"], j["meta"])
     # 解析中に歌詞が変わった
     only(T2, True); o, e = claim(); c2 = J(o)

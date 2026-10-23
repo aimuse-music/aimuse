@@ -384,6 +384,16 @@ button.stat{font:inherit;color:inherit;background:none;border:0;cursor:pointer;w
 .ls-line .tx{font-size:15px;line-height:1.45}
 .ls-tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:2px 0 4px 68px}
 .ls-end{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:4px}
+.ls-ai{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:12.5px;line-height:1.55;color:var(--muted)}
+.ls-ai b{color:var(--fg)}
+.ls-ai .row2{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ls-ai.warn{border-color:var(--warn,#e0a100)}
+.ls-est{font-size:11px;font-weight:700;color:var(--warn,#e0a100);border:1px solid currentColor;border-radius:6px;padding:0 5px}
+.ls-diff{font-size:11.5px;color:var(--muted)}
+.icon-btn.has-ai{position:relative}
+.icon-btn.has-ai::after{content:"";position:absolute;top:7px;right:7px;width:8px;height:8px;border-radius:50%;background:var(--violet)}
+.al-sum{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;font-size:12.5px;color:var(--muted)}
+.al-sum b{display:block;font-size:17px;color:var(--fg)}
 .lyrics .none{font-size:15px;color:rgba(255,255,255,.65);text-align:center;padding-top:30%}
 .pt{display:flex;align-items:center;gap:12px}
 .pt .t{font-size:22px;font-weight:900;line-height:1.3}
@@ -599,7 +609,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-23.1";
+const BUILD = "2026-10-24.1";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -859,6 +869,25 @@ const repo = {
     const v = {lines:lines.map(x=>({...x})),stale:false,source:"manual",updatedAt:new Date().toISOString()};
     this.syncCache.set(id,v); return v;
   },
+  // 歌詞の自動同期（AI・v1.15）。v1.15 が未適用なら null を返し、画面は今までどおり手動の同期だけになる
+  async alignStatus(id){
+    const {data,error} = await sb.rpc("lyrics_align_status",{p_track:id});
+    if(error){ if(!/function|schema cache/i.test(error.message||"")) console.warn("lyrics_align",error.message); return null; }
+    return data||null;
+  },
+  async alignMyStates(){
+    const {data,error} = await sb.rpc("lyrics_align_my_states");
+    if(error) return {};
+    const m={}; (data||[]).forEach(x=>{ m[x.track_id]=x; }); return m;
+  },
+  async alignApply(id,lines){
+    const {data,error} = await sb.rpc("lyrics_align_apply",{p_track:id,p_lines:lines});
+    if(error) throw error;
+    const v = {lines:lines.map(x=>({...x})),stale:false,source:(data&&data.source)||"auto",updatedAt:new Date().toISOString()};
+    this.syncCache.set(id,v); return data||{};
+  },
+  async alignRequest(id){ const {data,error} = await sb.rpc("lyrics_align_request",{p_track:id}); if(error) throw error; return data||{}; },
+  async alignDismiss(id){ const {error} = await sb.rpc("lyrics_align_dismiss",{p_track:id}); if(error) throw error; },
   async removeFiles(t){
     if(t&&t.audioPath) await sb.storage.from("audio").remove([t.audioPath]);
     if(t&&t.imagePath) await sb.storage.from("covers").remove([t.imagePath]);
@@ -1384,6 +1413,9 @@ function MyPage({ctx}){
   const {songs,artists,artistOf,play,favs,toggleFav,follows,openArtist,submissions,setTab,current,playing,user,profile,isAdmin,signOut,recovery,myFollowers,openFollowList,playlists} = ctx;
   const [tab,setT] = useState("fav");
   const [delSong,setDelSong] = useState(null);
+  // AI の提案が届いている投稿曲（歌詞の同期ボタンに印を付ける。v1.15 が未適用なら何も付かない）
+  const [aiMap,setAiMap] = useState({});
+  useEffect(()=>{ if(!user||tab!=="mine") return; let alive=true; repo.alignMyStates().then(m=>{ if(alive) setAiMap(m||{}); }).catch(()=>{}); return ()=>{ alive=false; }; },[user&&user.id,tab]);
   if(recovery) return html`<div className="screen"><header className="top"><h1>マイページ</h1></header><${NewPasswordPanel} ctx=${ctx}/></div>`;
   if(!user) return html`<div className="screen">
     <header className="top"><h1>マイページ</h1></header>
@@ -1425,7 +1457,7 @@ function MyPage({ctx}){
     <div style=${{marginTop:8}}>
       ${tab==="fav" && (favSongs.length ? html`<div className="list">${favSongs.map(s=>html`<${SongRow} key=${s.id} song=${s} artist=${artistOf(s)} cur=${current?.id===s.id} playing=${playing} fav=${true} onPlay=${()=>play(s,favSongs)} onFav=${()=>toggleFav(s.id)}/>`)}</div>` : html`<div className="empty">ハートをタップした曲がここに並びます</div>`)}
       ${tab==="pl" && html`<${PlaylistNew} ctx=${ctx}/>${playlists.length ? html`<${PlaylistRows} ctx=${ctx} list=${playlists}/>` : html`<div className="empty">プレイリストを作って、好きな曲をまとめて連続再生できます</div>`}`}
-      ${tab==="mine" && (mine.length ? html`<div className="list">${mine.map(s=>html`<div key=${s.id} className="row norank"><${Cover} item=${s} radius=${10}/><div style=${{minWidth:0}}><div className="t">${s.title}</div><div className="sub"><span className="n">${s.submittedAt}</span></div></div><div className="end">${statusTag(s.status)}${Array.isArray(s.lyrics)&&s.lyrics.some(l=>lyricKind(l)==="text")&&s.audioUrl&&html`<button className="icon-btn" aria-label=${`「${s.title}」の歌詞の同期`} onClick=${()=>ctx.openLyricsSync(s)}><${Icon} n="lyrics" size=${19}/></button>`}<button className="icon-btn del" aria-label=${`「${s.title}」を削除`} onClick=${()=>setDelSong(s)}><${Icon} n="trash" size=${19}/></button></div></div>`)}</div>` : html`<div className="empty">まだ投稿した曲はありません<br/><button className="btn primary sm" style=${{margin:"14px auto 0"}} onClick=${()=>setTab("upload")}>楽曲を投稿する</button></div>`)}
+      ${tab==="mine" && (mine.length ? html`<div className="list">${mine.map(s=>html`<div key=${s.id} className="row norank"><${Cover} item=${s} radius=${10}/><div style=${{minWidth:0}}><div className="t">${s.title}</div><div className="sub"><span className="n">${s.submittedAt}</span></div></div><div className="end">${statusTag(s.status)}${Array.isArray(s.lyrics)&&s.lyrics.some(l=>lyricKind(l)==="text")&&s.audioUrl&&html`<button className=${"icon-btn"+(aiMap[s.id]&&aiMap[s.id].has_proposal&&aiMap[s.id].state==="review"?" has-ai":"")} aria-label=${`「${s.title}」の歌詞の同期${aiMap[s.id]&&aiMap[s.id].has_proposal&&aiMap[s.id].state==="review"?"（AI の提案あり）":""}`} onClick=${()=>ctx.openLyricsSync(s)}><${Icon} n="lyrics" size=${19}/></button>`}<button className="icon-btn del" aria-label=${`「${s.title}」を削除`} onClick=${()=>setDelSong(s)}><${Icon} n="trash" size=${19}/></button></div></div>`)}</div>` : html`<div className="empty">まだ投稿した曲はありません<br/><button className="btn primary sm" style=${{margin:"14px auto 0"}} onClick=${()=>setTab("upload")}>楽曲を投稿する</button></div>`)}
       ${tab==="follow" && (followed.length ? html`<div className="list">${followed.map(a=>html`<button key=${a.id} className="row norank" onClick=${()=>openArtist(a.id)}><${Cover} item=${a} radius="50%"/><div style=${{minWidth:0}}><div className="t">${a.name}</div><div className="sub">${fmtNum(a.followers)} フォロワー</div></div><${Icon} n="chev" size=${18}/></button>`)}</div>` : hiddenFollows===0 ? html`<div className="empty">フォローしたアーティストがここに並びます</div>` : null)}
       ${tab==="follow" && hiddenFollows>0 && html`<div className="fl-listeners"><${Icon} n="info" size=${18}/><span>ほか ${hiddenFollows}件は、現在公開中の曲がないアーティストです（フォローは残っています）。<button className="link" onClick=${()=>openFollowList({mine:true,mode:"following"})}>一覧で確認・解除する</button></span></div>`}
     </div>
@@ -1495,6 +1527,7 @@ function Admin({ctx}){
       <button className=${tab==="reports"?"on":""} onClick=${()=>setT("reports")}>通報${openReports.length?html`<span className="badge-count">${openReports.length}</span>`:""}</button>
       <button className=${tab==="songs"?"on":""} onClick=${()=>setT("songs")}>楽曲管理</button>
       <button className=${tab==="names"?"on":""} onClick=${()=>setT("names")}>名義変更</button>
+      <button className=${tab==="align"?"on":""} onClick=${()=>setT("align")}>歌詞AI</button>
     </div>
 
     ${tab==="review" && html`<div style=${{display:"flex",flexDirection:"column",gap:12,marginTop:14}}>
@@ -1523,6 +1556,7 @@ function Admin({ctx}){
     </div>`}
 
     ${tab==="names" && html`<${AdminNameHistory} ctx=${ctx}/>`}
+    ${tab==="align" && html`<${AdminLyricsAlign} ctx=${ctx}/>`}
     ${tab==="songs" && html`<div className="list" style=${{marginTop:8}}>
       ${allSongs.map(s=>html`<div key=${s.id} className="row norank" style=${{opacity:s.status==="public"?1:.55}}>
         <${Cover} item=${s} radius=${10}/>
@@ -1660,11 +1694,22 @@ function LyricsSyncEditor({ctx,song}){
   const [err,setErr] = useState(null);
   const [confirmClear,setConfirmClear] = useState(false);
   const [confirmLeave,setConfirmLeave] = useState(false);
-  useEffect(()=>{ let alive=true; repo.loadSync(song.id,true).then(v=>{ if(!alive) return;
-      if(v && v.lines.length && !v.stale){ const t=lines.map(()=>null); v.lines.forEach(x=>{ if(x.i>=0&&x.i<t.length&&lyricKind(lines[x.i])==="text") t[x.i]=x.e!=null?{t:x.t,e:x.e}:{t:x.t}; }); setTimes(t);
-        const first=textIdx.find(i=>!t[i]); setCursor(first!=null?first:-1); }
+  // AI の自動同期（v1.15）：状態と提案。提案は「下書き」として読み込み、人が聞いて確かめて保存したときだけ再生画面に出る
+  const [ai,setAi] = useState(null);            // lyrics_align_status の結果（null＝未対応か読み込み前）
+  const [aiTimes,setAiTimes] = useState(null);  // 読み込んだ AI の提案（行ごと）。null＝AI の提案を使っていない
+  const [aiBusy,setAiBusy] = useState(false);
+  const toTimes = list => { const t=lines.map(()=>null); (list||[]).forEach(x=>{ if(x.i>=0&&x.i<t.length&&lyricKind(lines[x.i])==="text"&&isFinite(x.t)) t[x.i]=x.e!=null?{t:+x.t,e:+x.e}:{t:+x.t}; }); return t; };
+  const firstMissing = t => { const f=textIdx.find(i=>!t[i]); return f!=null?f:-1; };
+  const loadDraft = st => { const t=toTimes(st.proposal); setTimes(t); setAiTimes(toTimes(st.proposal)); setCursor(firstMissing(t)); setErr(null); };
+  useEffect(()=>{ let alive=true;
+    Promise.all([repo.loadSync(song.id,true).catch(()=>null), repo.alignStatus(song.id).catch(()=>null)]).then(([v,st])=>{ if(!alive) return;
+      const has = !!(v && v.lines.length && !v.stale);
+      if(has){ const t=toTimes(v.lines); setTimes(t); setCursor(firstMissing(t)); }
       if(v && v.stale && v.lines.length) setStaleNote(true);
-      setLoaded(true); }).catch(()=>setLoaded(true));
+      setAi(st);
+      // 同期がまだ無い曲に AI の提案があれば、下書きとして読み込む（保存するまでは再生画面に出ない）
+      if(!has && st && Array.isArray(st.proposal) && st.proposal.length && st.state!=="dismissed") loadDraft(st);
+      setLoaded(true); });
     return ()=>{ alive=false; const a=aRef.current; if(a){ try{ a.pause(); }catch(e){} } }; },[]);
   // 再生中は 0.1秒ごとに現在の時刻を読む（画面の書き換えを抑えて、スマートフォンでも軽く動かす）
   useEffect(()=>{ if(!playing) return; const id=setInterval(()=>{ const a=aRef.current; if(a) setNow(a.currentTime); },100); return ()=>clearInterval(id); },[playing]);
@@ -1701,10 +1746,46 @@ function LyricsSyncEditor({ctx,song}){
   const save = async () => {
     if(bad.size){ setErr(`時刻が前の行より前になっている行があります（${[...bad].map(i=>i+1).slice(0,5).join("・")}行目）。調整してから保存してください`); return; }
     setBusy(true); setErr(null);
-    try{ await repo.saveSync(song.id,built); setDirty(false); setStaleNote(false); say(built.length?"歌詞の同期を保存しました":"歌詞の同期を消しました（歌詞は全文表示になります）"); }
-    catch(e){ const m=(e&&e.message)||""; setErr(/NOT_ALLOWED/.test(m)?"この曲の同期を変更する権限がありません":/BAD_DATA/.test(m)?m.replace(/^.*BAD_DATA:\s*/,""):/lyrics_sync_save|function/i.test(m)?"歌詞の同期の準備がまだ完了していません（運営の作業待ち）":"保存できませんでした。通信状態を確認して、もう一度お試しください"); }
+    try{
+      if(aiTimes && built.length){
+        // AI の提案から作った同期：採用として保存（直した量＝AI との時刻の差が記録され、精度の確認に使われる）
+        const r = await repo.alignApply(song.id,built); setDirty(false); setStaleNote(false);
+        const rv = r.review||{};
+        say(rv.changed ? `保存しました（AI から直した行 ${rv.changed}行・ずれの中央値 ${rv.median_abs}秒）` : "AI の同期をそのまま保存しました");
+        setAi(a=>a?{...a,state:"applied",sync_source:r.source}:a);
+      } else {
+        await repo.saveSync(song.id,built); setDirty(false); setStaleNote(false); say(built.length?"歌詞の同期を保存しました":"歌詞の同期を消しました（歌詞は全文表示になります）");
+      }
+    }
+    catch(e){ const m=(e&&e.message)||""; setErr(/NO_PROPOSAL/.test(m)?"AI の提案が古くなりました（歌詞が変わった可能性があります）。画面を開き直してください":/NOT_ALLOWED/.test(m)?(/手動/.test(m)?"投稿者が手動で合わせた同期は、投稿者本人しか置き換えられません":"この曲の同期を変更する権限がありません"):/BAD_DATA/.test(m)?m.replace(/^.*BAD_DATA:\s*/,""):/lyrics_sync_save|function/i.test(m)?"歌詞の同期の準備がまだ完了していません（運営の作業待ち）":"保存できませんでした。通信状態を確認して、もう一度お試しください"); }
     setBusy(false);
   };
+  const aiRequest = async () => { setAiBusy(true);
+    try{ const r=await repo.alignRequest(song.id); say(r.result==="queued"?"AI の解析を頼みました。順番に処理します（数分〜。結果は提案として届きます）":r.result==="running"?"いま解析中です":"この曲は AI の解析の対象外です"); setAi(await repo.alignStatus(song.id)); }
+    catch(e){ const m=(e&&e.message)||""; say(/LIMIT/.test(m)?m.replace(/^.*LIMIT:\s*/,""):/NOT_ALLOWED/.test(m)?"この操作の権限がありません":"頼めませんでした。通信状態を確認して、もう一度お試しください"); }
+    setAiBusy(false); };
+  const aiDismiss = async () => { setAiBusy(true);
+    try{ await repo.alignDismiss(song.id); setAi(a=>a?{...a,state:"dismissed"}:a); if(aiTimes){ setAiTimes(null); } say("AI の提案を使わないことにしました（今の同期はそのままです）"); }
+    catch(e){ say("変更できませんでした。もう一度お試しください"); }
+    setAiBusy(false); };
+  const aiLoad = () => { loadDraft(ai); setDirty(true); say("AI の提案を読み込みました。保存するまで、今の同期は変わりません"); };
+  const estSet = useMemo(()=>new Set((ai&&ai.meta&&ai.meta.est)||[]),[ai]);
+  // 確認ポイント（歌い出し・最初のサビ・中盤・最後のサビ・最後の行）：実際の歌声と聞き比べる場所
+  const checks = useMemo(()=>{ const timed=textIdx.filter(i=>times[i]); if(!timed.length) return [];
+    const after = (last) => { let h=-1; lines.forEach((l,i)=>{ if(lyricKind(l)==="head"&&/chorus|サビ|hook/i.test(l)&&(h<0||last)) h=i; }); return h<0?null:timed.find(i=>i>h); };
+    const pick=[["歌い出し",timed[0]],["最初のサビ",after(false)],["中盤",timed[Math.floor(timed.length/2)]],["最後のサビ",after(true)],["最後の行",timed[timed.length-1]]];
+    const seen=new Set(); return pick.filter(([,i])=>i!=null&&!seen.has(i)&&seen.add(i)); },[times]);
+  const playFrom = i => { const x=times[i]; if(!x) return; seekTo(Math.max(0,x.t-2)); const el=a(); if(el&&el.paused) toggle(); };
+  const aiNote = (()=>{ if(!ai) return null; const st=ai.state, rs=ai.reason;
+    if(ai.paused && (st==="queued"||st==="none")) return "AI の自動同期は、いま停止中です（運営の作業待ち）。手動で合わせることもできます。";
+    if(st==="queued") return "AI の自動同期：解析待ちです（順番に処理します）。手動で合わせることもできます。";
+    if(st==="running") return "AI の自動同期：いま解析中です。少し待ってから開き直してください。";
+    if(st==="failed") return "AI では合わせられませんでした。手動で合わせてください。";
+    if(st==="skipped" && (rs==="too_long"||rs==="too_large")) return "長い曲・大きな音源は、AI の自動同期の対象外です。手動で合わせてください。";
+    if(st==="waiting" && rs==="no_duration") return "曲の長さがわかると、AI が自動で合わせます（一度再生すると登録されます）。";
+    if(st==="applied" && ai.sync_source==="auto") return "AI が合わせた同期を使っています。ずれている行は直して保存できます。";
+    return null; })();
+  const canRequest = ai && ai.requests_left>0 && !["queued","running"].includes(ai.state) && song.status==="public";
   const leave = () => { if(dirty) setConfirmLeave(true); else goBack(); };
   // 次に合わせる行が見えるように、一覧の中で表示位置を合わせる
   useEffect(()=>{ if(cursor<0) return; const el=document.getElementById("ls-row-"+cursor); if(el&&el.scrollIntoView) el.scrollIntoView({block:"nearest",behavior:"smooth"}); },[cursor]);
@@ -1742,19 +1823,32 @@ function LyricsSyncEditor({ctx,song}){
     <div className="ls-list">
       <p className="hint">曲を再生し、ボタンに表示されている行の歌い出しで押してください。押すまでの遅れ（約0.2秒）は自動で補正します。間奏や曲の終わりで「歌が止まる」を押すと、次の歌い出しまで歌詞を表示しません。行をタップすると、その行から合わせ直せます。</p>
       ${staleNote && html`<div className="demo-note"><${Icon} n="info" size=${18}/><span>歌詞が変わったため、以前の同期は使えません。最初から合わせてください。</span></div>`}
+      ${aiTimes && ai && html`<div className=${"ls-ai"+(ai.meta&&ai.meta.quality_ok===false?" warn":"")} role="status">
+        <span><b>AI が合わせた下書きです</b>（歌詞と合った行 ${ai.meta?Math.round((ai.meta.ratio||0)*100):0}%）。下の確認ポイントや各行の「▶ 確認」で実際の歌声と聞き比べ、ずれている行は直してから「保存する」を押してください。保存するまで、再生画面には表示されません。</span>
+        ${ai.meta&&ai.meta.quality_ok===false && html`<span>AI が聞き取れなかった部分があります（「推定」の行）。特に確認してください。</span>`}
+        ${checks.length>0 && html`<div className="row2"><span>確認ポイント：</span>${checks.map(([lb,i])=>html`<button key=${i} className="btn ghost xs" onClick=${()=>playFrom(i)} aria-label=${`${lb}（${i+1}行目）の少し前から再生`}>▶ ${lb}</button>`)}</div>`}
+        <div className="row2"><button className="btn ghost xs" onClick=${aiDismiss} disabled=${aiBusy}>AI の提案を使わない</button></div>
+      </div>`}
+      ${!aiTimes && ai && Array.isArray(ai.proposal) && ai.proposal.length>0 && ai.state==="review" && html`<div className="ls-ai" role="status">
+        <span><b>AI の提案があります</b>（歌詞と合った行 ${ai.meta?Math.round((ai.meta.ratio||0)*100):0}%）。今の同期はそのままです。読み込んで聞き比べ、よければ保存してください。</span>
+        <div className="row2"><button className="btn ghost xs" onClick=${aiLoad} disabled=${aiBusy}>提案を読み込む</button><button className="btn ghost xs" onClick=${aiDismiss} disabled=${aiBusy}>使わない</button></div>
+      </div>`}
+      ${!aiTimes && aiNote && html`<div className="demo-note"><${Icon} n="info" size=${18}/><span>${aiNote}</span></div>`}
+      ${canRequest && html`<div className="row2" style=${{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontSize:12.5,color:"var(--muted)"}}><button className="btn ghost xs" onClick=${aiRequest} disabled=${aiBusy}>AI で合わせ直す</button><span>結果は提案として届き、今の同期はそのままです（今日あと${ai.requests_left}回）</span></div>`}
       <div className="ls-meta"><span>${textIdx.length-missing} / ${textIdx.length} 行に時刻あり${missing?`（未設定 ${missing}行）`:""}</span>
         <span className="ls-shift">全体を <button className="btn ghost xs" onClick=${()=>shiftAll(-0.1)}>−0.1秒</button><button className="btn ghost xs" onClick=${()=>shiftAll(0.1)}>+0.1秒</button></span></div>
       ${lines.map((l,i)=>{ const k=lyricKind(l); if(k==="gap") return null;
         if(k==="head") return html`<div key=${i} className="ls-head">${headLabel(l)}</div>`;
         const x=times[i];
         return html`<div key=${i} id=${"ls-row-"+i} className=${"ls-row"+(i===cursor?" cur":"")+(i===preview?" on":"")+(bad.has(i)?" bad":"")}>
-          <button className="ls-line" onClick=${()=>setCursor(i)} aria-label=${`${i+1}行目を次に合わせる行にする`}><span className="mono">${fmtClock(x&&x.t)}</span><span className="tx">${l}</span></button>
+          <button className="ls-line" onClick=${()=>setCursor(i)} aria-label=${`${i+1}行目を次に合わせる行にする`}><span className="mono">${fmtClock(x&&x.t)}</span><span className="tx">${l}${aiTimes&&estSet.has(i)?html` <span className="ls-est">推定</span>`:""}</span></button>
           ${x && html`<div className="ls-tools">
             <button className="btn ghost xs" onClick=${()=>nudge(i,-0.1)} aria-label=${`${i+1}行目を0.1秒早く`}>−0.1</button>
             <button className="btn ghost xs" onClick=${()=>nudge(i,0.1)} aria-label=${`${i+1}行目を0.1秒遅く`}>+0.1</button>
             <button className="btn ghost xs" onClick=${()=>{ seekTo(Math.max(0,x.t-2)); const el=a(); if(el&&el.paused) toggle(); }} aria-label=${`${i+1}行目の少し前から再生`}>▶ 確認</button>
             <button className="btn ghost xs" onClick=${()=>clearLine(i)} aria-label=${`${i+1}行目の時刻を消す`}>消す</button>
             ${x.e!=null && html`<span className="ls-end mono">〜${fmtClock(x.e)} 間奏<button className="link" onClick=${()=>clearEnd(i)} aria-label=${`${i+1}行目の歌い終わりを消す`}>×</button></span>`}
+            ${aiTimes&&aiTimes[i]&&Math.abs(x.t-aiTimes[i].t)>=0.05 && html`<span className="ls-diff mono">AI より ${x.t>aiTimes[i].t?"+":"−"}${Math.abs(x.t-aiTimes[i].t).toFixed(1)}秒</span>`}
           </div>`}
         </div>`; })}
       <button className="btn ghost sm" style=${{margin:"18px auto 0"}} onClick=${()=>setConfirmClear(true)}>すべての時刻を消す</button>
@@ -2140,6 +2234,67 @@ function ProfileEdit({ctx}){
 }
 
 // 管理者用：アーティスト名の変更履歴
+/* ---------- 歌詞の自動同期（AI・v1.15）の管理 ----------
+   ・停止と再開、今日の使用量（予約）と上限、状態ごとの数、人が確認したときのずれ（精度）、曲ごとの状態
+   ・解析待ちへの登録：まず1曲（おぼろ月など）で確認 → よければ公開中の曲をまとめて（重複はしない）
+   ・どの操作もデータベースの関数が「運営か」を確かめる（会員には使えない） */
+const ALIGN_STATE = {waiting:"待ち",queued:"解析待ち",running:"解析中",review:"確認待ち",applied:"使用中",dismissed:"不採用",failed:"打ち切り",skipped:"対象外"};
+const ALIGN_REASON = {no_lyrics:"歌詞なし",no_duration:"長さ未登録",too_long:"10分超",too_large:"20MB超",has_sync:"手動の同期あり",not_public:"非公開",low_quality:"品質の確認が必要",ready:"品質の検査に合格",
+  gave_up:"3回失敗",bad_result:"結果の形式違い",reviewed:"確認済み",auto_applied:"自動で使用",approved:"承認",existing:"既存曲",admin:"運営",admin_retry:"やり直し",requested:"投稿者の依頼",lyrics_changed:"歌詞の変更",duration:"長さの登録",hidden:"非公開",dismissed_by_owner:"投稿者が不採用",dismissed_by_admin:"運営が不採用"};
+function AdminLyricsAlign({ctx}){
+  const {allSongs,openLyricsSync,say} = ctx;
+  const [ov,setOv] = useState(null), [err,setErr] = useState(null), [busy,setBusy] = useState(false), [pick,setPick] = useState(""), [confirmAll,setConfirmAll] = useState(false);
+  const load = () => sb.rpc("admin_align_overview").then(r=>{ if(r.error){ setErr(/function|schema cache/i.test(r.error.message||"")?"歌詞の自動同期の準備（v1.15）がまだ完了していません":"読み込めませんでした。通信状態を確認してください"); setOv(false); } else { setErr(null); setOv(r.data); } });
+  useEffect(()=>{ load(); },[]);
+  const act = async (fn,args,msg) => { setBusy(true); const r = await sb.rpc(fn,args||{}); setBusy(false);
+    if(r.error){ const m=r.error.message||""; say(/BAD_DATA|NOT_ALLOWED/.test(m)?m.replace(/^.*(BAD_DATA|NOT_ALLOWED):\s*/,""):"操作できませんでした。もう一度お試しください"); return null; }
+    if(msg) say(typeof msg==="function"?msg(r.data):msg); load(); return r.data; };
+  const resultMsg = d => { const k=d&&d.result; return k==="queued"?"解析待ちにしました（5分ごとに1曲ずつ処理します）":k==="duplicate"?"すでに登録済みです（重複して解析しません）":k==="skipped"?"この曲は対象外です（手動の同期がある・長すぎる など）":k==="waiting"?"歌詞か長さがそろうと自動で解析します":"登録できませんでした（"+(k||"不明")+"）"; };
+  if(ov===null) return html`<div className="empty">読み込み中…</div>`;
+  if(ov===false) return html`<div style=${{marginTop:14}}><span className="err">${err}</span></div>`;
+  const st=ov.settings||{}, td=ov.today||{}, cn=ov.counts||{}, acc=ov.accuracy||{};
+  const blocked = st.blocked_until && new Date(st.blocked_until)>new Date();
+  const pub = allSongs.filter(x=>x.status==="public");
+  const songOf = id => allSongs.find(x=>x.id===id);
+  return html`<div style=${{display:"flex",flexDirection:"column",gap:12,marginTop:14}}>
+    <div className="panel">
+      <div style=${{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <b>${st.paused?"停止中":blocked?"一時停止（無料枠）":"動作中"}</b>
+        ${st.paused ? html`<button className="btn sm okb" disabled=${busy} onClick=${()=>act("admin_align_set_paused",{p_paused:false},"再開しました（5分ごとに1曲ずつ解析します）")}>再開する</button>`
+          : html`<button className="btn sm danger" disabled=${busy} onClick=${()=>act("admin_align_set_paused",{p_paused:true},"停止しました（解析中の1曲が終わると止まります）")}>停止する</button>`}
+      </div>
+      <div style=${{fontSize:12.5,color:"var(--muted)"}}>${st.paused?(st.pause_reason==="ai_auth"?"Cloudflare のトークンが無効になったため止まっています。トークンを直してから再開してください":st.pause_reason==="not_configured"?"Cloudflare の設定が足りないため止まっています":"運営が停止中です"):blocked?`Cloudflare の無料枠に達したため、${new Date(st.blocked_until).toLocaleString("ja-JP")} まで止めています（課金はされません）`:"解析待ちの曲を5分ごとに1曲ずつ解析しています。結果はすべて確認待ちになります"}</div>
+      <div className="al-sum">
+        <div><b>${td.reserved||0} / ${st.daily_cap}</b>今日の使用量（予約・ニューロン）</div>
+        <div><b>${td.ok||0}件 / 失敗 ${td.failed||0}件</b>今日の解析（世界標準時）</div>
+        <div><b>${cn.queued||0}曲</b>解析待ち</div>
+        <div><b>${cn.review||0}曲</b>確認待ち</div>
+        <div><b>${acc.songs?`${acc.median_abs}秒`:"—"}</b>人が直したずれ（中央値${acc.songs?`・${acc.songs}曲`:""}）</div>
+        <div><b>${acc.songs?`${acc.max_abs}秒`:"—"}</b>人が直したずれ（最大）</div>
+      </div>
+    </div>
+    <div className="panel">
+      <b style=${{fontSize:14}}>解析待ちに登録</b>
+      <div style=${{fontSize:12.5,color:"var(--muted)"}}>まず1曲で、保存と表示を確かめてから、残りをまとめて登録してください。手動の同期がある曲・同じ歌詞で解析済みの曲は登録されません。</div>
+      <select className="input" value=${pick} onChange=${e=>setPick(e.target.value)} aria-label="解析する曲"><option value="">曲を選ぶ</option>${pub.map(x=>html`<option key=${x.id} value=${x.id}>${x.title}（${x.artistName}）</option>`)}</select>
+      <div className="btn-row">
+        <button className="btn sm ghost" disabled=${busy||!pick} onClick=${()=>act("admin_align_enqueue",{p_track:pick},resultMsg)}>この1曲を登録</button>
+        ${confirmAll ? html`<button className="btn sm danger" disabled=${busy} onClick=${()=>{ setConfirmAll(false); act("admin_align_enqueue_existing",{},d=>`登録しました：解析待ち ${(d&&d.queued)||0}曲・重複 ${(d&&d.duplicate)||0}曲・対象外 ${(d&&d.skipped)||0}曲`); }}>公開中の${pub.length}曲を登録する</button>`
+          : html`<button className="btn sm ghost" disabled=${busy} onClick=${()=>setConfirmAll(true)}>公開中の曲をまとめて登録</button>`}
+      </div>
+    </div>
+    ${(ov.jobs||[]).length===0 && html`<div className="empty">まだ登録された曲はありません</div>`}
+    ${(ov.jobs||[]).map(j=>{ const so=songOf(j.track_id); const rv=j.review||{}; return html`<div key=${j.track_id} className="panel">
+      <div style=${{display:"flex",justifyContent:"space-between",gap:8,alignItems:"baseline"}}><b style=${{overflowWrap:"anywhere"}}>${j.title}</b><span className=${"tag"+(j.state==="applied"?" ok":j.state==="failed"?" bad":j.state==="review"?" demo":"")}>${ALIGN_STATE[j.state]||j.state}</span></div>
+      <div style=${{fontSize:12.5,color:"var(--muted)"}}>${j.artist} · ${ALIGN_REASON[j.reason]||j.reason||""}${j.ratio!=null?` · 歌詞と合った行 ${Math.round(j.ratio*100)}%`:""}${j.quality_ok===false?" · 要確認":""}${rv.median_abs!=null?` · 人が直したずれ 中央値${rv.median_abs}秒／最大${rv.max_abs}秒（${rv.changed}/${rv.compared}行）`:""}${j.last_error?` · 最後の失敗 ${j.last_error}（${j.attempts}回）`:""}</div>
+      <div className="btn-row">
+        ${so && so.lyrics && so.audioUrl && html`<button className="btn sm ghost" onClick=${()=>openLyricsSync(so)}>聞いて確認する</button>`}
+        ${["failed","skipped","dismissed"].includes(j.state) && html`<button className="btn sm ghost" disabled=${busy} onClick=${()=>act("admin_align_retry",{p_track:j.track_id},resultMsg)}>やり直す</button>`}
+      </div>
+    </div>`; })}
+  </div>`;
+}
+
 function AdminNameHistory({ctx}){
   const {artists,openArtist,say} = ctx;
   const [rows,setRows] = useState(null), [err,setErr] = useState(null), [confirm,setConfirm] = useState(null);
@@ -2658,6 +2813,7 @@ const LEGAL_DOCS = [
       [
         "会員登録、ログイン、本人確認のため",
         "楽曲の保存・審査・公開・再生など、本サービスを提供するため",
+        "公開中の楽曲の歌詞を、再生に合わせて表示するため（AI による各行の歌い出しの時刻の推定を含みます）",
         "再生数・フォロワー数を集計するため（同じ方による短時間の重複カウントの防止を含みます）",
         "本規約・ガイドラインへの違反、権利侵害、不正利用に対応するため",
         "確認メール、パスワード再設定メール、重要なお知らせを送るため",
@@ -2671,6 +2827,7 @@ const LEGAL_DOCS = [
       [
         "Supabase（Supabase, Inc.・米国）：会員の認証、データベース、音源・画像ファイルの保存、確認メールなどの送信。データの保存地域：日本（東京）",
         "Cloudflare Pages（Cloudflare, Inc.・米国）：本サービスのWebサイトの配信",
+        "Cloudflare Workers AI（Cloudflare, Inc.・米国）：歌詞の自動同期（再生に合わせて歌詞を表示するための、各行の歌い出しの時刻の推定）。運営者が承認して公開した楽曲のうち歌詞がある楽曲について、音源ファイルを音声認識のために送信します（歌詞は本サービスのサーバー内で照合し、送信しません）。会員のメールアドレス・表示名などは送信しません。Cloudflare は、この処理で送られた内容をAIの学習に使用せず、処理に必要な間を過ぎると保持しないとしています。推定した時刻は本サービスのデータベースに保存し、投稿者が確認・修正できます",
         "Google Fonts（Google LLC・米国）、cdnjs、jsDelivr、unpkg：画面表示に使うフォントやプログラムの配信。画面を表示するとき、IPアドレスなどがこれらの事業者に送られます。"
       ],
       "Supabase, Inc.・Cloudflare, Inc.・Google LLC は米国の事業者です。会員情報・投稿の情報・音源・画像は日本（東京）のサーバーに保存しています（Webサイトの画面は、Cloudflare の世界各地のサーバーから配信されます）。運営者は、個人情報保護委員会が公表している情報により米国の個人情報の保護に関する制度を確認したうえで、委託先が通信と保存データの暗号化、アクセスの制限などの安全管理措置を講じていることを確認しています。"

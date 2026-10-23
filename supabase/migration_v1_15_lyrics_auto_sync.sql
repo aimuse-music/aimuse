@@ -464,7 +464,7 @@ begin
   v_matched := least(aimuse_private.jnum(p_meta, 'matched_lines', 0, 100000, 0)::int, v_text);
   v_ratio := case when v_text > 0 then v_matched::numeric / v_text else 0 end;
   -- 品質：照合率 60%以上・時刻の検査（Edge Function 側）に通る・時刻のある行が 60%以上
-  v_ok := coalesce((p_meta->>'quality_ok')::boolean, false) is true
+  v_ok := coalesce(p_meta->'quality_ok' = 'true'::jsonb, false)
           and v_ratio >= 0.6 and jsonb_array_length(v_out) >= ceil(v_text * 0.6);
   v_meta := jsonb_build_object(
     'lyrics_hash', v_h,
@@ -477,7 +477,7 @@ begin
     'ai_ms', aimuse_private.jnum(p_meta, 'ai_ms', 0, 600000, 0),
     'words', aimuse_private.jnum(p_meta, 'words', 0, 100000, 0),
     'granularity', case when p_meta->>'granularity' in ('word', 'segment', 'none') then p_meta->>'granularity' else 'none' end,
-    'vad_filter', coalesce((p_meta->>'vad_filter')::boolean, false),
+    'vad_filter', coalesce(p_meta->'vad_filter' = 'true'::jsonb, false),
     'analyzed_at', now());
   select * into v_st from aimuse_private.lyrics_align_settings where id = 1;
   select s.source into v_sync_src from public.track_lyrics_sync s where s.track_id = p_track;

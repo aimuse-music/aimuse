@@ -3,6 +3,7 @@
 -- Supabase の SQL Editor に全文を貼り付けて、1回実行してください。
 --   ・lyrics_align_finish を更新：自動で採用する基準（照合率 95%以上・推定の行 5%以下・推定の行が2行以上続かない・時刻の品質の検査に合格）
 --   ・admin_align_set_auto を追加：運営が「自動で採用」をオン／オフにする（適用しただけではオフのまま。何も変わらない）
+--   ・admin_align_apply_ready を追加：確認待ちの提案のうち、自動で採用する基準を満たす曲だけをまとめて採用（まず一覧だけを返す。運営が確認して実行したときだけ採用）
 --   ・手動・手直し済み（manual・mixed）の同期は、どの設定でも自動では置き換えない
 --   ・歌詞が変わったら古い同期は使われず（v1.14 の stale）、新しい歌詞で解析し直す（v1.15）
 --   ・楽曲・歌詞・同期・会員のデータは変更しません。AIMUSE BOOST には触れません
@@ -100,6 +101,70 @@ begin
   return jsonb_build_object('status', v_state, 'count', jsonb_array_length(v_out), 'quality_ok', v_ok, 'auto_ok', v_auto, 'ratio', round(v_ratio, 3));
 end;
 $$;
+
+-- 自動で採用する基準（解析の結果の付帯情報から判定。lyrics_align_finish と同じ基準）
+create or replace function aimuse_private.lyrics_align_auto_ok(p_meta jsonb)
+returns boolean
+language sql immutable set search_path = ''
+as $$
+  select coalesce(p_meta->'quality_ok' = 'true'::jsonb, false)
+     and aimuse_private.jnum(p_meta, 'ratio', 0, 1, 0) >= 0.95
+     and jsonb_typeof(p_meta->'est') = 'array'
+     and jsonb_array_length(p_meta->'est') <= floor(aimuse_private.jnum(p_meta, 'text_lines', 0, 100000, 0) * 0.05)
+     and aimuse_private.jnum(p_meta, 'max_est_run', 0, 1000, 1000) <= 1
+$$;
+revoke all on function aimuse_private.lyrics_align_auto_ok(jsonb) from public, anon, authenticated, service_role;
+
+-- 確認待ちの提案のうち、基準を満たす曲だけをまとめて採用（運営だけ）
+--   p_run = false（既定）：採用する曲と、採用しない曲（理由つき）の一覧を返すだけ。何も変えない
+--   p_run = true：一覧の「採用する曲」だけを同期の時刻にする（source = auto）
+--   対象外：今の歌詞の提案でない・基準に届かない・手動や手直しの同期がある・確認待ちでない
+create or replace function public.admin_align_apply_ready(p_run boolean default false)
+returns jsonb
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  r record;
+  v_ok jsonb := '[]'::jsonb;
+  v_ng jsonb := '[]'::jsonb;
+  v_why text;
+  v_src text;
+  v_out jsonb;
+begin
+  if not public.is_admin() then raise exception 'NOT_ALLOWED: 運営だけが使えます'; end if;
+  for r in select j.track_id, j.proposal, j.meta, t.title, t.lyrics
+             from aimuse_private.lyrics_align_jobs j join public.tracks t on t.id = j.track_id
+            where j.state = 'review' order by t.title
+            for update of j, t loop
+    v_why := null;
+    select s.source into v_src from public.track_lyrics_sync s where s.track_id = r.track_id;
+    if r.proposal is null or coalesce(r.meta->>'lyrics_hash', '') <> public.lyrics_hash(r.lyrics) then v_why := 'old_lyrics';
+    elsif not aimuse_private.lyrics_align_auto_ok(r.meta) then v_why := 'below_standard';
+    elsif v_src is not null and v_src <> 'auto' then v_why := 'has_manual_sync';
+    end if;
+    if v_why is not null then
+      v_ng := v_ng || jsonb_build_object('track_id', r.track_id, 'title', r.title, 'why', v_why, 'ratio', r.meta->'ratio');
+      continue;
+    end if;
+    v_ok := v_ok || jsonb_build_object('track_id', r.track_id, 'title', r.title, 'ratio', r.meta->'ratio', 'lines', jsonb_array_length(r.proposal));
+    if p_run then
+      v_out := aimuse_private.lyrics_sync_check((select t from public.tracks t where t.id = r.track_id), r.proposal);
+      insert into public.track_lyrics_sync as s (track_id, lines, source, lyrics_hash, updated_by, updated_at)
+      values (r.track_id, v_out, 'auto', public.lyrics_hash(r.lyrics), auth.uid(), now())
+      on conflict (track_id) do update
+        set lines = excluded.lines, source = 'auto', lyrics_hash = excluded.lyrics_hash, updated_by = excluded.updated_by, updated_at = now()
+        where s.source = 'auto';
+      update aimuse_private.lyrics_align_jobs
+         set state = 'applied', reason = 'bulk_applied',
+             review = jsonb_build_object('bulk', true, 'by', 'admin', 'at', now(), 'source', 'auto'), updated_at = now()
+       where track_id = r.track_id;
+    end if;
+  end loop;
+  return jsonb_build_object('run', coalesce(p_run, false), 'apply', v_ok, 'skip', v_ng);
+end;
+$$;
+revoke all on function public.admin_align_apply_ready(boolean) from public, anon;
+grant execute on function public.admin_align_apply_ready(boolean) to authenticated;
 
 create or replace function public.admin_align_set_auto(p_on boolean)
 returns jsonb

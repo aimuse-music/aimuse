@@ -76,6 +76,27 @@ for port in PORTS:
     q(f"update public.track_lyrics_sync set source = 'manual' where track_id = '{TA}'")
     q(f"update public.tracks set lyrics = array_append(lyrics, 'さらに') where id = '{TA}'", "admin"); r = run(TA, lines=GOOD + [{"i": 21, "t": 120}, {"i": 22, "t": 125}], meta=META(m=22))
     ok("6 手動の同期は、歌詞が変わって古くなっても自動では置き換えない（提案だけ）", r["status"] == "review" and sync(TA)["source"] == "manual" and len(sync(TA)["lines"]) == 21, r)
+    # 8. 基準を満たす確認待ちの曲をまとめて採用（既存曲向け）
+    q("select public.admin_align_set_auto(false)", "admin")
+    T = [f"20000000-0000-4000-8000-00000000000{k}" for k in (6, 7, 8, 9)]
+    q(f"update public.tracks set status = 'public', lyrics = {lit}, duration = 200, audio_size = 4000000 where id in ({','.join(repr(x) for x in T)})")
+    for x in T: q(f"select aimuse_private.lyrics_align_enqueue('{x}', 'existing', false, null)")
+    run(T[0]); run(T[1], meta=META(m=18, est=[19, 20], run=2)); run(T[2]); run(T[3])
+    q(f"select public.lyrics_sync_save('{T[2]}', '[{{\"i\":1,\"t\":4}}]'::jsonb)", "admin")        # 手動の同期を先に保存
+    q(f"update public.tracks set lyrics = array_append(lyrics, '追加') where id = '{T[3]}'", "admin")   # 歌詞が変わった（提案は古い）
+    q(f"update aimuse_private.lyrics_align_jobs set state = 'review' where track_id = '{T[3]}'")
+    d1 = q("select md5(string_agg(s::text, '|' order by track_id)) from public.track_lyrics_sync s")[0]
+    o, e = q("select public.admin_align_apply_ready()", "a"); ok("8 会員はまとめて採用できない", "NOT_ALLOWED" in e, e[:60])
+    o, e = q("select public.admin_align_apply_ready()", "admin"); pv = J(o)
+    ok("8 まず一覧だけ（何も変えない）：採用する曲と、採用しない曲の理由", pv and pv["run"] is False and q("select md5(string_agg(s::text, '|' order by track_id)) from public.track_lyrics_sync s")[0] == d1, o[:200] or e)
+    ap = {x["track_id"] for x in pv["apply"]}; sk = {x["track_id"]: x["why"] for x in pv["skip"]}
+    ok("8 基準を満たす曲だけが「採用する」", T[0] in ap and T[1] not in ap and T[2] not in ap and T[3] not in ap, (ap, sk))
+    ok("8 理由：基準に届かない・手動の同期あり・古い歌詞の提案", sk.get(T[1]) == "below_standard" and sk.get(T[2]) == "has_manual_sync" and sk.get(T[3]) == "old_lyrics", sk)
+    o, e = q("select public.admin_align_apply_ready(true)", "admin"); rr = J(o)
+    ok("8 実行すると、一覧の曲だけを同期の時刻にする（auto）", rr and {x["track_id"] for x in rr["apply"]} == ap and sync(T[0])["source"] == "auto" and job(T[0])["state"] == "applied", o[:160] or e)
+    ok("8 対象外の曲は変わらない（手動の同期はそのまま・基準未満は確認待ちのまま）", sync(T[2])["lines"] == [{"i": 1, "t": 4}] and sync(T[1]) is None and job(T[1])["state"] == "review" and sync(T[3]) is None)
+    ok("8 採用した同期は再生画面で読める（stale でない）", J(q(f"select json_agg(x) from public.lyrics_sync_get('{T[0]}') x", "a")[0])[0]["stale"] is False)
+    o, e = q("select public.admin_align_apply_ready(true)", "admin"); ok("8 2回目は何も採用しない（重複しない）", J(o)["apply"] == [], o[:120])
     # 7. 元に戻す
     o, e = q(RB); ok("7 元に戻せる（設定はオフ・関数が無くなる・同期は残る）", not e and q("select auto_apply from aimuse_private.lyrics_align_settings")[0] == "f" and q("select to_regprocedure('public.admin_align_set_auto(boolean)') is null")[0] == "t" and sync(TA) is not None, e)
     o, e = q(M16); ok("7 再適用できる", not e, e)

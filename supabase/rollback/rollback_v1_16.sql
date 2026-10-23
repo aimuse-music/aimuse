@@ -3,6 +3,8 @@
 begin;
 update aimuse_private.lyrics_align_settings set auto_apply = false where id = 1;
 drop function if exists public.admin_align_set_auto(boolean);
+drop function if exists public.admin_align_apply_ready(boolean);
+drop function if exists aimuse_private.lyrics_align_auto_ok(jsonb);
 create or replace function public.lyrics_align_finish(p_track uuid, p_token uuid, p_lines jsonb, p_meta jsonb)
 returns jsonb
 language plpgsql security definer set search_path = ''

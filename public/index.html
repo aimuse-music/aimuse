@@ -2243,7 +2243,7 @@ const ALIGN_REASON = {no_lyrics:"歌詞なし",no_duration:"長さ未登録",too
   gave_up:"3回失敗",bad_result:"結果の形式違い",reviewed:"確認済み",auto_applied:"自動で使用",approved:"承認",existing:"既存曲",admin:"運営",admin_retry:"やり直し",requested:"投稿者の依頼",lyrics_changed:"歌詞の変更",duration:"長さの登録",hidden:"非公開",dismissed_by_owner:"投稿者が不採用",dismissed_by_admin:"運営が不採用"};
 function AdminLyricsAlign({ctx}){
   const {allSongs,openLyricsSync,say} = ctx;
-  const [ov,setOv] = useState(null), [err,setErr] = useState(null), [busy,setBusy] = useState(false), [pick,setPick] = useState(""), [confirmAll,setConfirmAll] = useState(false), [confirmAuto,setConfirmAuto] = useState(false);
+  const [ov,setOv] = useState(null), [err,setErr] = useState(null), [busy,setBusy] = useState(false), [pick,setPick] = useState(""), [confirmAll,setConfirmAll] = useState(false), [confirmAuto,setConfirmAuto] = useState(false), [ready,setReady] = useState(null);
   const load = () => sb.rpc("admin_align_overview").then(r=>{ if(r.error){ setErr(/function|schema cache/i.test(r.error.message||"")?"歌詞の自動同期の準備（v1.15）がまだ完了していません":"読み込めませんでした。通信状態を確認してください"); setOv(false); } else { setErr(null); setOv(r.data); } });
   useEffect(()=>{ load(); },[]);
   const act = async (fn,args,msg) => { setBusy(true); const r = await sb.rpc(fn,args||{}); setBusy(false);
@@ -2278,6 +2278,19 @@ function AdminLyricsAlign({ctx}){
         <div><b>${cn.review||0}曲</b>確認待ち</div>
         <div><b>${acc.songs?`${acc.median_abs}秒`:"—"}</b>人が直したずれ（中央値${acc.songs?`・${acc.songs}曲`:""}）</div>
         <div><b>${acc.songs?`${acc.max_abs}秒`:"—"}</b>人が直したずれ（最大）</div>
+      </div>
+    </div>
+    <div className="panel">
+      <b style=${{fontSize:14}}>基準を満たす曲をまとめて採用</b>
+      <div style=${{fontSize:12.5,color:"var(--muted)"}}>確認待ちの曲のうち、自動で採用する基準（照合率 95%以上・推定の行 5%以下・時刻の品質の検査に合格）を満たす曲だけを、再生画面に表示します。手動で合わせた同期・手直しした同期・古い歌詞の提案は対象外です。</div>
+      ${ready && html`<div style=${{fontSize:12.5}}>
+        <div>採用する曲（${ready.apply.length}曲）：${ready.apply.map(x=>x.title).join("・")||"なし"}</div>
+        ${ready.skip.length>0 && html`<div style=${{color:"var(--muted)"}}>採用しない曲：${ready.skip.map(x=>`${x.title}（${x.why==="below_standard"?"基準に届かない":x.why==="has_manual_sync"?"手動の同期あり":"古い歌詞"}）`).join("・")}</div>`}
+      </div>`}
+      <div className="btn-row">
+        ${ready&&ready.apply.length>0 ? html`<button className="btn sm danger" disabled=${busy} onClick=${()=>{ setReady(null); act("admin_align_apply_ready",{p_run:true},d=>`${(d&&d.apply||[]).length}曲を採用しました（再生画面で歌詞が光ります）`); }}>${ready.apply.length}曲を採用する</button>`
+          : ""}
+        <button className="btn sm ghost" disabled=${busy} onClick=${async()=>{ const d=await act("admin_align_apply_ready",{p_run:false}); if(d) setReady(d); }}>${ready?"一覧を更新":"対象の曲を確認する"}</button>
       </div>
     </div>
     <div className="panel">

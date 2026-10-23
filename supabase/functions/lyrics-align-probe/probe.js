@@ -85,6 +85,8 @@ export async function handleProbe({ admin, keys, userJwt, callerSecret, body, en
   const trackId = body && body.track_id;
   if (typeof trackId !== "string" || !UUID.test(trackId)) return reply(400, { code: "BAD_REQUEST" });
   const usePrompt = !!(body && body.prompt === true);
+  // 音声のない部分を飛ばす前処理（Cloudflare の vad_filter）。既定はオン、vad: false のときだけオフ（検証用）
+  const useVad = !(body && body.vad === false);
   const { data: rows, error: tErr } = await admin.rpc("align_probe_track", { p_track: trackId });
   if (tErr) return reply(502, { code: "DB_ERROR" });
   const track = Array.isArray(rows) ? rows[0] : rows;
@@ -106,7 +108,7 @@ export async function handleProbe({ admin, keys, userJwt, callerSecret, body, en
   if (!bytes.length || bytes.length > MAX_BYTES) return reply(422, { code: "AUDIO_TOO_LARGE" });
   const t1 = now();
   // 5. Workers AI（Whisper）
-  const input = { audio: toBase64(bytes), task: "transcribe", language: "ja", vad_filter: true, condition_on_previous_text: false };
+  const input = { audio: toBase64(bytes), task: "transcribe", language: "ja", vad_filter: useVad, condition_on_previous_text: false };
   if (usePrompt) input.initial_prompt = promptFrom(lyrics);
   const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), AI_TIMEOUT_MS);
   let res, json;
@@ -130,7 +132,7 @@ export async function handleProbe({ admin, keys, userJwt, callerSecret, body, en
   const segs = Array.isArray(result.segments) ? result.segments : [];
   const words = segs.reduce((n, s) => n + (Array.isArray(s.words) ? s.words.length : 0), 0);
   return reply(200, {
-    caller: who, model: MODEL, options: { language: "ja", vad_filter: true, prompt: usePrompt },
+    caller: who, model: MODEL, options: { language: "ja", vad_filter: useVad, prompt: usePrompt },
     track: { title: track.title, duration: track.duration },
     timing_ms: { audio: t1 - t0, ai: t2 - t1, align: t3 - t2 },
     audio_bytes: bytes.length,

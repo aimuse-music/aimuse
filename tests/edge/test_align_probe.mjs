@@ -87,6 +87,11 @@ ok("5 使うニューロンの見積もり（4分18秒で約200）", r.body.neur
 r = await run({}, { secret: SECRET, body: { track_id: TRACK, prompt: true } });
 const sent2 = JSON.parse(r.log.find((l) => String(l.url || "").startsWith("https://api.cloudflare.com/")).body);
 ok("5 prompt: true のときだけ、歌詞の先頭（見出しを除く・120文字まで）を手がかりに渡す", sent2.initial_prompt === promptFrom(LYR) && !sent2.initial_prompt.includes("Verse") && sent2.initial_prompt.length <= 120);
+r = await run({}, { secret: SECRET, body: { track_id: TRACK, vad: false } });
+{ const s3 = JSON.parse(r.log.find((l) => String(l.url || "").startsWith("https://api.cloudflare.com/")).body);
+  ok("5 vad: false のときだけ無音の除去をオフ（ほかの設定は同じ）", s3.vad_filter === false && s3.language === "ja" && s3.condition_on_previous_text === false && s3.task === "transcribe" && !("initial_prompt" in s3) && s3.audio === sent.audio && r.body.options.vad_filter === false); }
+{ const r4 = await run({}, { secret: SECRET, body: { track_id: TRACK, vad: "false" } }); const s4 = JSON.parse(r4.log.find((l) => String(l.url || "").startsWith("https://api.cloudflare.com/")).body);
+  ok("5 vad に false 以外（文字の \"false\" など）を渡しても無音の除去はオンのまま", s4.vad_filter === true); }
 r = await run({}, { jwt: "jwt-admin" }); ok("5 管理者のログイン情報でも実行できる", r.status === 200 && r.body.caller === "admin");
 // 6. 設定の確認だけ（AI を呼ばない）
 r = await run({}, { secret: SECRET, body: { check: true } });

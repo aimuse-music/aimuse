@@ -211,9 +211,10 @@
         return {track_id:id,title:t.title,artist:t.artist,state:j.state,reason:j.reason,ratio:j.meta?j.meta.ratio:null,quality_ok:j.meta?j.meta.quality_ok:null,review:j.review||null,attempts:0,last_error:null}; });
       const counts={}; jobs.forEach(j=>{ counts[j.state]=(counts[j.state]||0)+1; });
       const rv=jobs.filter(j=>j.review&&j.review.median_abs!=null);
-      return {data:{settings:{paused:!!st.paused,pause_reason:st.pause_reason||"",daily_cap:st.daily_cap||6000,auto_apply:false,blocked_until:null},today:{reserved:db.alignReserved||0,runs:0,ok:0,failed:0},counts,
+      return {data:{settings:{paused:!!st.paused,pause_reason:st.pause_reason||"",daily_cap:st.daily_cap||6000,auto_apply:!!st.auto_apply,blocked_until:null},today:{reserved:db.alignReserved||0,runs:0,ok:0,failed:0},counts,
         accuracy:{songs:rv.length,median_abs:rv.length?rv[0].review.median_abs:0,max_abs:rv.length?Math.max(...rv.map(j=>j.review.max_abs)):0},jobs},error:null};
     },
+    admin_align_set_auto({p_on}){ if(!isAdmin()) return E("NOT_ALLOWED: 運営だけが使えます"); db.alignSettings={...(db.alignSettings||{daily_cap:6000}),auto_apply:!!p_on}; save(); window.__log.push({op:"admin_align_set_auto",on:!!p_on}); return {data:{auto_apply:!!p_on},error:null}; },
     admin_align_set_paused({p_paused}){ if(!isAdmin()) return E("NOT_ALLOWED: 運営だけが使えます"); db.alignSettings={...(db.alignSettings||{daily_cap:6000}),paused:!!p_paused,pause_reason:p_paused?"admin":""}; save(); window.__log.push({op:"admin_align_set_paused",paused:!!p_paused}); return {data:{paused:!!p_paused},error:null}; },
     admin_align_enqueue({p_track}){ if(!isAdmin()) return E("NOT_ALLOWED: 運営だけが使えます"); db.alignJobs=db.alignJobs||{};
       const t=db.tracks.find(x=>x.id===p_track); const s=db.lyricsSync[p_track];

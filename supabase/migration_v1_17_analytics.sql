@@ -145,6 +145,14 @@ begin
   if v_ip is null or v_ip !~ '^[0-9a-fA-F:.]{3,45}$' then
     return 'noip';
   end if;
+  -- IPv6 は /64 単位でまとめる（同じ回線でアドレスを替えて上限を逃れるのを防ぐ）
+  begin
+    if family(v_ip::inet) = 6 then
+      v_ip := host(network(set_masklen(v_ip::inet, 64)));
+    end if;
+  exception when others then
+    return 'noip';
+  end;
   return encode(sha256(convert_to('rate|' || coalesce((select s.value from aimuse_private.settings s where s.key = 'analytics_salt'), '')
                                   || '|' || v_ip, 'UTF8')), 'hex');
 end;

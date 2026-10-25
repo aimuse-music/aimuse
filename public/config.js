@@ -8,6 +8,7 @@ window.AIMUSE_CONFIG = {
   // 機能スイッチ（公開の段階に合わせて運営者が切り替えます。true 以外はすべてオフ）
   features: {
     pwa: true,               // ホーム画面に追加（PWA）。オフの間は登録済みの Service Worker も解除
-    accountDeletion: true    // 退会の申請画面。オフでも、退会手続き中の方の状況表示と取り消しは使えます
+    accountDeletion: true,   // 退会の申請画面。オフでも、退会手続き中の方の状況表示と取り消しは使えます
+    analytics: true          // アクセス解析（v1.17 のSQL 実行後に有効。オフにすると画面の表示を送らない）
   }
 };

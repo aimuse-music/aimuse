@@ -320,6 +320,34 @@ button.stat{font:inherit;color:inherit;background:none;border:0;cursor:pointer;w
 .sum b{display:block;font-family:var(--f-display);font-size:20px}
 .sum span{font-size:11px;color:var(--muted)}
 .sum .warn b{color:var(--warn)} .sum .bad b{color:var(--bad)}
+/* アクセス解析（管理者のみ） */
+.an-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.an-card{border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--surface);display:flex;flex-direction:column;gap:6px;min-width:0}
+.an-card .an-t{font-size:12px;font-weight:700;color:var(--muted)}
+.an-card div{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;column-gap:6px;row-gap:0;min-width:0}
+.an-card b{font-family:var(--f-display);font-size:18px}
+.an-card div span{font-size:11px;color:var(--muted);white-space:nowrap}
+.an-metrics{margin:0;padding:0}
+.an-chart svg{width:100%;height:auto;display:block;touch-action:manipulation}
+.an-chart .an-bar{fill:var(--accent-soft,#c9a8ff);opacity:.8}
+.an-chart .an-bar.on{opacity:1;fill:var(--fg)}
+.an-chart .an-grid{stroke:var(--line);stroke-width:1}
+.an-chart .an-ax{fill:var(--muted);font-size:9px}
+.an-sel{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5;min-height:18px}
+.an-sel b{color:var(--fg)}
+.an-pages{display:flex;flex-direction:column;gap:6px}
+.an-page{display:grid;grid-template-columns:7.5em minmax(0,1fr) auto;align-items:center;gap:8px;font-size:12.5px}
+.an-page i{display:block;height:8px;border-radius:4px;background:var(--accent-soft,#c9a8ff);opacity:.7;min-width:2px}
+.an-page b{font-size:12.5px}
+.an-rank{display:flex;flex-direction:column}
+.an-rrow{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--line)}
+.an-rrow:first-child{border-top:0}
+.an-rrow .t{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.an-rrow .sub{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.an-no{font-family:var(--f-display);font-weight:800;color:var(--muted);text-align:center}
+.an-n{text-align:right;display:flex;flex-direction:column}
+.an-n b{font-size:14px}
+.an-n span{font-size:11px;color:var(--muted);white-space:nowrap}
 
 /* bottom nav */
 .nav{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(13,11,21,.92);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border-top:1px solid var(--line);padding:0 var(--gr) var(--sb) var(--gl)}
@@ -609,7 +637,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-24.2";
+const BUILD = "2026-10-26.1";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -627,7 +655,7 @@ async function newerBuildAvailable(){
 //   pwa             … ホーム画面に追加（manifest・Service Worker）
 //   accountDeletion … 退会の申請画面（オフでも、手続き中の方の状況表示と取り消しは常に使える）
 //   ※ 画面のスイッチは表示を変えるだけ。退会の可否はサーバー（Edge Function とデータベース）でも判定する
-const FEATURES = (()=>{ const f=((window.AIMUSE_CONFIG||{}).features)||{}; return { pwa: f.pwa===true, accountDeletion: f.accountDeletion===true }; })();
+const FEATURES = (()=>{ const f=((window.AIMUSE_CONFIG||{}).features)||{}; return { pwa: f.pwa===true, accountDeletion: f.accountDeletion===true, analytics: f.analytics===true }; })();
 // 検証者用：URL の末尾に #account-delete-test を付けて開いたときだけ、この端末で退会画面の入口を表示（申請できるかはサーバーが判定）
 const deleteTestEntry = (()=>{ try{ if(location.hash==="#account-delete-test"){ sessionStorage.setItem("aimuse.deleteTest","1"); history.replaceState(null,"",location.pathname+location.search); } return sessionStorage.getItem("aimuse.deleteTest")==="1"; }catch(e){ return false; } })();
 const showAccountDeletion = FEATURES.accountDeletion || deleteTestEntry;
@@ -790,6 +818,31 @@ const auth = {
 };
 
 const deniedError = () => Object.assign(new Error("denied"),{denied:true});
+// 関数が未作成（SQL 未実行）のときのエラーか（このときは何も実行されていない）
+const fnMissing = e => !!e && (e.code==="PGRST202" || e.code==="42883" || /could not find the function|schema cache/i.test(e.message||""));
+// アクセス解析（v1.17）：端末ごとのランダムな匿名IDで画面の表示を数える。会員ID・メールは送らない
+//   管理者としてログインしたことがある端末では、ログアウト後も画面の表示を送らない（サーバー側でも除外）
+const analytics = (()=>{
+  const VID="aimuse.vid", ADMIN="aimuse.adminDevice", V4=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  const get = k => { try{ return localStorage.getItem(k); }catch(e){ return null; } };
+  const put = (k,v) => { try{ localStorage.setItem(k,v); }catch(e){} };
+  const uuid4 = () => { try{ if(crypto.randomUUID) return crypto.randomUUID(); const b=crypto.getRandomValues(new Uint8Array(16)); b[6]=(b[6]&15)|64; b[8]=(b[8]&63)|128; const h=[...b].map(x=>x.toString(16).padStart(2,"0")).join(""); return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`; }catch(e){ return null; } };
+  let vid=null, missing=false, last=null, marked=false;
+  const id = () => { if(vid) return vid; let v=get(VID); if(!V4.test(v||"")){ v=uuid4(); if(v) put(VID,v); } vid=v; return v; };
+  return {
+    id,
+    isAdminDevice: () => get(ADMIN)==="1",
+    // 管理者でログインしたとき：この端末を以後の計測から外す（それまでの分もサーバー側の集計から外れる）
+    markAdmin(){ put(ADMIN,"1"); if(marked||!sb||!id()) return; marked=true; sb.rpc("analytics_exclude_device",{p_vid:id()}).then(()=>{},()=>{}); },
+    // 画面の表示（同じ画面の再描画では送らない。再読み込みの重複はサーバー側で30分に1回にまとめる）
+    page(name){
+      if(!sb||!FEATURES.analytics||missing||this.isAdminDevice()||name===last||!id()) return;
+      last=name;
+      sb.rpc("analytics_track",{p_vid:id(),p_page:name}).then(r=>{ if(r&&fnMissing(r.error)) missing=true; },()=>{});
+    }
+  };
+})();
+let countPlayMissing = false;
 const repo = {
   mode:"pending", loadedAt:0,
   tracks:new Map(), reports:new Map(), listeners:new Set(),
@@ -845,6 +898,11 @@ const repo = {
   },
   async incPlays(id){
     const t=this.tracks.get(id); if(t){ this.tracks.set(id,{...t,plays:(t.plays||0)+1}); this.emit(); }
+    if(!countPlayMissing){
+      const r = await sb.rpc("count_play",{tid:id,p_vid:analytics.id()});
+      if(!fnMissing(r.error)) return;   // 成功・通信エラーのときは呼び直さない（二重に数えない）
+      countPlayMissing = true;
+    }
     await sb.rpc("increment_plays",{tid:id});
   },
   // 再生時間が未登録の曲：画面表示用には誰でも反映。データベースへの保存は投稿者本人か管理者のときだけ
@@ -1528,6 +1586,7 @@ function Admin({ctx}){
       <button className=${tab==="songs"?"on":""} onClick=${()=>setT("songs")}>楽曲管理</button>
       <button className=${tab==="names"?"on":""} onClick=${()=>setT("names")}>名義変更</button>
       <button className=${tab==="align"?"on":""} onClick=${()=>setT("align")}>歌詞AI</button>
+      <button className=${tab==="stats"?"on":""} onClick=${()=>setT("stats")}>アクセス解析</button>
     </div>
 
     ${tab==="review" && html`<div style=${{display:"flex",flexDirection:"column",gap:12,marginTop:14}}>
@@ -1557,6 +1616,7 @@ function Admin({ctx}){
 
     ${tab==="names" && html`<${AdminNameHistory} ctx=${ctx}/>`}
     ${tab==="align" && html`<${AdminLyricsAlign} ctx=${ctx}/>`}
+    ${tab==="stats" && html`<${AdminAnalytics} ctx=${ctx}/>`}
     ${tab==="songs" && html`<div className="list" style=${{marginTop:8}}>
       ${allSongs.map(s=>html`<div key=${s.id} className="row norank" style=${{opacity:s.status==="public"?1:.55}}>
         <${Cover} item=${s} radius=${10}/>
@@ -2315,6 +2375,83 @@ function AdminLyricsAlign({ctx}){
   </div>`;
 }
 
+/* ---------- アクセス解析（管理者のみ。集計はデータベース側で管理者か確認してから返す） ---------- */
+const AN_PAGES = {home:"ホーム",search:"検索",upload:"投稿",me:"マイページ",artist:"アーティスト",legal:"規約・ポリシー",profile:"プロフィール編集",follows:"フォロー一覧",playlist:"プレイリスト",guide:"使い方",settings:"設定",account:"退会の手続き",lyricsync:"歌詞の同期"};
+const AN_METRICS = [["pv","表示数"],["uu","訪問者（推計）"],["plays","再生数"]];
+const anNum = n => (Number(n)||0).toLocaleString("ja-JP");   // 集計画面は「万」に丸めず正確な数で表示
+const anDay = d => { const [y,m,dd]=String(d).split("-"); return `${+m}/${+dd}`; };
+const anMonth = d => { const [y,m]=String(d).split("-"); return `${+m}月`; };
+const anTop = v => { if(v<=5) return 5; const p=Math.pow(10,Math.floor(Math.log10(v))); for(const k of [1,2,2.5,5,10]) if(k*p>=v) return k*p; return 10*p; };
+function AnBars({rows,metric,label,full,every}){
+  const [sel,setSel] = useState(null);
+  useEffect(()=>setSel(null),[rows,metric]);
+  const vals = rows.map(r=>Number(r[metric])||0), top = anTop(Math.max(0,...vals)), n = rows.length;
+  const W=320, H=120, T=12, bw=W/n, gap=Math.min(3,bw*.18), name=(AN_METRICS.find(m=>m[0]===metric)||[])[1];
+  const y = v => T+H-(v/top)*H;
+  return html`<div className="an-chart">
+    <svg viewBox=${`0 0 ${W} ${T+H+16}`} role="img" aria-label=${`${name}の推移（最大 ${anNum(Math.max(0,...vals))}）`}>
+      ${[0,.5,1].map(f=>html`<line key=${f} x1="0" x2=${W} y1=${y(top*f)} y2=${y(top*f)} className="an-grid"/>`)}
+      <text x="0" y=${T-3} className="an-ax">${anNum(top)}</text>
+      ${rows.map((r,i)=>{ const h=(vals[i]/top)*H; return html`<rect key=${"b"+i} x=${i*bw+gap} y=${T+H-h} width=${Math.max(1,bw-2*gap)} height=${vals[i]?Math.max(h,1.5):0} rx="1.5" className=${"an-bar"+(sel===i?" on":"")}/>`; })}
+      ${rows.map((r,i)=>(n-1-i)%every===0 && html`<text key=${"l"+i} x=${i*bw+bw/2} y=${T+H+12} textAnchor="middle" className="an-ax">${label(r)}</text>`)}
+      ${rows.map((r,i)=>html`<rect key=${"h"+i} x=${i*bw} y="0" width=${bw} height=${T+H+16} fill="transparent" onClick=${()=>setSel(sel===i?null:i)}><title>${`${full(r)}：${anNum(vals[i])}`}</title></rect>`)}
+    </svg>
+    <div className="an-sel">${sel==null?"棒をタップすると、その日の数値を表示します":html`<b>${full(rows[sel])}</b>　表示数 ${anNum(rows[sel].pv)}・訪問者（推計） ${anNum(rows[sel].uu)}・再生 ${anNum(rows[sel].plays)}`}</div>
+  </div>`;
+}
+function AdminAnalytics({ctx}){
+  const [d,setD] = useState(null), [err,setErr] = useState(null), [busy,setBusy] = useState(false);
+  const [view,setView] = useState("daily"), [metric,setMetric] = useState("pv");
+  const [days,setDays] = useState(30), [rk,setRk] = useState(null);
+  const why = e => /RATE_LIMIT/.test(e.message||"") ? "短時間に何度も読み込みました。しばらく待ってからお試しください" : fnMissing(e) ? "アクセス解析の準備（v1.17 のSQL）がまだ完了していません" : "読み込めませんでした。通信状態を確認してください";
+  const load = () => { setBusy(true); sb.rpc("admin_analytics").then(r=>{ setBusy(false); if(r.error){ setErr(why(r.error)); if(!d) setD(false); } else { setErr(null); setD(r.data); } },()=>{ setBusy(false); setErr("読み込めませんでした。通信状態を確認してください"); if(!d) setD(false); }); };
+  const loadRk = n => { setRk(null); sb.rpc("admin_analytics_ranking",{p_days:n,p_limit:50}).then(r=>setRk(r.error?false:(r.data||[])),()=>setRk(false)); };
+  useEffect(()=>{ load(); },[]);
+  useEffect(()=>{ if(d) loadRk(days); },[days,!!d]);
+  if(d===null) return html`<div className="empty">読み込み中…</div>`;
+  if(d===false) return html`<div style=${{marginTop:14}}><span className="err">${err}</span></div>`;
+  const sm=d.summary||{}, pl=d.plays||{}, z={uu:0,pv:0};
+  const cards = [["今日",sm.today,pl.today],["昨日",sm.yesterday,pl.yesterday],["過去7日",sm.d7,pl.d7],["過去30日",sm.d30,pl.d30]];
+  const rows = view==="daily" ? (d.daily||[]) : (d.monthly||[]);
+  const pages = d.pages||[], pmax = Math.max(1,...pages.map(p=>p.pv));
+  const started = d.started ? String(d.started).replace(/^(\d+)-(\d+)-(\d+)$/,(m,y,mo,dd)=>`${y}年${+mo}月${+dd}日`) : "";
+  const upd = d.updated_at ? new Date(d.updated_at) : null;
+  return html`<div className="an" style=${{display:"flex",flexDirection:"column",gap:12,marginTop:14}}>
+    ${!d.enabled && html`<div className="panel"><span className="err">計測は停止中です（記録の設定が off になっています）</span></div>`}
+    <p className="hint">訪問者数は<b>端末・ブラウザごとの推計値</b>で、実際の人数とは一致しません（同じ人がスマホとパソコンで見ると2人、ブラウザのデータを消すと新しい訪問者として数えます）。管理者と、管理者としてログインしたことがある端末のアクセスは含みません。</p>
+    <div className="an-cards">
+      ${cards.map(([t,v,p])=>{ v=v||z; return html`<div key=${t} className="an-card"><span className="an-t">${t}</span>
+        <div><b>${anNum(v.uu)}</b><span>訪問者（推計）</span></div>
+        <div><b>${anNum(v.pv)}</b><span>表示数</span></div>
+        <div><b>${anNum(p||0)}</b><span>再生数</span></div></div>`; })}
+    </div>
+    <div className="panel">
+      <div className="seg">${[["daily","日別（30日）"],["monthly","月別（12か月）"]].map(([k,l])=>html`<button key=${k} className=${view===k?"on":""} onClick=${()=>setView(k)}>${l}</button>`)}</div>
+      <div className="chips an-metrics">${AN_METRICS.map(([k,l])=>html`<button key=${k} className=${"chip"+(metric===k?" on":"")} onClick=${()=>setMetric(k)}>${l}</button>`)}</div>
+      <${AnBars} rows=${rows} metric=${metric} every=${view==="daily"?7:1}
+        label=${r=>view==="daily"?anDay(r.day):anMonth(r.month)}
+        full=${r=>view==="daily"?anDay(r.day).replace("/","月")+"日":anMonth(r.month).replace(/^/,String(r.month).slice(0,4)+"年")}/>
+      ${view==="monthly" && html`<p className="hint">月別の訪問者（推計）は、その月に1回以上訪れた端末の数です（日別の合計とは一致しません）。</p>`}
+    </div>
+    <div className="panel">
+      <b>画面別の表示数（過去30日）</b>
+      ${pages.length ? html`<div className="an-pages">${pages.map(p=>html`<div key=${p.page} className="an-page"><span>${AN_PAGES[p.page]||p.page}</span><i style=${{width:(p.pv/pmax*100)+"%"}}></i><b>${anNum(p.pv)}</b></div>`)}</div>` : html`<span className="hint">まだ記録がありません</span>`}
+    </div>
+    <div className="panel">
+      <b>楽曲別の再生ランキング</b>
+      <div className="seg">${[[7,"7日"],[30,"30日"],[90,"90日"],[0,"全期間"]].map(([k,l])=>html`<button key=${k} className=${days===k?"on":""} onClick=${()=>setDays(k)}>${l}</button>`)}</div>
+      ${rk===null ? html`<span className="hint">読み込み中…</span>` : rk===false ? html`<span className="err">ランキングを読み込めませんでした</span>` : !rk.length ? html`<span className="hint">まだ公開中の楽曲がありません</span>` : html`<div className="an-rank">${rk.map((r,i)=>html`<div key=${r.track_id} className="an-rrow">
+          <span className="an-no">${i+1}</span>
+          <div style=${{minWidth:0}}><div className="t">${r.title}</div><div className="sub">${r.artist}${r.status==="hidden"?"・非公開":""}</div></div>
+          <div className="an-n"><b>${anNum(r.period)}回</b><span>累計 ${anNum(r.total)}回</span></div></div>`)}</div>`}
+      <p className="hint">期間の再生数は計測開始日${started?`（${started}）`:""}以降の分で、管理者の再生を含みません。累計は公開中の再生数で、管理者の再生と計測開始前の分も含みます。</p>
+    </div>
+    <p className="hint">表示数は、同じ端末で同じ種類の画面を30分以内に開き直した分を1回として数えます。生の記録は90日で削除し、それより前は日別・月別の集計値で表示します。${upd?`集計の更新：${upd.getMonth()+1}/${upd.getDate()} ${String(upd.getHours()).padStart(2,"0")}:${String(upd.getMinutes()).padStart(2,"0")}`:""}</p>
+    ${err && html`<span className="err">${err}</span>`}
+    <button className="btn ghost" disabled=${busy} onClick=${load}>${busy?"読み込み中…":"最新の状態に更新"}</button>
+  </div>`;
+}
+
 function AdminNameHistory({ctx}){
   const {artists,openArtist,say} = ctx;
   const [rows,setRows] = useState(null), [err,setErr] = useState(null), [confirm,setConfirm] = useState(null);
@@ -2713,6 +2850,8 @@ function AccountDeletePage({ctx}){
    ・ログインしていなくても閲覧可。URL末尾 #terms / #privacy / #guidelines で直接開ける */
 const LEGAL_OPERATOR = "AIMUSE運営事務局（個人による運営）";
 const LEGAL_DATE = "2026年10月19日";
+// アクセス解析の追記によるプライバシーポリシーの改定日（公開する日に合わせて設定）
+const PRIVACY_ANALYTICS_DATE = "2026年10月26日";
 const LEGAL_CONTACT = "aimuse.musicworld@gmail.com";
 const LEGAL_DOCS = [
 {
@@ -2810,7 +2949,7 @@ const LEGAL_DOCS = [
 },
 {
   id:"privacy", tab:"プライバシー", title:"プライバシーポリシー",
-  meta:["制定日："+LEGAL_DATE,"改定日：2026年10月24日（歌詞の自動同期について追記）","運営者："+LEGAL_OPERATOR],
+  meta:["制定日："+LEGAL_DATE,"改定日："+PRIVACY_ANALYTICS_DATE+"（アクセス数の集計について追記）、2026年10月24日（歌詞の自動同期について追記）","運営者："+LEGAL_OPERATOR],
   sections:[
     {h:"1. 基本方針", blocks:[
       LEGAL_OPERATOR+"（以下「運営者」）は、「AIMUSE」（以下「本サービス」）における利用者の個人情報を、個人情報の保護に関する法律その他の法令に従って取り扱います。"
@@ -2824,6 +2963,8 @@ const LEGAL_DOCS = [
         "カラーテーマを保存するとき（ログイン中）：選んだテーマの種類と色。本人のアカウントに保存し、公開されません。",
         "サービスを利用するとき：お気に入り・フォローの登録内容、通報の内容（対象の楽曲、理由、通報した会員のIDと表示名、日時）。",
         "再生数を数えるとき：ログイン中の方は会員ID、ログインしていない方はIPアドレスを元に戻せない形に変換（ハッシュ化）した値を、再生した楽曲と時間帯とともに記録します。IPアドレスそのものは、この記録には保存しません。",
+        "アクセス数を集計するとき（ログインの有無にかかわらず）：ブラウザが作るランダムな識別子（匿名ID。6.に記載）を元に戻せない形に変換（ハッシュ化）した値、表示した画面の種類（ホーム・検索など）、日時を記録します。この記録には、会員ID・メールアドレス・IPアドレスは保存せず、匿名IDを会員情報と結び付けることもしません。また、楽曲ごと・日ごとの再生回数を集計します（誰が聴いたかは記録しません）。",
+        "不正なアクセスを防ぐとき：アクセス数の水増しや短時間の大量送信を防ぐため、IPアドレスを元に戻せない形に変換した値と、送信の回数を一時的に記録します（7.に記載のとおり2時間以内に削除します）。",
         "通信の際に自動的に送られる情報：本サービスの表示や利用の際、IPアドレス、ブラウザの種類などの情報が、本サービスを動かすために運営者が利用している外部サービス（4.に記載）に送られます。",
         "お問い合わせのとき：お名前、連絡先、お問い合わせの内容など、利用者が入力・送信した情報。"
       ],
@@ -2869,7 +3010,8 @@ const LEGAL_DOCS = [
         "本サービスを最新の状態に更新するため、ブラウザの一時的な保存領域（sessionStorage）に、本サービスの版の情報を保存することがあります。",
         "画面の表示に関する設定（はじめての方向けの案内を閉じたかどうか、ログインしていない間のカラーテーマ、前回表示したカラーテーマ）を、ブラウザの保存領域（localStorage）に保存します。ブラウザのデータを消去すると削除されます。",
         "ホーム画面に追加して使えるよう、オフライン時の案内ページ・アイコン・アプリの情報を、ブラウザの保存領域（Service Worker のキャッシュ）に保存します。音源・画像・会員情報・画面の内容は保存しません。",
-        "本サービスは、広告や閲覧履歴の追跡を目的としたCookieやアクセス解析ツールを使用していません。",
+        "アクセス数を集計するため、ブラウザの保存領域（localStorage）にランダムな識別子（匿名ID）を保存します。匿名IDは、本サービスの訪問者数・画面の表示数の集計（運営者だけが見る統計）にだけ使い、会員情報と結び付けたり、広告や他のサイトをまたいだ追跡に使ったりすることはありません。ブラウザのデータを消去すると削除され、次に本サービスを開いたときに新しい匿名IDが作られます。",
+        "本サービスは、広告を目的としたCookieや、外部の事業者のアクセス解析ツールを使用していません。アクセス数の集計は、本サービスのデータベース（4.に記載の Supabase）の中だけで行います。",
         "4.に記載した外部サービスが、サービスの提供や安全確保のために、独自にCookieなどを使用する場合があります。"
       ]
     ]},
@@ -2879,6 +3021,8 @@ const LEGAL_DOCS = [
         "退会を申請すると、公開プロフィールと投稿した楽曲を非公開にし、申請から30日間は情報を保存します（この間は本人が取り消せます）。30日を過ぎると、会員情報、投稿した楽曲の情報と音源・ジャケット画像、アイコン・背景画像、お気に入り、フォロー、レビュー、通報の記録を、サーバー側の処理で順次削除します。削除の対象と進み具合は、処理が終わるまで記録します。削除がすべて終わったことは、会員情報が削除されたことを確認して記録します（記録には会員IDのみを残し、メールアドレスは残しません）。",
         "削除された楽曲の情報は、誤って削除した場合に復元できるよう、削除時点の内容を約30日間保存し、その後順次削除します。音源・画像ファイルも少なくともこの期間は保存されます。",
         "再生数を数えるための記録は、約2日を過ぎたものから順次削除します。",
+        "アクセス数の集計のための記録（匿名IDを変換した値・画面の種類・日時）は、90日を過ぎたものから順次削除します。その後は、日ごと・月ごとの訪問者数と表示数、楽曲ごと・日ごとの再生回数の集計値（個人を区別できない数値）だけを保存します。",
+        "不正なアクセスを防ぐための記録（IPアドレスを変換した値と送信の回数）は、2時間以内に削除します。",
         "アイコン・背景画像を変更した場合、それまでの画像は新しい画像の設定が完了した後に削除します（削除に失敗した画像は、次にプロフィールを保存したときに削除します）。",
         "アーティスト名の変更履歴は、そのアーティストが削除されるまで保存します。",
         "外部サービスの記録やバックアップに、一定期間情報が残る場合があります。"
@@ -3103,6 +3247,8 @@ function App(){
   const user = authState.user, profile = authState.profile, isAdmin = !!(profile&&profile.is_admin);
   const withdrawing = !!(user && profile && profile.deletion);   // 退会手続き中（操作はサーバー側でも拒否される）
   useEffect(()=>{ if(authState.recovery){ setHistory([]); setTab("me"); } },[authState.recovery]);
+  // アクセス解析：ログイン状態の確認が終わってから画面の表示を送る（管理者は送らず、この端末を除外）
+  useEffect(()=>{ if(!authState.ready) return; if(isAdmin){ analytics.markAdmin(); return; } analytics.page(tab); },[tab,authState.ready,user,isAdmin]);
   useEffect(()=>{ if(authState.linkError){ setHistory([]); setTab("me"); } },[authState.linkError]);
 
   // ログイン・ログアウト・アカウント切り替えのたびに、まず空にしてから本人の分だけ読み込み直す

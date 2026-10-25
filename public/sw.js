@@ -4,7 +4,7 @@
 //  ・画面（index.html）・接続設定（config.js）は保存しない → 公開した最新版を毎回読み込む
 //  ・音源・画像・会員情報など Supabase とのやり取り、外部サイト（フォント等）には一切関わらない（保存もしない）
 //  ・版（VERSION）を変えて公開すると、新しい Service Worker に入れ替わり、古い保存は削除される
-const VERSION = "2026-10-26.1";            // index.html の BUILD と同じ値にする
+const VERSION = "2026-10-25.1";            // index.html の BUILD と同じ値にする
 const CACHE = "aimuse-shell-" + VERSION;
 const PRECACHE = ["/offline.html", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png",
                   "/icons/icon-maskable-512.png", "/icons/apple-touch-icon.png", "/icons/favicon-32.png"];

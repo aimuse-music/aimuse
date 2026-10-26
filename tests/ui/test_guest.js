@@ -33,7 +33,7 @@ const TEXTS = ['AIMUSEへようこそ！', 'AI音楽を、もっと自由に。'
   await p.locator('.sec .list .row', { hasText: 'ああ' }).first().click(); await w(700);
   const t1 = await toast();
   ok('2 ゲストで再生が始まり、ログインを求められない', !/ログイン/.test(t1) && await p.locator('[class*=mini]').count() > 0, t1);
-  const plays = await p.evaluate(() => window.__log.filter(l => l.op === 'rpc' && l.name === 'increment_plays').length);
+  const plays = await p.evaluate(() => window.__log.filter(l => l.op === 'rpc' && (l.name === 'count_play' || l.name === 'increment_plays')).length);
   ok('2 ゲストの再生も再生数の集計に送られる', plays >= 1, plays);
   await nav('ホーム'); await w(400);
   await p.locator('.row', { hasText: 'おぼろ月' }).first().click(); await w(600);

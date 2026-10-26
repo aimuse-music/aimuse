@@ -51,7 +51,7 @@
   const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
   const key = n => (n||"").normalize("NFKC").replace(/[\s\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]+/g,"").toLowerCase();
   const reserved = n => /(aimuse|運営|管理者|公式|admin|staff|スタッフ)/.test((n||"").normalize("NFKC").toLowerCase());
-  const E = m => ({ data:null, error:{ message:m } });
+  const E = (m,code) => ({ data:null, error:Object.assign({ message:m }, code?{code}:{}) });
   const pick = (r,cols) => { if(!cols||cols==="*") return {...r}; const o={}; cols.split(",").forEach(c=>{ c=c.trim(); if(!(c in r) && window.__noV16 && /avatar_path|header_path/.test(c)) o.__missing=c; o[c]=r[c]; }); return o; };
 
   function query(table){
@@ -310,6 +310,30 @@
       p.updated_at=new Date().toISOString(); save(); return {data:null,error:null}; },
     playlist_remove_track({p_id,p_track}){ const p=plOwned(p_id); if(p.error) return p; p.track_ids=p.track_ids.filter(t=>t!==p_track); p.updated_at=new Date().toISOString(); save(); return {data:null,error:null}; },
     increment_plays: () => ({data:null,error:null}),
+    // v1.17 アクセス解析（window.__noV117 で「SQL 未実行」を再現）。集計はテスト用の固定値
+    count_play: () => window.__noV117 ? E("Could not find the function public.count_play(p_vid, tid) in the schema cache","PGRST202") : ({data:null,error:null}),
+    analytics_track: () => window.__noV117 ? E("Could not find the function public.analytics_track(p_page, p_vid) in the schema cache","PGRST202") : ({data:null,error:null}),
+    analytics_exclude_device: () => window.__noV117 ? E("Could not find the function","PGRST202") : isAdmin() ? {data:null,error:null} : E("NOT_ALLOWED: 管理者のみ利用できます"),
+    admin_analytics(){
+      if(window.__noV117) return E("Could not find the function public.admin_analytics in the schema cache","PGRST202");
+      if(!isAdmin()) return E("NOT_ALLOWED: 管理者のみ利用できます");
+      if(window.__anRate) return E("RATE_LIMIT: 短時間に何度も読み込んだため、しばらく待ってからお試しください");
+      const T=new Date(); T.setHours(12,0,0,0); const ds=k=>{ const d=new Date(T.getTime()-k*86400000); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+      const daily=[...Array(30)].map((_,i)=>{ const k=29-i; return {day:ds(k),pv:k%5===0?0:12+((k*37)%40),uu:k%5===0?0:5+((k*13)%17),plays:(k*7)%23}; });
+      const monthly=[...Array(12)].map((_,i)=>{ const d=new Date(T.getFullYear(),T.getMonth()-(11-i),1); return {month:d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-01",pv:i<9?0:300+i*120,uu:i<9?0:90+i*30,plays:i<9?0:80+i*11}; });
+      const big=window.__anBig?1234567:0;
+      return {error:null,data:{today:ds(0),started:ds(40),raw_from:ds(40),enabled:!window.__anOff,updated_at:new Date().toISOString(),
+        summary:{today:{uu:7+big,pv:31+big},yesterday:{uu:9,pv:40},d7:{uu:41,pv:260},d30:{uu:130,pv:900}},
+        plays:{today:5,yesterday:8,d7:44,d30:150,all:170,total_public:220},daily,monthly,
+        pages:[{page:"home",pv:520},{page:"search",pv:180},{page:"artist",pv:120},{page:"me",pv:50},{page:"legal",pv:30}]}};
+    },
+    admin_analytics_ranking({p_days}){
+      if(window.__noV117) return E("Could not find the function","PGRST202");
+      if(!isAdmin()) return E("NOT_ALLOWED: 管理者のみ利用できます");
+      window.__log.push({op:"ranking",days:p_days});
+      const list=db.tracks.filter(t=>["public","hidden"].includes(t.status)).slice(0,50).map((t,i)=>({track_id:t.id,title:t.title,artist:t.artist,status:t.status,period:Math.max(0,40-i*3-(p_days===7?20:0)),total:(t.plays||0)+60-i}));
+      return {error:null,data:list.sort((a,b)=>b.period-a.period)};
+    },
     set_duration_if_missing: () => ({data:null,error:null}),
     public_artist_profiles({p_artist_ids}){
       return {error:null, data: db.artists.filter(a=>(p_artist_ids||[]).slice(0,200).includes(a.id)).map(a=>{

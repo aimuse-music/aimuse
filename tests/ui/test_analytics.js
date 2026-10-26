@@ -12,10 +12,15 @@ const route = feat => r => { const u = r.request().url();
   if (u.includes('react-dom.production') || u.includes('htm.umd')) return r.fulfill({ contentType: 'text/javascript', body: '' });
   if (u.includes('supabase.js')) return r.fulfill({ contentType: 'text/javascript', body: fs.readFileSync(path.join(__dirname, 'fake-profile.js')) });
   return r.fulfill({ status: 404, body: '' }); };
+const wav = sec => { const sr = 8000, n = Math.floor(sr * sec), b = Buffer.alloc(44 + n * 2);
+  b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22);
+  b.writeUInt32LE(sr, 24); b.writeUInt32LE(sr * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(Math.sin(i / sr * 2 * Math.PI * 440) * 800), 44 + i * 2);
+  return 'data:audio/wav;base64,' + b.toString('base64'); };   // 再生数は実際に音が流れてから数えるため、本物の短い音声を使う
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--autoplay-policy=no-user-gesture-required'] });
   const dev = DEV === 'android' ? devices['Pixel 7'] : devices['iPhone 13'];
-  const open = async (feat = true) => { const ctx = await b.newContext({ ...dev }); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message)); await p.route('**/*', route(feat)); return { ctx, p, errs }; };
+  const open = async (feat = true) => { const ctx = await b.newContext({ ...dev }); await ctx.addInitScript(a => { window.__testAudio = a; }, wav(6)); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message)); await p.route('**/*', route(feat)); return { ctx, p, errs }; };
   let { ctx, p, errs } = await open();
   const w = ms => p.waitForTimeout(ms || 400);
   const nav = l => p.locator('nav.nav button', { hasText: l }).click();
@@ -23,7 +28,10 @@ const route = feat => r => { const u = r.request().url();
   const login = async e => { await nav('マイページ'); await w(300); await p.fill('#a-email', e); await p.fill('#a-pw', 'password'); await p.locator('.form button.btn.primary').click(); await p.locator('text=ログアウト').waitFor(); await w(700); };
   const logout = async () => { await nav('マイページ'); await w(300); await p.locator('button', { hasText: 'ログアウト' }).click(); await w(800); };
   const noOverflow = () => p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
-  const play = async title => { await nav('ホーム'); await w(300); await p.locator('.row', { hasText: title }).first().click(); await w(900); };
+  // 再生して、数える基準（6秒の曲なので半分の3秒）まで聴いてから一時停止する
+  const play = async title => { await nav('ホーム'); await w(300); await p.locator('.row', { hasText: title }).first().click();
+    await p.waitForFunction(() => window.__listenMeter && window.__listenMeter.state().done, null, { timeout: 9000 }).catch(() => {}); await w(300);
+    await p.locator('.mini button[aria-label="一時停止"]').click().catch(() => {}); await w(200); };
 
   // ---- 1. 未ログインの訪問者
   await p.goto('http://aimuse.test/'); await w(1200);
@@ -140,7 +148,9 @@ const route = feat => r => { const u = r.request().url();
   await p.locator('button[aria-label="案内を閉じる"]').click().catch(() => {});
   await p.locator('nav.nav button', { hasText: '検索' }).click(); await p.waitForTimeout(300);
   await p.locator('nav.nav button', { hasText: 'ホーム' }).click(); await p.waitForTimeout(300);
-  await p.locator('.row', { hasText: 'おぼろ月' }).first().click(); await p.waitForTimeout(900);
+  await p.locator('.row', { hasText: 'おぼろ月' }).first().click();
+  await p.waitForFunction(() => window.__listenMeter && window.__listenMeter.state().done, null, { timeout: 9000 }).catch(() => {}); await p.waitForTimeout(300);
+  await p.locator('.mini button[aria-label="一時停止"]').click().catch(() => {}); await p.waitForTimeout(200);
   ok('7 機能スイッチ off：画面の表示は送らない', (await p.evaluate(() => window.__log.filter(l => l.op === 'rpc' && l.name === 'analytics_track').length)) === 0);
   ok('7 機能スイッチ off でも再生数は1回だけ数える', (await p.evaluate(() => window.__log.filter(l => l.op === 'rpc' && (l.name === 'count_play' || l.name === 'increment_plays')).length)) === 1);
   ok('7 画面のエラーなし', errs.length === 0, errs);

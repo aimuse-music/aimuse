@@ -637,7 +637,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-26.1";
+const BUILD = "2026-10-27.1";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -843,6 +843,37 @@ const analytics = (()=>{
   };
 })();
 let countPlayMissing = false;
+// 再生数：実際に音声が流れた時間だけを合計し、30秒（30秒未満の曲は長さの半分）に達したら1回数える
+//   ・一時停止・シーク（飛ばした分）・読み込み待ち・再生失敗の間は再生位置が進まないので合計に入らない
+//   ・1回の再生で数えるのは1回だけ。最後まで聴いて最初から再生し直したとき（1曲リピート・もう一度再生）は新しい1回
+//   ・同じ人×同じ曲は1時間に1回まで、という上限はサーバー側（count_play）でそのまま守られる
+const PLAY_COUNT_SEC = 30;
+const playThreshold = d => (isFinite(d) && d > 0 && d < PLAY_COUNT_SEC) ? d * 0.5 : PLAY_COUNT_SEC;
+const makeListenMeter = onCount => {
+  let s = {tid:null, acc:0, last:null, done:false, ended:false};
+  const reset = (tid,t) => { s = {tid, acc:0, last:t, done:false, ended:false}; };
+  return {
+    // 再生位置が進んだとき（timeupdate）・最後まで再生したとき（final=true）
+    tick(a, final){
+      const tid=a.dataset.tid||null, t=a.currentTime;
+      if(tid!==s.tid){ reset(tid,t); return; }
+      if(s.ended && !final){ reset(tid,t); return; }                       // 最後まで聴いた後の再生し直し
+      if((a.paused && !final) || a.seeking || s.last==null || !isFinite(t)){ s.last=t; return; }
+      const d=t-s.last;
+      if(d<-1 && isFinite(a.duration) && s.last>=a.duration-1.5){ reset(tid,t); return; }   // 1曲リピートで最初に戻った
+      s.last=t;
+      if(d>0 && d<=2) s.acc+=d;                                             // 通常の進み方だけ（飛んだ分は入れない）
+      if(!s.done && s.acc>=playThreshold(a.duration)-0.05){ s.done=true; onCount(tid); }
+      if(final) s.ended=true;
+    },
+    // シーク・再生の開始／再開・読み込み直し：位置だけ合わせ直す（飛んだ分は合計しない）
+    sync(a){ const tid=a.dataset.tid||null; if(tid!==s.tid){ reset(tid,a.currentTime); return; }
+      // 1曲リピート（loop）は最後まで進むと最初へシークして戻る → 新しい1回
+      if(a.loop && isFinite(a.duration) && a.currentTime<1 && s.last!=null && s.last>=a.duration-1.5){ reset(tid,a.currentTime); return; }
+      s.last=a.currentTime; },
+    state: () => ({...s})
+  };
+};
 const repo = {
   mode:"pending", loadedAt:0,
   tracks:new Map(), reports:new Map(), listeners:new Set(),
@@ -3488,15 +3519,14 @@ function App(){
   useEffect(()=>{ if(audioRef.current) audioRef.current.loop = (repeat==="one"); },[repeat,currentId]);
   const cycleRepeat = () => setRepeat(r=>{const n=r==="off"?"all":r==="all"?"one":"off"; say({off:"リピート：オフ",all:"リピート：全曲",one:"リピート：1曲"}[n]); return n;});
 
-  // 再生数：音源のある曲を再生し始めたときに1回数える
-  const counted = useRef(null);
-  useEffect(()=>{
-    if(!current||!playing||!current.audioUrl||counted.current===current.id) return;
-    counted.current=current.id;
-    const t=tracks.find(x=>x.id===current.id);
+  // 再生数：実際に音声が30秒（短い曲は半分）流れたときに1回数える（makeListenMeter）
+  const tracksRef = useRef(tracks); tracksRef.current = tracks;
+  const meter = useRef(null);
+  if(!meter.current) meter.current = makeListenMeter(tid => {
+    const t=tracksRef.current.find(x=>x.id===tid);
     if(t&&t.status==="public") repo.incPlays(t.id).catch(()=>{});
-  },[currentId,playing]);
-  useEffect(()=>{ counted.current=null; },[currentId]);
+  });
+  useEffect(()=>{ window.__listenMeter = meter.current; },[]);   // 動作確認用（状態を読むだけ）
 
   // 音源の再生
   useEffect(()=>{
@@ -3599,7 +3629,8 @@ function App(){
     </div></nav>
     ${current && playerOpen && html`<${FullPlayer} ctx=${ctx}/>`}
     ${toast && html`<div className="toast" role="status">${toast}</div>`}
-    <audio ref=${audioRef} preload="auto" playsInline onTimeUpdate=${e=>setPos(e.target.currentTime)} onEnded=${()=>nextRef.current(true)}
+    <audio ref=${audioRef} preload="auto" playsInline onTimeUpdate=${e=>{ setPos(e.target.currentTime); meter.current.tick(e.target,false); }} onEnded=${e=>{ meter.current.tick(e.target,true); nextRef.current(true); }}
+      onSeeking=${e=>meter.current.sync(e.target)} onSeeked=${e=>meter.current.sync(e.target)} onPlaying=${e=>meter.current.sync(e.target)}
       onPlay=${()=>{ if(!playingRef.current) setPlaying(true); }}
       onPause=${e=>{ const a=e.target; setTimeout(()=>{ if(a.paused && !a.ended && playingRef.current && a.dataset.tid===currentIdRef.current) setPlaying(false); },0); }}
       onError=${e=>{ const a=e.target; if(current&&current.audioUrl&&a.dataset.tid===current.id&&a.dataset.src!==current.audioUrl){ const t=a.currentTime; a.src=current.audioUrl; a.dataset.src=current.audioUrl; a.addEventListener("loadedmetadata",()=>{ try{ a.currentTime=t; }catch(_){} if(playing) a.play().catch(()=>{}); },{once:true}); } }}

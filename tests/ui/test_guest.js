@@ -11,10 +11,15 @@ const route = r => { const u = r.request().url();
   if (u.includes('supabase.js')) return r.fulfill({ contentType: 'text/javascript', body: fs.readFileSync(path.join(__dirname, 'fake-profile.js')) });
   return r.fulfill({ status: 404, body: '' }); };
 const TEXTS = ['AIMUSEへようこそ！', 'AI音楽を、もっと自由に。', '音楽を聴くだけなら会員登録は不要。気になる曲をタップして、すぐに楽しめます。', '楽曲を投稿するには無料会員登録が必要です。'];
+const wav = sec => { const sr = 8000, n = Math.floor(sr * sec), b = Buffer.alloc(44 + n * 2);
+  b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22);
+  b.writeUInt32LE(sr, 24); b.writeUInt32LE(sr * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(Math.sin(i / sr * 2 * Math.PI * 440) * 800), 44 + i * 2);
+  return 'data:audio/wav;base64,' + b.toString('base64'); };   // 再生数は実際に音が流れてから数えるため、本物の短い音声を使う
 (async () => {
-  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--autoplay-policy=no-user-gesture-required'] });
   const dev = DEV === 'android' ? devices['Pixel 7'] : devices['iPhone 13'];
-  const ctx = await b.newContext({ ...dev }); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  const ctx = await b.newContext({ ...dev }); await ctx.addInitScript(a => { window.__testAudio = a; }, wav(2)); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
   await p.route('**/*', route);
   const w = ms => p.waitForTimeout(ms || 500), nav = l => p.locator('nav.nav button', { hasText: l }).click();
   const toast = async () => (await p.locator('.toast').innerText().catch(() => '')).trim();
@@ -33,6 +38,7 @@ const TEXTS = ['AIMUSEへようこそ！', 'AI音楽を、もっと自由に。'
   await p.locator('.sec .list .row', { hasText: 'ああ' }).first().click(); await w(700);
   const t1 = await toast();
   ok('2 ゲストで再生が始まり、ログインを求められない', !/ログイン/.test(t1) && await p.locator('[class*=mini]').count() > 0, t1);
+  await p.waitForFunction(() => window.__log.some(l => l.op === 'rpc' && (l.name === 'count_play' || l.name === 'increment_plays')), null, { timeout: 6000 }).catch(() => {});
   const plays = await p.evaluate(() => window.__log.filter(l => l.op === 'rpc' && (l.name === 'count_play' || l.name === 'increment_plays')).length);
   ok('2 ゲストの再生も再生数の集計に送られる', plays >= 1, plays);
   await nav('ホーム'); await w(400);

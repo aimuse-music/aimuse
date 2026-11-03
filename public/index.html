@@ -637,7 +637,7 @@ const genreHue = {"J-POP":330,"シティポップ":285,"EDM":215,"ロック":355
    ※ 架空のデータは入れていません。表示はすべて実際に投稿されたデータから集計します */
 
 // 公開バージョン。更新して公開するたびに変える（開きっぱなしの古い画面を自動で最新版に切り替えるため）
-const BUILD = "2026-10-27.1";
+const BUILD = "2026-11-04.1";
 async function newerBuildAvailable(){
   try{
     const r = await fetch(location.pathname+"?build-check="+Date.now(),{cache:"no-store"});
@@ -744,10 +744,10 @@ const sb = sbReady ? window.supabase.createClient(SB_CFG.supabaseUrl, SB_CFG.sup
 const SIGN_TTL = 3600, SIGN_RENEW_MS = 15*60*1000;
 const signedCache = new Map();
 const cachedUrl = (bucket,path) => { if(!path) return null; const c=signedCache.get(bucket+":"+path); return c&&c.exp>Date.now()?c.url:null; };
-async function signPaths(bucket,paths){
+async function signPaths(bucket,paths,renewMs=SIGN_RENEW_MS){
   if(!sb) return;
   const now=Date.now();
-  const need=[...new Set(paths.filter(Boolean))].filter(p=>{ const c=signedCache.get(bucket+":"+p); return !c||c.exp-now<SIGN_RENEW_MS; });
+  const need=[...new Set(paths.filter(Boolean))].filter(p=>{ const c=signedCache.get(bucket+":"+p); return !c||c.exp-now<renewMs; });
   for(let i=0;i<need.length;i+=100){
     const chunk=need.slice(i,i+100);
     try{
@@ -898,6 +898,19 @@ const repo = {
       if(!r.error) r.data.forEach(x=>this.reports.set(x.id,reportFromRow(x)));
     }
     this.mode="cloud"; this.loadedAt=Date.now(); this.emit();
+  },
+  // 再生する曲の期限付きURLを、残りが minMs を切っていたら取り直す（force：期限に関係なく取り直す＝読み込みエラーからの復旧用）
+  async freshen(ids,minMs,force){
+    if(!sb) return;
+    const rows=[...new Set(ids)].map(id=>this.tracks.get(id)).filter(t=>t&&t.audioPath);
+    const now=Date.now();
+    const need=rows.filter(t=>{ const c=signedCache.get("audio:"+t.audioPath); return force||!c||c.exp-now<minMs; });
+    if(!need.length) return;
+    if(force) need.forEach(t=>signedCache.delete("audio:"+t.audioPath));
+    await signPaths("audio",need.map(t=>t.audioPath),minMs);
+    let changed=false;
+    need.forEach(t=>{ const u=cachedUrl("audio",t.audioPath), cur=this.tracks.get(t.id); if(u&&cur&&cur.audioUrl!==u){ this.tracks.set(t.id,{...cur,audioUrl:u}); changed=true; } });
+    if(changed) this.emit();
   },
   mapOf(col){ return col==="tracks"?this.tracks:this.reports; },
   async insertTrack(row){
@@ -3528,17 +3541,104 @@ function App(){
   });
   useEffect(()=>{ window.__listenMeter = meter.current; },[]);   // 動作確認用（状態を読むだけ）
 
+  // ---- 画面オフでの連続再生を安定させる（Android など）
+  //   ・曲の再生を始めるたびに、その曲と次の曲の期限付きURLを取り直しておく（画面オフの間は10分ごとの更新が止まるため）
+  //   ・曲の途中で読み込みが止まった・エラーになったときは、新しいURLで止まった位置から読み込み直す（2回まで）
+  //   ・それでも再生できない曲は、止まったままにせず次の曲へ進む
+  //   ・ロック画面・通知に曲名と操作ボタン（再生・一時停止・前の曲・次の曲・シーク）を出す（Media Session）
+  const FRESH_MS = 20*60*1000, STALL_MS = 12000;
+  const rec = useRef({tid:null, tries:0, at:0, busy:false});
+  const repeatRef = useRef(repeat); repeatRef.current = repeat;
+  const peekNextId = () => {
+    if(!current||!queue.length) return null;
+    if(repeat==="one") return currentId;
+    const order = shuffle&&queue.length>1 ? shuffleOrder() : queue;
+    let ni = order.indexOf(currentId)+1;
+    if(ni>=order.length){ if(repeat!=="all") return null; ni=0; }
+    return order[ni]||null;
+  };
+  useEffect(()=>{ if(playing&&current) repo.freshen([current.id,peekNextId()].filter(Boolean),FRESH_MS).catch(()=>{}); },[currentId,playing]);
+  const recover = async kind => {
+    const a=audioRef.current, r=rec.current;
+    if(!a||!current||!current.audioUrl||!playingRef.current||r.busy) return;
+    const tid=current.id;
+    if(r.tid!==tid){ r.tid=tid; r.tries=0; }
+    if(r.tries>=2){   // 2回読み込み直しても再生できない：止まったままにしない
+      r.tries=0;
+      if(repeatRef.current==="one"){ setPlaying(false); say("この曲を再生できませんでした"); return; }
+      say("この曲を再生できなかったため、次の曲へ進みました"); nextRef.current(true); return;
+    }
+    r.tries++; r.busy=true;
+    const t=isFinite(a.currentTime)?a.currentTime:0; r.at=t;
+    try{ await repo.freshen([tid],FRESH_MS,true); }catch(e){}
+    const u=(repo.tracks.get(tid)||{}).audioUrl;
+    if(!u||a.dataset.tid!==tid||!playingRef.current){ r.busy=false; return; }
+    // 読み込み直しの結果：成功 → 止まった位置から再生／失敗 → 次の試行（2回失敗したら次の曲へ）
+    let settled=false;
+    const finish=()=>{ settled=true; a.removeEventListener("loadedmetadata",onMeta); a.removeEventListener("error",onErr); };
+    const onMeta=()=>{ finish(); try{ a.currentTime=t+(kind==="decode"?0.5:0); }catch(e){} r.busy=false; a.play().catch(()=>{}); };
+    const onErr=()=>{ finish(); r.busy=false; recoverRef.current(kind); };
+    a.addEventListener("loadedmetadata",onMeta); a.addEventListener("error",onErr);
+    a.src=u; a.dataset.src=u;
+    setTimeout(()=>{ if(!settled&&a.dataset.src===u){ finish(); r.busy=false; recoverRef.current("stall"); } },15000);
+  };
+  const recoverRef = useRef(recover); recoverRef.current = recover;
+  // 見張り：再生中なのに再生位置が12秒進まない（読み込みが止まった）ときは読み込み直す
+  const stall = useRef({t:null, since:0});
+  useEffect(()=>{
+    if(!playing) return;
+    const id=setInterval(()=>{
+      const a=audioRef.current, w=stall.current;
+      if(!a||a.paused||a.seeking||a.ended||rec.current.busy){ w.t=null; return; }
+      const now=performance.now();   // 端末の時計の変更に影響されない経過時間
+      if(w.t===null||a.currentTime!==w.t){ w.t=a.currentTime; w.since=now; return; }
+      if(now-w.since>=STALL_MS){ w.since=now; recoverRef.current("stall"); }
+    },2000);
+    return ()=>clearInterval(id);
+  },[playing,currentId]);
+  const onMediaError = e => {
+    const a=e.target;
+    if(!current||!current.audioUrl||a.dataset.tid!==current.id||rec.current.busy) return;
+    if(a.dataset.src!==current.audioUrl){   // 新しい期限付きURLがある：止まった位置から差し替え
+      const t=a.currentTime; a.src=current.audioUrl; a.dataset.src=current.audioUrl;
+      a.addEventListener("loadedmetadata",()=>{ try{ a.currentTime=t; }catch(_){} if(playingRef.current) a.play().catch(()=>{}); },{once:true});
+      return;
+    }
+    recoverRef.current(a.error&&a.error.code===3?"decode":"error");
+  };
+  // ロック画面・通知の表示と操作（Media Session：Android の Chrome・iPhone の Safari など）
+  const ms = typeof navigator!=="undefined" && navigator.mediaSession ? navigator.mediaSession : null;
+  const msRef = useRef({}); msRef.current = { play:()=>{ if(current&&current.audioUrl) setPlaying(true); }, pause:()=>setPlaying(false), next:()=>next(false), prev:()=>prev(), seek:v=>seek(v) };
+  useEffect(()=>{
+    if(!ms) return;
+    const set=(k,f)=>{ try{ ms.setActionHandler(k,f); }catch(e){} };
+    set("play",()=>msRef.current.play()); set("pause",()=>msRef.current.pause());
+    set("nexttrack",()=>msRef.current.next()); set("previoustrack",()=>msRef.current.prev());
+    set("seekto",d=>{ if(d&&isFinite(d.seekTime)) msRef.current.seek(Math.max(0,d.seekTime)); });
+    return ()=>["play","pause","nexttrack","previoustrack","seekto"].forEach(k=>set(k,null));
+  },[]);
+  useEffect(()=>{
+    if(!ms) return;
+    try{
+      ms.metadata = current ? new MediaMetadata({ title:current.title, artist:artistOf(current).name||current.artistName||"", album:"AIMUSE",
+        artwork: current.imageUrl ? [{src:current.imageUrl,sizes:"512x512",type:"image/jpeg"}] : [{src:"/icons/icon-512.png",sizes:"512x512",type:"image/png"}] }) : null;
+    }catch(e){}
+  },[currentId,current?.imageUrl,current?.title]);
+  useEffect(()=>{ if(ms) try{ ms.playbackState = current ? (playing?"playing":"paused") : "none"; }catch(e){} },[playing,currentId]);
+  const msPos = a => { if(ms&&ms.setPositionState&&isFinite(a.duration)&&a.duration>0) try{ ms.setPositionState({duration:a.duration,playbackRate:a.playbackRate||1,position:Math.min(Math.max(0,a.currentTime),a.duration)}); }catch(e){} };
+
   // 音源の再生
   useEffect(()=>{
     const a = audioRef.current; if(!a) return;
     if(current?.audioUrl){
       if(a.dataset.tid!==current.id){ a.src=current.audioUrl; a.dataset.src=current.audioUrl; a.dataset.tid=current.id; a.currentTime=0; }
-      else if(a.dataset.src!==current.audioUrl && a.paused){
+      else if(a.dataset.src!==current.audioUrl && a.paused && !rec.current.busy){
         // 同じ曲の期限付きURLが更新された：一時停止中なら再生位置を保ったまま差し替え
         const t=a.currentTime; a.src=current.audioUrl; a.dataset.src=current.audioUrl;
         a.addEventListener("loadedmetadata",()=>{ try{ a.currentTime=t; }catch(e){} },{once:true});
       }
-      if(playing) a.play().catch(()=>{ setPlaying(false); say("再生を開始できませんでした"); }); else a.pause();
+      // 音源の読み込みに失敗したとき（NotSupportedError）は、止めずに onMediaError の読み込み直しに任せる
+      if(playing) a.play().catch(err=>{ const n=err&&err.name; if(n==="AbortError"||n==="NotSupportedError") return; setPlaying(false); say("再生を開始できませんでした"); }); else a.pause();
     } else { a.pause(); if(playing) setPlaying(false); }
   },[currentId,playing,current?.audioUrl]);
 
@@ -3630,11 +3730,11 @@ function App(){
     ${current && playerOpen && html`<${FullPlayer} ctx=${ctx}/>`}
     ${toast && html`<div className="toast" role="status">${toast}</div>`}
     <audio ref=${audioRef} preload="auto" playsInline onTimeUpdate=${e=>{ setPos(e.target.currentTime); meter.current.tick(e.target,false); }} onEnded=${e=>{ meter.current.tick(e.target,true); nextRef.current(true); }}
-      onSeeking=${e=>meter.current.sync(e.target)} onSeeked=${e=>meter.current.sync(e.target)} onPlaying=${e=>meter.current.sync(e.target)}
+      onSeeking=${e=>meter.current.sync(e.target)} onSeeked=${e=>{ meter.current.sync(e.target); msPos(e.target); }} onPlaying=${e=>{ meter.current.sync(e.target); msPos(e.target); const r=rec.current; if(r.tries&&e.target.currentTime>r.at+10) r.tries=0; }}
       onPlay=${()=>{ if(!playingRef.current) setPlaying(true); }}
-      onPause=${e=>{ const a=e.target; setTimeout(()=>{ if(a.paused && !a.ended && playingRef.current && a.dataset.tid===currentIdRef.current) setPlaying(false); },0); }}
-      onError=${e=>{ const a=e.target; if(current&&current.audioUrl&&a.dataset.tid===current.id&&a.dataset.src!==current.audioUrl){ const t=a.currentTime; a.src=current.audioUrl; a.dataset.src=current.audioUrl; a.addEventListener("loadedmetadata",()=>{ try{ a.currentTime=t; }catch(_){} if(playing) a.play().catch(()=>{}); },{once:true}); } }}
-      onLoadedMetadata=${e=>{const d=Math.round(e.target.duration); const t=current&&tracks.find(x=>x.id===current.id); if(t&&isFinite(d)&&d>0&&!t.duration) repo.setDuration(t.id,d,!!(user&&(t.userId===user.id||isAdmin))).catch(()=>{});}}></audio>
+      onPause=${e=>{ const a=e.target; setTimeout(()=>{ if(a.paused && !a.ended && !a.error && !rec.current.busy && playingRef.current && a.dataset.tid===currentIdRef.current) setPlaying(false); },0); }}
+      onError=${onMediaError}
+      onLoadedMetadata=${e=>{msPos(e.target); const d=Math.round(e.target.duration); const t=current&&tracks.find(x=>x.id===current.id); if(t&&isFinite(d)&&d>0&&!t.duration) repo.setDuration(t.id,d,!!(user&&(t.userId===user.id||isAdmin))).catch(()=>{});}}></audio>
   </div>`;
 }
 

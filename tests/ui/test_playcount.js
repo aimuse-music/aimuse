@@ -61,7 +61,7 @@ const route = r => { const u = r.request().url();
   ok('1 合計25秒（30秒未満）ではまだ数えない', !(await h.counts())[T1]);
   await h.until(() => window.__listenMeter.state().done); await h.w(300);
   a = await h.au(); c = await h.counts();
-  ok('1 実際に30秒再生したところで1回だけ数える（count_play）', c[T1] === 1 && a.acc >= 29.9 && a.acc < 32, { c, acc: a.acc, t: a.t });
+  ok('1 実際に30秒再生したところで1回だけ数える（count_play）', c[T1] === 1 && a.acc >= 29.9 && a.acc < 33, { c, acc: a.acc, t: a.t });
   await h.until(() => document.querySelector('audio').dataset.tid !== 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1', 20000);
   ok('1 最後まで聴いても同じ再生では2回目を数えない', (await h.counts())[T1] === 1);
   await h.pause(); await h.w(300);

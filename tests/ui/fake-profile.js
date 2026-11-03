@@ -466,7 +466,12 @@
       return rpcs[name] ? rpcs[name](args||{}) : {data:null,error:null}; },
     storage:{ from(bucket){
       if(bucket==="avatars") return avatarStore;
-      return { async createSignedUrls(paths){ return { data: paths.map(p=>({ path:p, signedUrl:(p.endsWith(".jpg")||p.endsWith(".png")?"data:audio/mpeg;base64,":(window.__testAudio||"data:audio/mpeg;base64,")), error:null })), error:null }; },
+      // window.__mediaBase を設定すると、期限付きURLを本物に近い形（期限 exp・発行番号 v つき）で返す。期限は window.__signTtlMs（既定1時間）
+      return { async createSignedUrls(paths){ window.__signN=(window.__signN||0);
+        if(window.__mediaBase) window.__log.push({op:"sign",bucket,n:paths.length});
+        return { data: paths.map(p=>({ path:p, signedUrl:(p.endsWith(".jpg")||p.endsWith(".png")?"data:audio/mpeg;base64,":
+          window.__mediaBase ? `${window.__mediaBase}/${encodeURIComponent(p)}?v=${++window.__signN}&exp=${Date.now()+(window.__signTtlMs||3600000)}` :
+          (window.__testAudio||"data:audio/mpeg;base64,")), error:null })), error:null }; },
                async remove(paths){ window.__log.push({op:"media_remove",bucket,paths}); return {error:null}; },
                // 音源・ジャケット（audio・covers）：本人の会員IDのフォルダだけ。window.__fail.media で失敗を注入
                async upload(path, blob, opts){ await delay();

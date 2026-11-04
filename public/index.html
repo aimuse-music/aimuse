@@ -850,23 +850,40 @@ const AUDIO_PREFETCH = /Android/i.test((typeof navigator!=="undefined"&&navigato
 const PREFETCH_MAX_BYTES = 40*1024*1024;
 const audioBlobs = new Map();   // 曲ID → 端末内のURL（blob:）
 const prefetching = new Map();  // 曲ID → 読み込み中の Promise
+const prefetchCtl = new Map();  // 曲ID → 読み込みの中止用
+let prefetchKeep = [];          // 今の曲と次の2曲（これ以外は保持も読み込みもしない）
 function prefetchAudio(tid, src){
-  if(!AUDIO_PREFETCH||!tid||!src||audioBlobs.has(tid)) return Promise.resolve();
+  if(!AUDIO_PREFETCH||!tid||!src||audioBlobs.has(tid)||!prefetchKeep.includes(tid)) return Promise.resolve();
   if(prefetching.has(tid)) return prefetching.get(tid);
+  const ctl = typeof AbortController!=="undefined" ? new AbortController() : null;
+  const stop = () => { try{ ctl&&ctl.abort(); }catch(e){} };
   const job=(async()=>{
     try{
-      const r=await fetch(src,{credentials:"omit"});
-      if(!r.ok) return;
-      if(+(r.headers.get("content-length")||0)>PREFETCH_MAX_BYTES) return;
-      const b=await r.blob();
+      const r=await fetch(src,{credentials:"omit",signal:ctl?ctl.signal:undefined});
+      if(!r.ok){ stop(); return; }
+      if(+(r.headers.get("content-length")||0)>PREFETCH_MAX_BYTES){ stop(); return; }
+      let b;
+      if(r.body&&r.body.getReader){   // 上限（40MB）を超えたら、その時点で読み込みをやめる
+        const rd=r.body.getReader(), parts=[]; let n=0;
+        for(;;){ const {done,value}=await rd.read(); if(done) break; n+=value.byteLength; if(n>PREFETCH_MAX_BYTES){ stop(); return; } parts.push(value); }
+        b=new Blob(parts,{type:r.headers.get("content-type")||""});
+      } else b=await r.blob();
       const type=(b.type||"").toLowerCase();
       if(!b.size||b.size>PREFETCH_MAX_BYTES||(type&&!/^audio\/|octet-stream/.test(type))) return;
+      if(!prefetchKeep.includes(tid)||audioBlobs.has(tid)) return;   // 読み込み中に不要になった曲は保持しない
       audioBlobs.set(tid,URL.createObjectURL(b));
-    }catch(e){} finally{ prefetching.delete(tid); }
+    }catch(e){} finally{ prefetching.delete(tid); prefetchCtl.delete(tid); }
   })();
-  prefetching.set(tid,job); return job;
+  prefetching.set(tid,job); if(ctl) prefetchCtl.set(tid,ctl); return job;
 }
-function pruneAudio(keep){ for(const [tid,u] of audioBlobs){ if(!keep.includes(tid)){ try{ URL.revokeObjectURL(u); }catch(e){} audioBlobs.delete(tid); } } }
+// 読み込み中の先読みを中止（その曲を通信で再生し始めたとき：同じ曲を二重に読み込まない）
+function cancelPrefetch(tid){ const c=prefetchCtl.get(tid); if(c){ try{ c.abort(); }catch(e){} } }
+function pruneAudio(keep){
+  prefetchKeep=keep.slice();
+  for(const [tid,u] of audioBlobs){ if(!keep.includes(tid)){ try{ URL.revokeObjectURL(u); }catch(e){} audioBlobs.delete(tid); } }
+  for(const tid of [...prefetchCtl.keys()]) if(!keep.includes(tid)) cancelPrefetch(tid);
+}
+if(typeof window!=="undefined") window.__audioCache = { size:()=>audioBlobs.size, loading:()=>prefetching.size };   // 動作確認用（件数を読むだけ）
 // 再生数：実際に音声が流れた時間だけを合計し、30秒（30秒未満の曲は長さの半分）に達したら1回数える
 //   ・一時停止・シーク（飛ばした分）・読み込み待ち・再生失敗の間は再生位置が進まないので合計に入らない
 //   ・1回の再生で数えるのは1回だけ。最後まで聴いて最初から再生し直したとき（1曲リピート・もう一度再生）は新しい1回
@@ -3681,7 +3698,7 @@ function App(){
   useEffect(()=>{
     const a = audioRef.current; if(!a) return;
     if(current?.audioUrl){
-      if(a.dataset.tid!==current.id){ const bl=audioBlobs.get(current.id); a.src=bl||current.audioUrl; a.dataset.src=current.audioUrl; a.dataset.blob=bl?"1":""; a.dataset.tid=current.id; a.currentTime=0; }
+      if(a.dataset.tid!==current.id){ const bl=audioBlobs.get(current.id); if(!bl) cancelPrefetch(current.id); a.src=bl||current.audioUrl; a.dataset.src=current.audioUrl; a.dataset.blob=bl?"1":""; a.dataset.tid=current.id; a.currentTime=0; }
       else if(a.dataset.src!==current.audioUrl && a.paused && !rec.current.busy && a.dataset.blob!=="1"){
         // 同じ曲の期限付きURLが更新された：一時停止中なら再生位置を保ったまま差し替え
         const t=a.currentTime; a.src=current.audioUrl; a.dataset.src=current.audioUrl;

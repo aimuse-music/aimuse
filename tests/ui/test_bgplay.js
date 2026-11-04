@@ -10,7 +10,7 @@ function wavBuf(sec) { const sr = 8000, n = Math.floor(sr * sec), b = Buffer.all
   for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(Math.sin(i / sr * 2 * Math.PI * 440) * 800), 44 + i * 2);
   return b; }
 // 音源の配信（期限・途中停止・途中エラーを再現）。srv.plan[path] = {stallV|errV: 発行番号, bad: true}
-const srv = { wav: wavBuf(4), plan: {}, hits: [], offset: 0, blackout: false, failFetch: false, every3: false, elCount: 0 };   // blackout：通信の途絶（省電力）／failFetch：先読みだけ失敗   // offset：ページの時計を進めた分（長時間の再生を短く再現）
+const srv = { wav: wavBuf(4), plan: {}, hits: [], offset: 0, blackout: false, failFetch: false, every3: false, elCount: 0, preDelay: 0 };   // blackout：通信の途絶（省電力）／failFetch：先読みだけ失敗   // offset：ページの時計を進めた分（長時間の再生を短く再現）
 const media = async r => {
   const u = new URL(r.request().url()); const p = decodeURIComponent(u.pathname.replace('/media/', '')); const v = +u.searchParams.get('v'); const exp = +u.searchParams.get('exp');
   const range = r.request().headers()['range'] || ''; const from = +((/bytes=(\d+)-/.exec(range) || [])[1] || 0);
@@ -18,6 +18,7 @@ const media = async r => {
   if (srv.blackout) { srv.hits.push({ p, v, from, pre, blocked: true }); return new Promise(() => {}); }
   // 本番の記録と同じ形：3曲目・6曲目…の再生開始時の読み込みだけ通信が止まる（画面オフの省電力）
   if (srv.every3 && !pre && from === 0) { srv.elCount++; if (srv.elCount % 3 === 0 && !(srv.plan[p] || {}).okV?.includes?.(v)) { srv.hits.push({ p, v, from, pre, blocked: true }); return new Promise(() => {}); } }
+  if (pre && srv.preDelay) { srv.hits.push({ p, v, from, pre, slow: true }); await new Promise(res => setTimeout(res, srv.preDelay)); try { await r.fulfill({ status: 200, contentType: 'audio/wav', body: srv.wav }); } catch (e) {} return; }
   if (pre && srv.failFetch) { srv.hits.push({ p, v, from, pre, failed: true }); return r.fulfill({ status: 500, body: 'error' }); }
   const plan = srv.plan[p] || {}; const body = plan.wav || srv.wav; srv.hits.push({ p, v, from, pre, expired: Date.now() + srv.offset > exp });
   if (plan.stallFirst && plan.stallV == null) plan.stallV = v;   // 最初に使われた発行番号のURLだけ途中で止める
@@ -185,9 +186,10 @@ const route = r => { const u = r.request().url();
     for (let k = 0; k < 4; k++) { const l = await p.locator('.player button[aria-label^="リピート"]').getAttribute('aria-label'); if (l === 'リピート：全曲') break; await p.locator('.player button[aria-label^="リピート"]').click(); await h.w(150); }
     await p.locator('.player button[aria-label="閉じる"]').click(); await p.evaluate(() => window.__setHidden(true));
     srv.every3 = true; srv.elCount = 0;
-    const plays = []; let last = null, lastTid = null, stuck = 0, prevT = -1; const e9 = Date.now() + 140000;
+    const plays = []; let last = null, lastTid = null, stuck = 0, prevT = -1, maxCache = 0; const e9 = Date.now() + 140000;
     while (Date.now() < e9 && plays.length < 10) {
-      const x = await p.evaluate(() => { const a = document.querySelector('audio'); const t = window.__db.tracks.find(y => y.id === a.dataset.tid); return { title: t && t.title, t: a.currentTime, paused: a.paused }; });
+      const x = await p.evaluate(() => { const a = document.querySelector('audio'); const t = window.__db.tracks.find(y => y.id === a.dataset.tid); return { title: t && t.title, t: a.currentTime, paused: a.paused, cache: window.__audioCache ? window.__audioCache.size() + window.__audioCache.loading() : 0 }; });
+      maxCache = Math.max(maxCache, x.cache);
       if (!last || x.title !== last.title || x.t + 5 < last.t) plays.push({ title: x.title, max: 0 });
       plays[plays.length - 1].max = Math.max(plays[plays.length - 1].max, x.t);
       if (!x.paused && x.t === prevT) stuck++; prevT = x.t; last = x; await h.w(250); }
@@ -195,6 +197,19 @@ const route = r => { const u = r.request().url();
     const done9 = plays.slice(0, 9);
     ok('9 Android：曲順を変えて9曲連続（3曲ごとに通信が止まる）：9曲とも最後まで再生', done9.length === 9 && done9.every(x => x.max > 11.3), done9.map(x => x.title.slice(0, 2) + ':' + x.max.toFixed(1)));
     ok('9 Android：途中で止まらない（再生位置が止まった時間 1秒未満）', stuck < 4, stuck);
+    const dl = {}; srv.hits.filter(x => !x.blocked && (x.pre || x.from === 0)).forEach(x => { dl[x.p.slice(-6)] = (dl[x.p.slice(-6)] || 0) + 1; });
+    const total = Object.values(dl).reduce((a, n) => a + n, 0);
+    ok('9 Android：9回の再生で読み込みは合計4回まで（通信で再生した最初の曲を2周目用に1回だけ先読み。以後は読み込まない）', Object.keys(dl).length === 3 && total <= 4 && Object.values(dl).every(n => n <= 2), { dl, total });
+    ok('9 Android：端末に保持する音源は最大3曲（読み込み中を含む）', maxCache > 0 && maxCache <= 3, maxCache);
+    await ctx.close();
+    // ---- 11. 先読みが間に合わないうちに次の曲が始まった：先読みを中止して、同じ曲を二重に読み込まない
+    ({ ctx, p } = await open(3600000)); h = H(p); srv.wav = wavBuf(12); srv.hits = []; srv.preDelay = 25000;
+    await h.play(titles[0]); await p.evaluate(() => window.__setHidden(true));
+    await p.waitForFunction(t => { const a = document.querySelector('audio'); return window.__db.tracks.find(y => y.id === a.dataset.tid).title === t && a.currentTime > 1; }, titles[1], { timeout: 20000 }).catch(() => {});
+    await h.w(800);
+    const c11 = await p.evaluate(() => ({ loading: window.__audioCache.loading(), size: window.__audioCache.size(), src: document.querySelector('audio').src.slice(0, 5) }));
+    ok('11 Android：先読みが終わる前に次の曲が始まったら、その曲の先読みを中止して通信で再生（二重に読み込まない）', c11.src === 'http:' && c11.loading <= 1 && c11.size === 0, c11);
+    srv.preDelay = 0;
     await ctx.close();
   }
   // ---- 10. 止まっているときに画面を点けると、3秒ほどで自動復旧
